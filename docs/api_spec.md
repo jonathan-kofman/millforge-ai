@@ -153,6 +153,159 @@ Submit a contact or pilot interest form.
 
 ---
 
+## POST /api/auth/register
+
+Register a new user account. Returns a JWT on success.
+
+**Request**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword",
+  "name": "Jane Smith",
+  "company": "Acme Steel"   // optional
+}
+```
+
+**Response 200**
+```json
+{
+  "access_token": "<jwt>",
+  "token_type": "bearer",
+  "user_id": 1,
+  "email": "user@example.com",
+  "name": "Jane Smith"
+}
+```
+
+**Errors**: 400 if email already registered.
+
+---
+
+## POST /api/auth/login
+
+**Request**
+```json
+{ "email": "user@example.com", "password": "securepassword" }
+```
+
+**Response 200** — same shape as `/register`, plus optional `company` field.
+
+**Errors**: 401 if credentials invalid.
+
+---
+
+## GET /api/orders
+
+List the authenticated user's orders. Requires `Authorization: Bearer <token>`.
+
+**Query params**: `status` (optional) — filter by `pending|scheduled|in_progress|completed|cancelled`.
+
+**Response 200**
+```json
+{
+  "total": 2,
+  "orders": [
+    {
+      "id": 1,
+      "order_id": "ORD-ABCD1234",
+      "material": "steel",
+      "dimensions": "200x100x10mm",
+      "quantity": 500,
+      "priority": 3,
+      "complexity": 1.0,
+      "due_date": "2026-04-15T00:00:00",
+      "status": "pending",
+      "notes": null,
+      "created_by_id": 1,
+      "created_at": "2026-03-23T10:00:00",
+      "updated_at": "2026-03-23T10:00:00"
+    }
+  ]
+}
+```
+
+---
+
+## POST /api/orders
+
+Create a new order for the authenticated user.
+
+**Request**
+```json
+{
+  "material": "steel",
+  "dimensions": "200x100x10mm",
+  "quantity": 500,
+  "priority": 3,
+  "complexity": 1.0,
+  "due_date": "2026-04-15T00:00:00",  // optional, defaults to +14 days
+  "notes": "Rush job"                  // optional
+}
+```
+
+**Response 201** — `OrderResponse` (same as list item above).
+
+---
+
+## GET /api/orders/{order_id}
+
+Get a single order by integer ID. Returns 404 if not found or belongs to another user.
+
+---
+
+## PATCH /api/orders/{order_id}
+
+Partial update. All fields optional.
+
+**Request**
+```json
+{
+  "priority": 1,
+  "status": "in_progress",
+  "due_date": "2026-04-10T00:00:00",
+  "notes": "Expedited"
+}
+```
+
+**Response 200** — updated `OrderResponse`.
+
+---
+
+## DELETE /api/orders/{order_id}
+
+Delete an order. Returns 200 `{"message": "Order deleted"}`. Returns 404 if not found or not owned by caller.
+
+---
+
+## POST /api/orders/schedule
+
+Run the scheduler on the authenticated user's pending orders, persist a `ScheduleRun`, and mark orders as `scheduled`.
+
+**Query params**: `algorithm` — `edd` (default) or `sa`.
+
+**Response 200**
+```json
+{
+  "schedule_run_id": 7,
+  "orders_scheduled": 4,
+  "algorithm": "sa",
+  "generated_at": "2026-03-23T10:05:00",
+  "summary": {
+    "total_orders": 4,
+    "on_time_count": 3,
+    "on_time_rate_percent": 75.0,
+    "makespan_hours": 18.2,
+    "utilization_percent": 82.5
+  },
+  "schedule": [ ... ]
+}
+```
+
+**Errors**: 400 if user has no pending orders.
+
+---
+
 ## GET /health
 
 Returns `{"status": "ok"}`. Used by Docker health checks.

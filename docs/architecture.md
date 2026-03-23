@@ -70,9 +70,52 @@ Browser                Backend               Scheduler Agent
   │◄──────────────────────  │                        │
 ```
 
+## Database Layer
+
+MillForge uses **SQLAlchemy 2.0** with **SQLite** for development (PostgreSQL-ready).
+
+### ORM Models (`backend/db_models.py`)
+
+| Model | Key fields |
+|-------|-----------|
+| `User` | `id`, `email` (unique), `hashed_password` (Argon2id), `name`, `created_at` |
+| `OrderRecord` | `order_id` (UUID-based), `material`, `dimensions`, `quantity`, `priority`, `complexity`, `due_date`, `status`, `created_by_id` FK |
+| `ScheduleRun` | `algorithm`, `order_ids_json`, `summary_json`, `on_time_rate`, `makespan_hours`, `created_by_id` FK |
+| `InspectionRecord` | `order_record_id` FK (nullable), `image_url`, `passed`, `confidence`, `defects_json`, `recommendation` |
+
+### Session Management
+
+`database.py` exposes `engine`, `SessionLocal`, and `Base`. Routers use `get_db()` as a FastAPI dependency. Tests patch `db_module.engine` and `db_module.SessionLocal` with a `StaticPool` in-memory engine to avoid cross-connection isolation issues.
+
+## Auth Flow
+
+```
+Client              /api/auth/register or /login
+  │                         │
+  │  POST {email, password}  │
+  ├────────────────────────► │
+  │                          │  Argon2id hash verify
+  │                          │  python-jose sign JWT
+  │  {access_token: <jwt>}   │
+  │◄────────────────────────  │
+
+  │  GET /api/orders          │
+  │  Authorization: Bearer <jwt>
+  ├────────────────────────► │
+  │                          │  get_current_user() dependency
+  │                          │  decodes JWT → user_id
+  │                          │  scopes DB query to created_by_id
+  │  [{orders...}]           │
+  │◄────────────────────────  │
+```
+
+Passwords are hashed with **Argon2id** (`argon2-cffi`). JWTs are signed with HS256. Token expiry defaults to 7 days (configurable via `JWT_EXPIRE_DAYS` env var).
+
 ## Key Design Decisions
 
 1. **Agents are plain Python classes** — no framework lock-in. They can be called from CLI, tests, Celery tasks, or HTTP routes without modification.
 2. **Scheduler is deterministic given the same input** — enables reproducible tests.
-3. **Mock data in `get_mock_orders()`** — the demo `/api/schedule/demo` endpoint uses this, so the frontend works without any user input.
-4. **In-memory only for POC** — no database dependency. Adding Postgres requires only swapping the mock queue with a DB read.
+3. **SA warm-starts from EDD** — SA never produces a worse schedule than EDD; it can only improve.
+4. **Mock data in `get_mock_orders()`** — the demo `/api/schedule/demo` endpoint uses this, so the frontend works without any user input.
+5. **StaticPool for test isolation** — SQLite in-memory opens a fresh DB per connection; StaticPool reuses one connection so multi-request tests share state correctly.
+6. **User-scoped queries** — all order/schedule/inspection endpoints filter by `created_by_id`, preventing cross-user data leakage.
