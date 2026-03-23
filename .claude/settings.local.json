@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find . -name *)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(powershell -NonInteractive -ExecutionPolicy Bypass -File \"/c/Users/jonko/Downloads/millforge-ai/run_session.ps1\" -DryRun)",
+      "Skill(update-config)",
+      "Bash(npx ecc-agentshield:*)"
+    ]
+  }
+}
