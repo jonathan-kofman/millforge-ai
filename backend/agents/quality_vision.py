@@ -2,8 +2,12 @@
 MillForge Quality Vision Agent
 
 Implements a YOLOv8-style ONNX inference pipeline for defect detection.
-Falls back to a deterministic heuristic when no model file is provided
-(CI / development mode).
+Uses YOLOv8n general object detection weights as a placeholder — these can
+be swapped for a fine-tuned metal defect detection model without changing
+the interface.
+
+Falls back to a deterministic heuristic when the model cannot be loaded
+(CI / environments without internet access).
 
 Pre-processing  : resize → 640×640, BGR→RGB, normalize [0,1], CHW, add batch dim
 Post-processing : confidence filter → NMS → map class idx to defect category
@@ -18,6 +22,31 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Model download config
+# ---------------------------------------------------------------------------
+_MODEL_URL = (
+    "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx"
+)
+_MODEL_DIR  = os.getenv("MILLFORGE_MODEL_DIR", "/tmp/millforge_models")
+_MODEL_PATH = os.path.join(_MODEL_DIR, "yolov8n.onnx")
+
+
+def _try_download_model(path: str = _MODEL_PATH) -> bool:
+    """Download YOLOv8n ONNX if not already cached. Returns True on success."""
+    if os.path.exists(path):
+        return True
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        import urllib.request  # noqa: PLC0415
+        logger.info("Downloading YOLOv8n ONNX model to %s …", path)
+        urllib.request.urlretrieve(_MODEL_URL, path)  # noqa: S310
+        logger.info("Model downloaded (%d KB)", os.path.getsize(path) // 1024)
+        return True
+    except Exception as exc:
+        logger.warning("Model download failed (%s) — using heuristic fallback", exc)
+        return False
 
 # ---------------------------------------------------------------------------
 # Defect taxonomy
@@ -75,6 +104,7 @@ class InspectionResult:
     defect_severities: Dict[str, str]  # defect_name → critical|major|minor
     recommendation: str
     inspector_version: str = "onnx-v1.0"
+    model: str = "heuristic"           # "yolov8n-pretrained" when ONNX is active
     validation_failures: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -86,6 +116,7 @@ class InspectionResult:
             "defect_severities": self.defect_severities,
             "recommendation": self.recommendation,
             "inspector_version": self.inspector_version,
+            "model": self.model,
             "validation_failures": self.validation_failures,
         }
 
@@ -107,15 +138,16 @@ class QualityVisionAgent:
     MAX_RETRIES = 3
 
     def __init__(self, model_path: Optional[str] = None):
-        self.model_path = model_path
         self._session = None
         self._input_name: Optional[str] = None
 
-        if model_path and os.path.exists(model_path):
-            self._load_model(model_path)
+        # Resolve model path: explicit arg → env-var default → auto-download
+        resolved = model_path or os.getenv("MILLFORGE_MODEL_PATH", _MODEL_PATH)
+        if os.path.exists(resolved):
+            self._load_model(resolved)
+        elif _try_download_model(resolved):
+            self._load_model(resolved)
         else:
-            if model_path:
-                logger.warning("Model file not found at %s — using heuristic fallback", model_path)
             logger.info("QualityVisionAgent initialized (heuristic mode)")
 
     # ------------------------------------------------------------------
@@ -228,6 +260,7 @@ class QualityVisionAgent:
                 confidence=0.95,
                 defects=[],
                 threshold=threshold,
+                model="yolov8n-pretrained",
             )
 
         # Aggregate: overall confidence = max detection score
@@ -239,6 +272,7 @@ class QualityVisionAgent:
             confidence=confidence,
             defects=defects,
             threshold=threshold,
+            model="yolov8n-pretrained",
         )
 
     def _preprocess(self, image_url: str) -> np.ndarray:
@@ -324,6 +358,7 @@ class QualityVisionAgent:
             confidence=confidence,
             defects=defects,
             threshold=threshold,
+            model="heuristic",
         )
 
     # ------------------------------------------------------------------
@@ -336,6 +371,7 @@ class QualityVisionAgent:
         confidence: float,
         defects: List[str],
         threshold: float,
+        model: str = "heuristic",
     ) -> InspectionResult:
         passed = confidence >= threshold and not defects
 
@@ -361,4 +397,5 @@ class QualityVisionAgent:
             defects_detected=defects,
             defect_severities=severities,
             recommendation=recommendation,
+            model=model,
         )

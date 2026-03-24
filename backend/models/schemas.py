@@ -187,6 +187,7 @@ class VisionInspectResponse(BaseModel):
     defect_severities: Dict[str, str] = {}  # defect_name → critical|major|minor
     recommendation: str
     inspector_version: str
+    model: Optional[str] = None            # "yolov8n-pretrained" or "heuristic"
     order_id: Optional[str] = None
 
 

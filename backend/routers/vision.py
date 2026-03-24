@@ -77,5 +77,6 @@ async def inspect_part(
         defect_severities=result.defect_severities,
         recommendation=result.recommendation,
         inspector_version=result.inspector_version,
+        model=result.model,
         order_id=req.order_id,
     )

@@ -2,16 +2,43 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Lights-Out Vision
+
+MillForge is **the software stack for lights-out American metal mills**. China is moving toward dark factories — fully automated metal production where software controls the entire production flow and humans handle exceptions only. The US has almost none of this. MillForge is building the intelligence layer that makes it possible.
+
+**Every feature is evaluated against one question: does this remove a human touchpoint from routine metal production?**
+
+**Hierarchy of human touchpoints to eliminate (in order of priority):**
+1. **Scheduling** — ✅ automated. No human decides what runs next.
+2. **Quoting** — ✅ automated. No human calculates lead time or price.
+3. **Quality triage** — ⚡ pretrained (ONNX/YOLOv8n placeholder). No human does first-pass visual inspection.
+4. **Rework dispatch** — ✅ automated. No human decides rework priority.
+5. **Energy procurement** — mock. No human decides when to run energy-intensive jobs.
+6. **Inventory reorder** — ✅ automated. No human monitors stock levels.
+7. **Production planning** — mock. No human translates demand signals into capacity targets.
+8. **Exception handling** — this is what humans are for. Everything else is software.
+
+**Module audit against the lights-out lens:**
+
+| Module | Removes Human? | Status | Priority |
+|--------|---------------|--------|----------|
+| scheduler.py | ✅ Yes — no human schedules jobs | automated | Core |
+| quote.py | ✅ Yes — no human prices orders | automated | Core |
+| quality_vision.py | Partially — triage only | pretrained model | High |
+| rework.py | ✅ Yes — auto-dispatches failures | automated | Core |
+| inventory_agent.py | ✅ Yes — auto-reorders stock | automated | Medium |
+| energy_optimizer.py | Not yet — no grid integration | mock | Medium |
+| production_planner.py | Not yet — LLM heuristic | mock | Defer |
+| nl_scheduler.py | Assists human, not replaces | mock | Defer |
+| anomaly_detector.py | Assists human, not replaces | mock | Defer |
+
+**Lights-out readiness target:** `GET /health` returns a `lights_out_readiness` object showing automated vs mock vs not-implemented for each touchpoint. This is the living scoreboard.
+
 ## Product Vision
 
-MillForge is an **intelligence layer** that sits on top of whatever constraints a job shop already has — their machines, their suppliers, their staff, their deals. It does not control lead times, replace physical infrastructure, or promise supply chain transformation.
+MillForge is the intelligence layer for lights-out American metal mills — starting with AI production scheduling that replaces manual coordination, and expanding to automated quoting, real-time execution monitoring, computer vision quality inspection, and energy optimization.
 
-**The value proposition**: a job shop that was 60% on-time becomes 90%+ on-time with the same machines, same suppliers, same staff — just smarter sequencing.
-
-**Inputs**: the shop's real constraints (machine throughput, setup times, material changeovers, order priorities, due dates).
-**Outputs**: on-time delivery rate and machine utilisation.
-
-**The core demo is `/api/schedule/benchmark`**: it shows a three-way comparison of FIFO (naive baseline any shop can relate to) vs MillForge EDD vs MillForge SA on the same order set. The `on_time_improvement_pp` field is the number that wins the room.
+**The benchmark demo is `/api/schedule/benchmark`**: three-way comparison of FIFO (naive baseline) vs MillForge EDD vs MillForge SA on the same order set. The `on_time_improvement_pp` field is the number that wins the room.
 
 **Locked benchmark numbers (deterministic, 28-order dataset):**
 - FIFO: 60.7% on-time (±2pp, [58.7%, 62.7%])
@@ -20,7 +47,7 @@ MillForge is an **intelligence layer** that sits on top of whatever constraints 
 - Improvement over FIFO: +39.3pp
 - Results are fully deterministic — identical every run
 
-When writing copy, docs, or code comments, always frame MillForge around *efficiency within existing constraints*, never around *replacing* those constraints or compressing lead times as a standalone claim.
+When writing copy, docs, or code comments, frame MillForge around *removing human touchpoints from routine production*, not scheduling assistance or lead time compression.
 
 ## Commands
 

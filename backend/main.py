@@ -51,8 +51,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MillForge API",
     description=(
-        "Production scheduling optimization for job shops. "
-        "Improves on-time delivery rate by up to 39pp on the same machines and constraints."
+        "MillForge — the intelligence layer for lights-out American metal mills. "
+        "Removes human touchpoints from scheduling, quoting, quality, energy, and inventory. "
+        "Built for the dark factory transition."
     ),
     version="0.2.0",
     contact={"name": "MillForge Team"},
@@ -106,4 +107,22 @@ async def root():
 
 @app.get("/health", tags=["Health"])
 async def health():
-    return {"status": "ok", "version": "1.0.0"}
+    touchpoints = {
+        "scheduling":          "automated",
+        "quoting":             "automated",
+        "quality_inspection":  "pretrained",  # YOLOv8n ONNX placeholder
+        "energy_optimization": "mock",
+        "inventory_management":"automated",
+        "production_planning": "mock",
+        "rework_dispatch":     "automated",
+    }
+    automated = sum(1 for v in touchpoints.values() if v == "automated")
+    total = len(touchpoints)
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "lights_out_readiness": touchpoints,
+        "automated_touchpoints": automated,
+        "total_touchpoints": total,
+        "readiness_percent": round(automated / total * 100),
+    }

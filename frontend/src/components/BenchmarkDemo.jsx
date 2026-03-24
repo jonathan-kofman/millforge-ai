@@ -195,10 +195,10 @@ export default function BenchmarkDemo() {
       {/* ── Section header ── */}
       <div className="text-center mb-8">
         <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2">
-          See it in action
+          What happens when scheduling becomes autonomous.
         </h2>
         <p className="text-gray-400 text-sm max-w-xl mx-auto">
-          Most job shops schedule in spreadsheets. Here&apos;s what happens when you don&apos;t.
+          Most job shops schedule in spreadsheets. Here&apos;s what software changes.
         </p>
       </div>
 

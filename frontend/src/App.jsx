@@ -6,6 +6,7 @@ import ContactForm from "./components/ContactForm";
 import OrdersView from "./components/OrdersView";
 import AuthModal from "./components/AuthModal";
 import BenchmarkDemo from "./components/BenchmarkDemo";
+import LightsOutWidget from "./components/LightsOutWidget";
 
 const PUBLIC_TABS = [
   { id: "quote",    label: "Instant Quote" },
@@ -85,14 +86,18 @@ export default function App() {
       <section className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-14 text-center">
           <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-3">
-            MillForge —{" "}
-            <span className="text-forge-500">AI scheduling for metal manufacturing</span>
+            <span className="text-forge-500">The software stack for lights-out American manufacturing.</span>
           </h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-            Same machines. Same staff. From 62% on-time to 94%.
+            Same machines. Same staff. Software removes the human from every routine decision.
           </p>
         </div>
       </section>
+
+      {/* ── Lights-out readiness widget ── */}
+      <div className="bg-gray-950">
+        <LightsOutWidget />
+      </div>
 
       {/* ── Benchmark demo ── */}
       <div className="bg-gray-950 border-b border-gray-800">
