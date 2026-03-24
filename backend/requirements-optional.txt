@@ -1,0 +1,10 @@
+# Optional heavy dependencies — not required for the core API to run.
+# Install these for: YOLOv8 training, PJM real-time data, and the ML setup time predictor.
+#
+#   pip install -r requirements-optional.txt
+#
+ultralytics>=8.0.0
+gridstatus>=0.27.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
+kaggle>=1.6.0

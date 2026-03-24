@@ -13,11 +13,16 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-import joblib
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error
-from sklearn.model_selection import train_test_split
+
+try:
+    import joblib
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.metrics import mean_absolute_error
+    from sklearn.model_selection import train_test_split
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
 
 from agents.scheduler import BASE_SETUP_MINUTES, SETUP_MATRIX
 
@@ -45,11 +50,14 @@ class SetupTimePredictor:
     """
 
     def __init__(self) -> None:
-        self._model: Optional[RandomForestRegressor] = None
+        self._model: Optional[object] = None
         self._trained = False
         self._mae: Optional[float] = None
         self._n_training: int = 0
-        self._load_model()
+        if SKLEARN_AVAILABLE:
+            self._load_model()
+        else:
+            logger.warning("scikit-learn/joblib not installed — SetupTimePredictor using SETUP_MATRIX fallback")
 
     # ------------------------------------------------------------------
     # Public API
@@ -85,6 +93,12 @@ class SetupTimePredictor:
 
         Returns accuracy metrics. Saves model to MODEL_PATH on success.
         """
+        if not SKLEARN_AVAILABLE:
+            return {
+                "trained": False,
+                "reason": "scikit-learn not installed — run: pip install scikit-learn joblib",
+                "n_records": len(records),
+            }
         if len(records) < MIN_TRAINING_RECORDS:
             return {
                 "trained": False,
@@ -140,18 +154,21 @@ class SetupTimePredictor:
     # ------------------------------------------------------------------
 
     def _save_model(self) -> None:
+        if not SKLEARN_AVAILABLE:
+            return
         MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self._model, MODEL_PATH)
         logger.info("SetupTimePredictor saved to %s", MODEL_PATH)
 
     def _load_model(self) -> None:
-        if MODEL_PATH.exists():
-            try:
-                self._model = joblib.load(MODEL_PATH)
-                self._trained = True
-                logger.info("SetupTimePredictor loaded from %s", MODEL_PATH)
-            except Exception as exc:
-                logger.warning("Could not load predictor model: %s", exc)
+        if not SKLEARN_AVAILABLE or not MODEL_PATH.exists():
+            return
+        try:
+            self._model = joblib.load(MODEL_PATH)
+            self._trained = True
+            logger.info("SetupTimePredictor loaded from %s", MODEL_PATH)
+        except Exception as exc:
+            logger.warning("Could not load predictor model: %s", exc)
 
     # ------------------------------------------------------------------
     # Fallback

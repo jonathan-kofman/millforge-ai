@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+.env
+.git
+.gitignore
+node_modules
+frontend/node_modules
+frontend/.vite
+tests/__pycache__
+*.pkl
+backend/models/*.pkl
+output/
+simulation/
+controller/
