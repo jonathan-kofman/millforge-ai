@@ -51,12 +51,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MillForge API",
     description=(
-        "MillForge — the intelligence layer for lights-out American metal mills. "
-        "Removes human touchpoints from scheduling, quoting, quality, energy, and inventory. "
-        "Built for the dark factory transition."
+        "Built by a founder who operates CNC mills every day. "
+        "MillForge is the intelligence layer for lights-out American metal mills — "
+        "removing human touchpoints from scheduling, quoting, quality triage, energy, and inventory. "
+        "Jonathan Kofman machines parts daily at Northeastern's Advanced Manufacturing lab "
+        "and built MillForge because he lives the scheduling problem himself."
     ),
     version="0.2.0",
-    contact={"name": "MillForge Team"},
+    contact={"name": "Jonathan Kofman — MillForge"},
     lifespan=lifespan,
 )
 
@@ -111,9 +113,9 @@ async def health():
         "scheduling":          "automated",
         "quoting":             "automated",
         "quality_inspection":  "pretrained",  # YOLOv8n ONNX placeholder
-        "energy_optimization": "mock",
+        "energy_optimization": "automated",
         "inventory_management":"automated",
-        "production_planning": "mock",
+        "production_planning": "real_data",  # US Census ASM throughput benchmarks
         "rework_dispatch":     "automated",
     }
     automated = sum(1 for v in touchpoints.values() if v == "automated")

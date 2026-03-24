@@ -195,10 +195,10 @@ export default function BenchmarkDemo() {
       {/* ── Section header ── */}
       <div className="text-center mb-8">
         <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2">
-          What happens when scheduling becomes autonomous.
+          What a machinist-founder built when he got tired of scheduling by hand.
         </h2>
         <p className="text-gray-400 text-sm max-w-xl mx-auto">
-          Most job shops schedule in spreadsheets. Here&apos;s what software changes.
+          Same 28 orders. Same machines. Three strategies — and the gap is what MillForge ships.
         </p>
       </div>
 

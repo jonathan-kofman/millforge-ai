@@ -86,7 +86,7 @@ export default function App() {
       <section className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-14 text-center">
           <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-3">
-            <span className="text-forge-500">The software stack for lights-out American manufacturing.</span>
+            <span className="text-forge-500">Built by a founder who operates CNC mills every day. Powered by AI.</span>
           </h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto">
             Same machines. Same staff. Software removes the human from every routine decision.
@@ -102,6 +102,21 @@ export default function App() {
       {/* ── Benchmark demo ── */}
       <div className="bg-gray-950 border-b border-gray-800">
         <BenchmarkDemo />
+      </div>
+
+      {/* ── Founder credibility ── */}
+      <div className="bg-gray-900 border-b border-gray-800">
+        <div className="max-w-6xl mx-auto px-4 py-8 text-center">
+          <p className="text-gray-300 text-sm sm:text-base">
+            Jonathan Kofman operates CNC mills daily at Northeastern&apos;s Advanced Manufacturing lab.
+          </p>
+          <p className="text-gray-400 text-sm sm:text-base mt-1">
+            He owns a desktop CNC mill and multiple 3D printers, and has personally machined parts in aluminum, steel, and titanium on HAAS and Tormach machines.
+          </p>
+          <p className="text-gray-500 text-sm mt-1">
+            He built MillForge because he lives the scheduling problem himself.
+          </p>
+        </div>
       </div>
 
       {/* ── Tab nav ── */}

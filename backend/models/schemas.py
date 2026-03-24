@@ -187,7 +187,8 @@ class VisionInspectResponse(BaseModel):
     defect_severities: Dict[str, str] = {}  # defect_name → critical|major|minor
     recommendation: str
     inspector_version: str
-    model: Optional[str] = None            # "yolov8n-pretrained" or "heuristic"
+    model: Optional[str] = None            # "yolov8n-neu-det", "yolov8n-pretrained", or "heuristic"
+    model_map50: Optional[float] = None    # published mAP@0.5 accuracy; None for heuristic
     order_id: Optional[str] = None
 
 
@@ -410,6 +411,7 @@ class WeeklyPlanResponse(BaseModel):
     bottlenecks: List[str]
     recommendations: List[str]
     validation_failures: List[str] = []
+    data_source: str = "internal_benchmarks"
 
 
 # ---------------------------------------------------------------------------
@@ -431,6 +433,7 @@ class EnergyEstimateResponse(BaseModel):
     peak_rate: float
     off_peak_rate: float
     recommendation: str
+    data_source: str = "simulated_fallback"
     validation_failures: List[str] = []
 
 

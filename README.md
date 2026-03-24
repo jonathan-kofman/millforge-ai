@@ -2,9 +2,11 @@
 
 [![CI](https://github.com/jonathan-kofman/millforge-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/jonathan-kofman/millforge-ai/actions/workflows/ci.yml)
 
-**The software stack for lights-out American manufacturing.**
+**Built by a founder who operates CNC mills every day. Powered by AI.**
 
-China is moving toward dark factories — fully automated metal production where software controls the entire production flow and humans handle exceptions only. The US has almost none of this. MillForge is building the intelligence layer that makes it possible.
+Jonathan Kofman machines parts daily at Northeastern's Advanced Manufacturing lab — aluminum, steel, and titanium on HAAS and Tormach machines. His grandfather spent 40+ years in aluminum die manufacturing. He built MillForge because he lives the scheduling problem himself.
+
+China is moving toward dark factories — fully automated metal production where software controls the entire production flow and humans handle exceptions only. The US has almost none of this. MillForge is the intelligence layer that makes it possible.
 
 Same machines. Same staff. Software removes the human from every routine decision.
 
@@ -23,10 +25,10 @@ Same machines. Same staff. Software removes the human from every routine decisio
 | Quality Inspection | ⚡ pretrained (YOLOv8n ONNX) |
 | Rework Dispatch | ✅ automated |
 | Inventory Management | ✅ automated |
-| Energy Optimization | 🟡 mock |
-| Production Planning | 🟡 mock |
+| Energy Optimization | ✅ automated (PJM real-time LMP) |
+| Production Planning | 📊 real data (US Census ASM) |
 
-**Current readiness: 57%** (4 of 7 touchpoints fully automated)
+**Current readiness: 71%** (5 of 7 touchpoints fully automated)
 
 ## The Core Demo
 

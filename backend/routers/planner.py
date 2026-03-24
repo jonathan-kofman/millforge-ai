@@ -50,4 +50,5 @@ async def plan_week(req: WeeklyPlanRequest) -> WeeklyPlanResponse:
         bottlenecks=plan.bottlenecks,
         recommendations=plan.recommendations,
         validation_failures=plan.validation_failures,
+        data_source=plan.data_source,
     )

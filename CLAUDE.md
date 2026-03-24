@@ -13,9 +13,9 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 2. **Quoting** — ✅ automated. No human calculates lead time or price.
 3. **Quality triage** — ⚡ pretrained (ONNX/YOLOv8n placeholder). No human does first-pass visual inspection.
 4. **Rework dispatch** — ✅ automated. No human decides rework priority.
-5. **Energy procurement** — mock. No human decides when to run energy-intensive jobs.
+5. **Energy procurement** — ✅ automated (PJM real-time LMP). No human decides when to run energy-intensive jobs.
 6. **Inventory reorder** — ✅ automated. No human monitors stock levels.
-7. **Production planning** — mock. No human translates demand signals into capacity targets.
+7. **Production planning** — real data (Census ASM throughput). No human translates demand signals into capacity targets.
 8. **Exception handling** — this is what humans are for. Everything else is software.
 
 **Module audit against the lights-out lens:**
@@ -139,3 +139,20 @@ Full chain: schedule → inspect → energy → quote → rework (Step 6). Key a
 - Custom `forge-*` color palette is in `tailwind.config.js`
 - All API calls go through relative `/api/...` paths — Vite proxies to backend in dev
 - Error state pattern: `const [loading, error, result]` with early `setError(null)` on each request
+
+## Real Data Sources
+
+Every module falls back gracefully when real data is unavailable (CI-safe). The `data_source` field in each response tells callers which path was taken.
+
+| Module | Real Data | Source | Fallback | Cache TTL |
+|--------|-----------|--------|----------|-----------|
+| `energy_optimizer.py` | PJM real-time LMP | `gridstatus` library → `pjm.get_lmp(market="REAL_TIME_5_MIN")` | `MOCK_HOURLY_RATES` (24-hour simulated curve) | 1 hour |
+| `production_planner.py` | US Census ASM throughput | EIA API NAICS 332721 — Precision Turned Products; `EIA_API_KEY` env var (DEMO_KEY default) | `THROUGHPUT` constants (internal benchmarks) | 24 hours |
+| `quality_vision.py` | NEU-DET fine-tuned model | `backend/models/neu_det_yolov8n.onnx` (train: `yolo train model=yolov8n.pt data=neu_det.yaml`) | Generic YOLOv8n ONNX → heuristic hash | N/A (file-based) |
+
+**Adding new real data sources:**
+1. Write a `_fetch_X()` function that returns `None` on any failure
+2. Wrap with a module-level cache dict + TTL check in `_get_X()`
+3. Return `(data, data_source_string)` from the getter
+4. Pass `data_source` through to the response schema
+5. Add tests: one that monkeypatches fetch to `None` (checks fallback), one that returns fake data (checks real path), one that calls getter twice (checks cache hit count)

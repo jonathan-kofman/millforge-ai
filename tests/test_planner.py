@@ -12,7 +12,16 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
-from agents.production_planner import ProductionPlannerAgent, WeeklyPlan, DailyPlan, DAYS
+from agents.production_planner import (
+    ProductionPlannerAgent,
+    WeeklyPlan,
+    DailyPlan,
+    DAYS,
+    THROUGHPUT,
+    _get_throughput,
+    _fetch_asm_throughput,
+    _asm_cache,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -239,3 +248,69 @@ class TestPlannerAPI:
         assert r.status_code == 200
         util = r.json()["capacity_utilization_percent"]
         assert 0.0 <= util <= 100.0
+
+    def test_plan_week_response_includes_data_source(self, client):
+        payload = {
+            "demand_signal": "Routine production",
+            "capacity": {"steel": 20.0, "aluminum": 10.0},
+        }
+        r = client.post("/api/planner/week", json=payload)
+        assert r.status_code == 200
+        data = r.json()
+        assert "data_source" in data
+        assert data["data_source"] in ("US_Census_ASM_2022", "internal_benchmarks")
+
+
+# ---------------------------------------------------------------------------
+# Real data source tests
+# ---------------------------------------------------------------------------
+
+class TestDataSource:
+
+    def test_heuristic_plan_has_data_source_field(self, heuristic_agent):
+        plan = heuristic_agent.plan_week(DEMAND, CAPACITY)
+        assert hasattr(plan, "data_source")
+        assert plan.data_source in ("US_Census_ASM_2022", "internal_benchmarks")
+
+    def test_fallback_uses_internal_benchmarks(self, heuristic_agent, monkeypatch):
+        import agents.production_planner as pm
+        monkeypatch.setattr(pm, "_fetch_asm_throughput", lambda: None)
+        # Expire cache so the monkeypatched fetch is called
+        pm._asm_cache["fetched_at"] = None
+
+        plan = heuristic_agent.plan_week(DEMAND, CAPACITY)
+        assert plan.data_source == "internal_benchmarks"
+
+    def test_real_asm_data_sets_census_source(self, heuristic_agent, monkeypatch):
+        import agents.production_planner as pm
+        fake_throughput = {"steel": 11.0, "aluminum": 15.0, "titanium": 6.5, "copper": 13.0}
+        monkeypatch.setattr(pm, "_fetch_asm_throughput", lambda: fake_throughput)
+        pm._asm_cache["fetched_at"] = None  # expire cache
+
+        plan = heuristic_agent.plan_week(DEMAND, CAPACITY)
+        assert plan.data_source == "US_Census_ASM_2022"
+
+    def test_cache_reuses_throughput_within_ttl(self, monkeypatch):
+        import time
+        import agents.production_planner as pm
+
+        call_count = {"n": 0}
+
+        def counting_fetch():
+            call_count["n"] += 1
+            return {"steel": 10.0, "aluminum": 14.0, "titanium": 6.0, "copper": 12.0}
+
+        monkeypatch.setattr(pm, "_fetch_asm_throughput", counting_fetch)
+        pm._asm_cache["fetched_at"] = None  # prime first fetch
+
+        _get_throughput()   # should call fetch
+        _get_throughput()   # should hit cache
+        _get_throughput()   # should hit cache
+
+        assert call_count["n"] == 1
+
+    def test_get_throughput_returns_all_materials(self):
+        throughput, _ = _get_throughput()
+        for mat in ("steel", "aluminum", "titanium", "copper"):
+            assert mat in throughput
+            assert throughput[mat] > 0
