@@ -30,7 +30,14 @@
       "Bash(docker info:*)",
       "Bash(docker context:*)",
       "Bash(python3:*)",
-      "Bash(find .claude/agents -type f -name *.py)"
+      "Bash(find .claude/agents -type f -name *.py)",
+      "Bash(wc -l tests/*.py)",
+      "Bash(grep:*)",
+      "Bash(cat .github/workflows/*.yml)",
+      "Read(//mnt/c/Users/jonko/**)",
+      "Read(//c/Users/jonko/Downloads/**)",
+      "Read(//c//**)",
+      "Bash(python -c \":*)"
     ]
   }
 }

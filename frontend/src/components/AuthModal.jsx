@@ -100,6 +100,12 @@ export default function AuthModal({ onSuccess, onClose }) {
             {mode === "login" ? "Register" : "Sign In"}
           </button>
         </p>
+
+        <p className="text-sm text-center mt-3">
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-400 transition-colors">
+            ← Back to MillForge AI
+          </button>
+        </p>
       </div>
     </div>
   );

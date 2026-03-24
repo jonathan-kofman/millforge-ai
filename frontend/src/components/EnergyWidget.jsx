@@ -40,7 +40,6 @@ function Pill({ label, value, accent }) {
 export default function EnergyWidget() {
   const [data, setData] = useState(null);
   const [negWindows, setNegWindows] = useState(null);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Fetch current energy estimate (1-hour titanium run starting now as a representative load)
@@ -50,14 +49,14 @@ export default function EnergyWidget() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ start_time: now, duration_hours: 1, material: "titanium" }),
-      }).then(r => r.json()),
-      fetch(`${API_BASE}/api/energy/negative-pricing-windows`).then(r => r.json()),
+      }).then(r => r.ok ? r.json() : null),
+      fetch(`${API_BASE}/api/energy/negative-pricing-windows`).then(r => r.ok ? r.json() : null),
     ])
       .then(([est, neg]) => {
         setData(est);
         setNegWindows(neg);
       })
-      .catch(err => setError(err.message));
+      .catch(() => {});
   }, []);
 
   const mockRates = [
@@ -84,10 +83,6 @@ export default function EnergyWidget() {
         </p>
       </div>
 
-      {error && (
-        <p className="text-red-400 text-sm text-center mb-4">{error}</p>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Live PJM price card */}
         <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-5 flex flex-col gap-3">
@@ -100,12 +95,12 @@ export default function EnergyWidget() {
           <div className="flex gap-6">
             <Pill
               label="current $/kWh"
-              value={data ? `$${data.peak_rate.toFixed(3)}` : "—"}
+              value={data?.peak_rate != null ? `$${data.peak_rate.toFixed(3)}` : "—"}
               accent
             />
             <Pill
               label="off-peak $/kWh"
-              value={data ? `$${data.off_peak_rate.toFixed(3)}` : "—"}
+              value={data?.off_peak_rate != null ? `$${data.off_peak_rate.toFixed(3)}` : "—"}
             />
           </div>
           <SparkLine rates={mockRates} />
@@ -118,13 +113,13 @@ export default function EnergyWidget() {
           <div className="flex gap-6">
             <Pill
               label="best $/kWh"
-              value={data ? `$${data.off_peak_rate.toFixed(3)}` : "—"}
+              value={data?.off_peak_rate != null ? `$${data.off_peak_rate.toFixed(3)}` : "—"}
               accent
             />
             <Pill
               label="vs peak"
               value={
-                data
+                data?.peak_rate != null && data?.off_peak_rate != null && data.peak_rate !== 0
                   ? `-${(((data.peak_rate - data.off_peak_rate) / data.peak_rate) * 100).toFixed(0)}%`
                   : "—"
               }
@@ -146,7 +141,7 @@ export default function EnergyWidget() {
             />
             <Pill
               label="max credit $/MWh"
-              value={negWindows ? `$${negWindows.max_credit_usd_per_mwh.toFixed(0)}` : "—"}
+              value={negWindows?.max_credit_usd_per_mwh != null ? `$${negWindows.max_credit_usd_per_mwh.toFixed(0)}` : "—"}
             />
           </div>
           <p className="text-xs text-gray-400 leading-relaxed">

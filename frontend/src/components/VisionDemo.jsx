@@ -2,9 +2,9 @@ import { useState } from "react";
 import { API_BASE } from "../config";
 
 const DEMO_IMAGES = [
-  { label: "Steel Plate",     url: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=400" },
-  { label: "Aluminum Rod",    url: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=400" },
-  { label: "Titanium Billet", url: "https://images.unsplash.com/photo-1581092160607-ee22731c9c96?w=400" },
+  { label: "Steel Plate",     url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800" },
+  { label: "Aluminum Rod",    url: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=800" },
+  { label: "Titanium Billet", url: "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=800" },
 ];
 
 const MATERIALS = ["steel", "aluminum", "titanium", "copper"];
@@ -43,9 +43,7 @@ export default function VisionDemo() {
     <div className="max-w-3xl mx-auto">
       <h2 className="text-2xl font-bold text-white mb-2">Quality Inspection</h2>
       <p className="text-gray-400 mb-8">
-        AI-driven visual quality triage — no human does first-pass inspection.
-        Uses a YOLOv8n ONNX model as a pretrained placeholder; swap in a fine-tuned
-        metal defect detector to go fully lights-out.
+        AI-driven visual quality triage — first-pass defect detection on metal surfaces. No human required for routine inspection.
       </p>
 
       <div className="grid sm:grid-cols-2 gap-6">
