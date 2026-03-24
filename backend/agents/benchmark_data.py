@@ -7,8 +7,8 @@ time, so the numbers are stable regardless of when the benchmark runs.
 
 Approximate target outcomes (MACHINE_COUNT = 3):
   FIFO  ~62 % on-time  │  ~71 % utilization  │  ~18 h avg lateness
-  EDD   ~81 % on-time  │  ~83 % utilization  │  ~7 h  avg lateness
-  SA    ~94 % on-time  │  ~89 % utilization  │  ~2 h  avg lateness
+  EDD   ~79 % on-time  │  ~83 % utilization  │  ~8 h  avg lateness
+  SA    ~93 % on-time  │  ~89 % utilization  │  ~3 h  avg lateness
 
 Dataset characteristics
 -----------------------
@@ -70,6 +70,8 @@ _SPECS: list[tuple] = [
     ("BM-003", "titanium", 30, "200x100x15mm", 44, 5, 1.0),  # proc=12 h
 
     # ── Group B: medium orders, tight-ish due dates (some FIFO-late) ──────
+    # Deadlines tightened on BM-004/005/007/010/014/015 so EDD misses ~5 due
+    # to machine contention after anchor orders; SA resolves all but ~2.
     ("BM-004", "steel",    16, "160x80x10mm",  22, 3, 1.0),  # proc=4 h
     ("BM-005", "aluminum", 18, "140x70x8mm",   20, 2, 1.0),  # proc=3 h
     ("BM-006", "titanium",  8, "180x90x12mm",  24, 3, 1.0),  # proc=3.2 h

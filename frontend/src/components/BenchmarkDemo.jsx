@@ -97,8 +97,8 @@ function Stat({ label, value, accent }) {
 // ── Algorithm card ────────────────────────────────────────────────────────────
 const ALGO_META = {
   fifo: { label: "FIFO Baseline",          color: "#6b7280", ringColor: "#6b7280", desc: "Arrival order — no optimisation" },
-  edd:  { label: "EDD (MillForge Greedy)", color: "#3b82f6", ringColor: "#3b82f6", desc: "Earliest due date with setup-time awareness" },
-  sa:   { label: "SA (MillForge Best)",    color: "#f97316", ringColor: "#f97316", desc: "Simulated annealing — minimises tardiness" },
+  edd:  { label: "EDD (MillForge AI Greedy)", color: "#3b82f6", ringColor: "#3b82f6", desc: "Earliest due date with setup-time awareness" },
+  sa:   { label: "SA (MillForge AI Best)",    color: "#f97316", ringColor: "#f97316", desc: "Simulated annealing — minimises tardiness" },
 };
 
 function AlgoCard({ algo, entry, isWinner, rushDiff }) {
@@ -194,11 +194,11 @@ export default function BenchmarkDemo() {
     <section className="max-w-6xl mx-auto px-4 py-12">
       {/* ── Section header ── */}
       <div className="text-center mb-8">
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2">
-          What a machinist-founder built when he got tired of scheduling by hand.
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
+          Metal Parts in Days, Not Months.
         </h2>
         <p className="text-gray-400 text-sm max-w-xl mx-auto">
-          Same 28 orders. Same machines. Three strategies — and the gap is what MillForge ships.
+          Same 28 orders. Same machines. See what AI scheduling actually does to your on-time rate.
         </p>
       </div>
 

@@ -59,7 +59,7 @@ export default function App() {
             <span className="text-2xl">⚙️</span>
             <div>
               <span className="text-xl font-bold text-white tracking-tight">Mill</span>
-              <span className="text-xl font-bold text-forge-500 tracking-tight">Forge</span>
+              <span className="text-xl font-bold text-forge-500 tracking-tight">Forge AI</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -102,29 +102,17 @@ export default function App() {
         </div>
       </section>
 
-      {/* ── Lights-out readiness widget ── */}
-      <div className="bg-gray-950">
-        <LightsOutWidget />
-      </div>
-
       {/* ── Benchmark demo ── */}
       <div className="bg-gray-950 border-b border-gray-800">
         <BenchmarkDemo />
       </div>
 
-      {/* ── Founder credibility ── */}
-      <div className="bg-gray-900 border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-4 py-8 text-center">
-          <p className="text-gray-300 text-sm sm:text-base">
-            Jonathan Kofman operates CNC mills daily at Northeastern&apos;s Advanced Manufacturing lab.
-          </p>
-          <p className="text-gray-400 text-sm sm:text-base mt-1">
-            He owns a desktop CNC mill and multiple 3D printers, and has personally machined parts in aluminum, steel, and titanium on HAAS and Tormach machines.
-          </p>
-          <p className="text-gray-500 text-sm mt-1">
-            He built MillForge because he lives the scheduling problem himself.
-          </p>
+      {/* ── Lights-out readiness widget ── */}
+      <div className="bg-gray-950">
+        <div className="max-w-6xl mx-auto px-4 pt-10 pb-2">
+          <p className="text-sm text-gray-500 text-center">Every milestone removes one more human touchpoint from routine production.</p>
         </div>
+        <LightsOutWidget />
       </div>
 
       {/* ── Tab nav ── */}
@@ -153,7 +141,7 @@ export default function App() {
               onClick={() => setShowAuth(true)}
               className="px-5 py-4 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-gray-600 hover:text-gray-400 transition-colors"
             >
-              My Orders 🔒
+              My Orders
             </button>
           )}
         </div>
@@ -171,7 +159,7 @@ export default function App() {
       {/* ── Footer ── */}
       <footer className="border-t border-gray-800 bg-gray-950">
         <div className="max-w-6xl mx-auto px-4 py-6 text-center text-xs text-gray-600">
-          MillForge Proof of Concept · Not for production use · © 2025
+          MillForge AI · 2026 · Built by Jonathan Kofman, Northeastern Advanced Manufacturing
         </div>
       </footer>
 
