@@ -21,6 +21,8 @@ from routers.energy import router as energy_router
 from routers.anomaly import router as anomaly_router
 from routers.nl_schedule import router as nl_schedule_router
 from routers.rework import router as rework_router
+from routers.learning import router as learning_router
+from routers.twin import router as twin_router
 from database import init_db
 
 # ---------------------------------------------------------------------------
@@ -97,6 +99,8 @@ app.include_router(energy_router)
 app.include_router(anomaly_router,     include_in_schema=False)
 app.include_router(nl_schedule_router, include_in_schema=False)
 app.include_router(rework_router)
+app.include_router(learning_router)
+app.include_router(twin_router)
 
 
 # ---------------------------------------------------------------------------

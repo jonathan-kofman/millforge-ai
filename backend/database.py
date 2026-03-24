@@ -34,5 +34,5 @@ def get_db():
 def init_db() -> None:
     """Create all tables. Called at app startup."""
     # Import here so all models are registered on Base.metadata
-    from db_models import User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission  # noqa: F401
+    from db_models import User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission, MachineStateLog, JobFeedbackRecord  # noqa: F401
     Base.metadata.create_all(bind=engine)

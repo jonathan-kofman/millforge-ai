@@ -184,3 +184,73 @@ Every module falls back gracefully when real data is unavailable (CI-safe). The 
 3. Return `(data, data_source_string)` from the getter
 4. Pass `data_source` through to the response schema
 5. Add tests: one that monkeypatches fetch to `None` (checks fallback), one that returns fake data (checks real path), one that calls getter twice (checks cache hit count)
+
+## Scheduling Twin Architecture (ML self-calibration layer)
+
+Four agents form a closed feedback loop for continuous improvement. Adapted from microgravity-manufacturing-stack patterns.
+
+### Machine State Machine (`backend/agents/machine_state_machine.py`)
+
+Protocol-based IO isolation: `MachineIO` Protocol → real hardware OR `MockMachineIO`.
+
+States: `IDLE → SETUP (setup_time_min) → READY → RUNNING (processing_time_min) → COOLDOWN → IDLE`
+
+Any exception during `step()` → `FAULT`. Operator calls `reset_fault()` to return to IDLE.
+
+`MachineStateMachine(machine_id, io, db=None)` — pass a DB session to persist every transition to `MachineStateLog`.
+
+Key API:
+- `assign_job(job_id, setup_time_minutes, processing_time_minutes)` — only valid in IDLE
+- `step() → MachineState` — call periodically; exception-safe
+- `reset_fault()` — operator clears FAULT
+
+DB model: `MachineStateLog` (`machine_id`, `job_id`, `from_state`, `to_state`, `occurred_at`)
+
+### Setup Time Predictor (`backend/agents/setup_time_predictor.py`)
+
+`RandomForestRegressor` (n_estimators=200) surrogate for changeover time prediction.
+
+Features: `from_material (int), to_material (int), machine_id (int), hour_of_day (int), day_of_week (int)`
+
+- `train_test_split(test_size=0.3, random_state=42)`
+- Requires `MIN_TRAINING_RECORDS = 20` feedback records before switching from `SETUP_MATRIX` fallback
+- Model saved to `backend/models/setup_time_predictor.pkl` via `joblib`
+- Loaded automatically at startup if file exists
+- `SetupTimePredictor._trained` is the gate — checked by `SchedulingTwin`
+
+Endpoint: `GET /api/learning/setup-time-accuracy`
+
+### Feedback Logger (`backend/agents/feedback_logger.py`)
+
+Canonical ID: `ORD-{order_id}_M{material}_MC{machine_id}_{YYYYMMDDTHHMMSS}`
+
+`data_provenance` values (trust ranking): `operator_logged > mtconnect_auto > estimated`
+
+`FeedbackLogger.log(db, order_id, material, machine_id, predicted_*, actual_*, provenance)` — persists to `JobFeedbackRecord`.
+
+`FeedbackLogger.calibration_report(db, limit=50)` — last 50 jobs, predicted vs actual, grouped by provenance.
+
+Endpoint: `GET /api/learning/calibration-report`
+
+DB model: `JobFeedbackRecord` (`canonical_id` unique, `order_id`, `material`, `machine_id`, `predicted_setup_minutes`, `actual_setup_minutes`, `predicted_processing_minutes`, `actual_processing_minutes`, `data_provenance`, `logged_at`)
+
+### Scheduling Twin (`backend/agents/scheduling_twin.py`)
+
+Narrow predict API that starts with physics defaults and upgrades to ML automatically.
+
+- `predict_setup_time(from_material, to_material, machine_id, ...)` → uses `SetupTimePredictor` if trained, else `SETUP_MATRIX`
+- `predict_completion(material, quantity, complexity, setup_time_minutes, start_time)` → uses `THROUGHPUT` constants
+- `predict_on_time_probability(...)` → heuristic: ≥120 min slack → 95%, 0 min → 50%, negative → clamp 10%
+- `accuracy_report(db)` → MAE for setup and processing vs `JobFeedbackRecord` actuals
+
+`SetupTimePredictor` is a lazy module-level singleton — loaded once on first `SchedulingTwin` call.
+
+Endpoint: `GET /api/twin/accuracy`
+
+### Routing
+
+- `GET /api/learning/setup-time-accuracy` → `routers/learning.py`
+- `GET /api/learning/calibration-report` → `routers/learning.py`
+- `GET /api/twin/accuracy` → `routers/twin.py`
+
+Both routers registered in `main.py` after `rework_router`.

@@ -7,9 +7,15 @@ from .inventory_agent import InventoryAgent
 from .production_planner import ProductionPlannerAgent
 from .anomaly_detector import AnomalyDetector
 from .nl_scheduler import NLSchedulerAgent
+from .machine_state_machine import MachineState, MachineStateMachine, MockMachineIO
+from .setup_time_predictor import SetupTimePredictor
+from .feedback_logger import FeedbackLogger
+from .scheduling_twin import SchedulingTwin
 
 __all__ = [
     "Scheduler", "SAScheduler", "Order", "Schedule",
     "QualityVisionAgent", "EnergyOptimizer", "InventoryAgent",
     "ProductionPlannerAgent", "AnomalyDetector", "NLSchedulerAgent",
+    "MachineState", "MachineStateMachine", "MockMachineIO",
+    "SetupTimePredictor", "FeedbackLogger", "SchedulingTwin",
 ]

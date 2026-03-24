@@ -128,3 +128,41 @@ class ContactSubmission(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
     pilot_interest: Mapped[bool] = mapped_column(Boolean, default=False)
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class MachineStateLog(Base):
+    """Timestamped record of every CNC machine state transition."""
+
+    __tablename__ = "machine_state_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    machine_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    job_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    from_state: Mapped[str] = mapped_column(String(20), nullable=False)
+    to_state: Mapped[str] = mapped_column(String(20), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    def __repr__(self) -> str:
+        return f"<MachineStateLog machine={self.machine_id} {self.from_state}→{self.to_state}>"
+
+
+class JobFeedbackRecord(Base):
+    """Actual vs predicted job metrics — feeds SetupTimePredictor and SchedulingTwin."""
+
+    __tablename__ = "job_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    canonical_id: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
+    order_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    material: Mapped[str] = mapped_column(String(50), nullable=False)
+    machine_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    predicted_setup_minutes: Mapped[float] = mapped_column(Float, nullable=False)
+    actual_setup_minutes: Mapped[float] = mapped_column(Float, nullable=False)
+    predicted_processing_minutes: Mapped[float] = mapped_column(Float, nullable=False)
+    actual_processing_minutes: Mapped[float] = mapped_column(Float, nullable=False)
+    # operator_logged | mtconnect_auto | estimated
+    data_provenance: Mapped[str] = mapped_column(String(30), nullable=False, default="operator_logged")
+    logged_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    def __repr__(self) -> str:
+        return f"<JobFeedbackRecord {self.canonical_id} provenance={self.data_provenance}>"
