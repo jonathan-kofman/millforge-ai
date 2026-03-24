@@ -59,6 +59,11 @@ async def lifespan(app: FastAPI):
         logger.warning("Supplier auto-seed failed: %s", exc)
     finally:
         db.close()
+    logger.info(
+        "Routers active: suppliers=%s energy=%s",
+        suppliers_router.prefix,
+        energy_router.prefix,
+    )
     yield
     logger.info("MillForge backend shutting down.")
 
@@ -75,7 +80,7 @@ app = FastAPI(
         "Jonathan Kofman machines parts daily at Northeastern's Advanced Manufacturing lab "
         "and built MillForge because he lives the scheduling problem himself."
     ),
-    version="0.2.0",
+    version="0.3.0",
     contact={"name": "Jonathan Kofman — MillForge"},
     lifespan=lifespan,
 )
@@ -125,7 +130,7 @@ app.include_router(suppliers_router)
 # ---------------------------------------------------------------------------
 @app.get("/", tags=["Health"])
 async def root():
-    return {"service": "MillForge API", "status": "ok", "version": "0.2.0"}
+    return {"service": "MillForge API", "status": "ok", "version": "0.3.0"}
 
 
 @app.get("/health", tags=["Health"])
