@@ -2,6 +2,7 @@ import { useState } from "react";
 import { API_BASE } from "../config";
 
 const DEFAULT_FORM = { name: "", email: "", company: "", message: "" };
+const DEFAULT_SUPPLIER = { name: "", city: "", state: "", address: "", materials: "", website: "", phone: "" };
 
 export default function ContactForm() {
   const [form, setForm] = useState(DEFAULT_FORM);
@@ -9,9 +10,58 @@ export default function ContactForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Supplier submission state
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [supplierForm, setSupplierForm] = useState(DEFAULT_SUPPLIER);
+  const [supplierSubmitted, setSupplierSubmitted] = useState(false);
+  const [supplierLoading, setSupplierLoading] = useState(false);
+  const [supplierError, setSupplierError] = useState(null);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
+  };
+
+  const handleSupplierChange = (e) => {
+    const { name, value } = e.target;
+    setSupplierForm((f) => ({ ...f, [name]: value }));
+  };
+
+  const handleSupplierSubmit = async (e) => {
+    e.preventDefault();
+    setSupplierLoading(true);
+    setSupplierError(null);
+    try {
+      const materialsArr = supplierForm.materials
+        .split(",")
+        .map((m) => m.trim().toLowerCase())
+        .filter(Boolean);
+      const res = await fetch(`${API_BASE}/api/suppliers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: supplierForm.name,
+          city: supplierForm.city,
+          state: supplierForm.state,
+          address: supplierForm.address || undefined,
+          materials: materialsArr,
+          website: supplierForm.website || undefined,
+          phone: supplierForm.phone || undefined,
+          verified: false,
+          data_source: "user_submitted",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Submission failed");
+      }
+      setSupplierSubmitted(true);
+      setSupplierForm(DEFAULT_SUPPLIER);
+    } catch (err) {
+      setSupplierError(err.message);
+    } finally {
+      setSupplierLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -149,6 +199,70 @@ export default function ContactForm() {
             <p className="text-gray-300 text-sm">
               Based in Boston, MA — serving mills and job shops across the US.
             </p>
+          </div>
+
+          {/* ── Submit a supplier ── */}
+          <div className="border-t border-gray-800 pt-6">
+            <button
+              onClick={() => { setShowSupplierForm((v) => !v); setSupplierSubmitted(false); setSupplierError(null); }}
+              className="btn-secondary text-sm w-full"
+            >
+              {showSupplierForm ? "Hide supplier form" : "Submit a supplier →"}
+            </button>
+
+            {showSupplierForm && (
+              <div className="mt-4">
+                {supplierSubmitted ? (
+                  <div className="card text-center py-6">
+                    <p className="text-white font-semibold mb-1">Supplier submitted.</p>
+                    <p className="text-gray-400 text-sm">We'll verify and add it to the directory.</p>
+                    <button onClick={() => setSupplierSubmitted(false)} className="btn-secondary mt-4 text-xs">
+                      Submit another
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSupplierSubmit} className="card space-y-3">
+                    <p className="text-xs text-gray-500">Know a US metal supplier that should be listed? Add them here.</p>
+                    <div>
+                      <label className="label">Supplier name *</label>
+                      <input name="name" value={supplierForm.name} onChange={handleSupplierChange} className="input" placeholder="Olympic Steel" required minLength={2} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="label">City *</label>
+                        <input name="city" value={supplierForm.city} onChange={handleSupplierChange} className="input" placeholder="Cleveland" required />
+                      </div>
+                      <div>
+                        <label className="label">State *</label>
+                        <input name="state" value={supplierForm.state} onChange={handleSupplierChange} className="input" placeholder="OH" required maxLength={50} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="label">Street address</label>
+                      <input name="address" value={supplierForm.address} onChange={handleSupplierChange} className="input" placeholder="123 Industrial Blvd" />
+                    </div>
+                    <div>
+                      <label className="label">Materials (comma-separated)</label>
+                      <input name="materials" value={supplierForm.materials} onChange={handleSupplierChange} className="input" placeholder="steel, aluminum, stainless_steel" />
+                    </div>
+                    <div>
+                      <label className="label">Website</label>
+                      <input name="website" value={supplierForm.website} onChange={handleSupplierChange} className="input" placeholder="https://supplier.com" />
+                    </div>
+                    <div>
+                      <label className="label">Phone</label>
+                      <input name="phone" value={supplierForm.phone} onChange={handleSupplierChange} className="input" placeholder="+1 (555) 000-0000" />
+                    </div>
+                    {supplierError && (
+                      <div className="p-2 bg-red-900/40 border border-red-700 rounded text-red-300 text-xs">{supplierError}</div>
+                    )}
+                    <button type="submit" className="btn-primary w-full text-sm" disabled={supplierLoading}>
+                      {supplierLoading ? "Submitting…" : "Submit supplier"}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

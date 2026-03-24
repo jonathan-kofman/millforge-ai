@@ -23,6 +23,7 @@ from routers.nl_schedule import router as nl_schedule_router
 from routers.rework import router as rework_router
 from routers.learning import router as learning_router
 from routers.twin import router as twin_router
+from routers.suppliers import router as suppliers_router
 from database import init_db
 
 # ---------------------------------------------------------------------------
@@ -101,6 +102,7 @@ app.include_router(nl_schedule_router, include_in_schema=False)
 app.include_router(rework_router)
 app.include_router(learning_router)
 app.include_router(twin_router)
+app.include_router(suppliers_router)
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +123,7 @@ async def health():
         "inventory_management":"automated",
         "production_planning": "real_data",  # US Census ASM throughput benchmarks
         "rework_dispatch":     "automated",
+        "material_sourcing":   "directory_active",  # supplier directory with geo-search
     }
     automated = sum(1 for v in touchpoints.values() if v == "automated")
     total = len(touchpoints)

@@ -11,6 +11,7 @@ from .machine_state_machine import MachineState, MachineStateMachine, MockMachin
 from .setup_time_predictor import SetupTimePredictor
 from .feedback_logger import FeedbackLogger
 from .scheduling_twin import SchedulingTwin
+from .supplier_directory import SupplierDirectory, MATERIAL_CATEGORIES, haversine_miles
 
 __all__ = [
     "Scheduler", "SAScheduler", "Order", "Schedule",
@@ -18,4 +19,5 @@ __all__ = [
     "ProductionPlannerAgent", "AnomalyDetector", "NLSchedulerAgent",
     "MachineState", "MachineStateMachine", "MockMachineIO",
     "SetupTimePredictor", "FeedbackLogger", "SchedulingTwin",
+    "SupplierDirectory", "MATERIAL_CATEGORIES", "haversine_miles",
 ]

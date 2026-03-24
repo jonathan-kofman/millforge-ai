@@ -659,6 +659,78 @@ class ReworkScheduleResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# /api/suppliers
+# ---------------------------------------------------------------------------
+
+class SupplierCreate(BaseModel):
+    name: str = Field(..., min_length=2)
+    city: str = Field(..., min_length=2)
+    state: str = Field(..., min_length=2, max_length=50)
+    address: Optional[str] = None
+    country: str = "US"
+    lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    materials: List[str] = Field(default_factory=list)
+    categories: List[str] = Field(default_factory=list)
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    email: Optional[str] = None
+    verified: bool = False
+    data_source: str = "user_submitted"
+
+
+class SupplierResponse(BaseModel):
+    id: int
+    name: str
+    city: str
+    state: str
+    address: Optional[str] = None
+    country: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    materials: List[str]
+    categories: List[str]
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    email: Optional[str] = None
+    verified: bool
+    data_source: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SupplierSearchResult(SupplierResponse):
+    distance_miles: Optional[float] = None
+
+
+class SupplierListResponse(BaseModel):
+    total: int
+    suppliers: List[SupplierResponse]
+
+
+class SupplierNearbyResponse(BaseModel):
+    lat: float
+    lng: float
+    radius_miles: float
+    results: List[SupplierSearchResult]
+    total: int
+
+
+class SupplierStatsResponse(BaseModel):
+    total_suppliers: int
+    verified_suppliers: int
+    states_covered: int
+    state_list: List[str]
+
+
+class SupplierMaterialsResponse(BaseModel):
+    categories: Dict[str, List[str]]
+    all_materials: List[str]
+
+
+# ---------------------------------------------------------------------------
 # Generic error response
 # ---------------------------------------------------------------------------
 

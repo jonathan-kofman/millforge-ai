@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import QuoteForm from "./components/QuoteForm";
 import ScheduleViewer from "./components/ScheduleViewer";
 import VisionDemo from "./components/VisionDemo";
@@ -8,6 +8,8 @@ import AuthModal from "./components/AuthModal";
 import BenchmarkDemo from "./components/BenchmarkDemo";
 import LightsOutWidget from "./components/LightsOutWidget";
 import EnergyWidget from "./components/EnergyWidget";
+import SupplierMap from "./components/SupplierMap";
+import { API_BASE } from "./config";
 
 const PUBLIC_TABS = [
   { id: "quote",    label: "Instant Quote" },
@@ -23,6 +25,7 @@ const AUTH_TABS = [
 export default function App() {
   const [activeTab, setActiveTab] = useState("quote");
   const [showAuth, setShowAuth] = useState(false);
+  const [supplierStats, setSupplierStats] = useState(null);
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem("millforge_user");
@@ -48,6 +51,13 @@ export default function App() {
     localStorage.removeItem("millforge_user");
     setActiveTab("quote");
   };
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/suppliers/stats`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => d && setSupplierStats(d))
+      .catch(() => {});
+  }, []);
 
   const TABS = [...PUBLIC_TABS, ...(user ? AUTH_TABS : [])];
 
@@ -147,6 +157,55 @@ export default function App() {
       {/* ── Energy intelligence ── */}
       <div className="bg-gray-950 border-b border-gray-800">
         <EnergyWidget />
+      </div>
+
+      {/* ── Supplier sourcing section ── */}
+      <div className="bg-gray-950 border-b border-gray-800">
+        <div className="max-w-6xl mx-auto px-4 py-16">
+          <p className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-4 text-center">
+            Materials Sourcing
+          </p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white text-center mb-3">
+            Find materials. Schedule production. Ship faster.
+          </h2>
+          <p className="text-gray-400 text-center max-w-xl mx-auto mb-10">
+            MillForge connects your schedule to verified US suppliers — so when stock runs low, a purchase order with the nearest qualified source is one click away.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-10 items-start">
+            {/* Left: sourcing problem copy */}
+            <div className="space-y-5">
+              <h3 className="text-lg font-semibold text-white">The sourcing problem</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                American mills lose weeks to supplier search. When a material runs short, a floor manager calls three distributors, waits for callbacks, manually compares lead times, and enters a PO by hand. The scheduling software doesn't know any of this is happening.
+              </p>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                MillForge's inventory agent watches stock in real time. When a reorder point is hit, it surfaces the nearest verified supplier for that material — filtered by distance, category, and current schedule — and generates the purchase order automatically. No calls. No callbacks. No delays.
+              </p>
+              {supplierStats && (
+                <div className="flex flex-wrap gap-6 mt-4">
+                  <div>
+                    <p className="text-2xl font-bold text-white">{supplierStats.verified_suppliers}</p>
+                    <p className="text-xs text-gray-500">verified US suppliers</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{supplierStats.states_covered}</p>
+                    <p className="text-xs text-gray-500">states covered</p>
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => setActiveTab("contact")}
+                className="btn-secondary text-sm mt-2"
+              >
+                Submit a supplier →
+              </button>
+            </div>
+            {/* Right: map */}
+            <div>
+              <SupplierMap />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Tab nav ── */}

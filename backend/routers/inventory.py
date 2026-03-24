@@ -3,21 +3,29 @@
 """
 
 import logging
-from fastapi import APIRouter, HTTPException
+from typing import Any, Dict, List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from database import get_db
 from models.schemas import (
     InventoryConsumeRequest,
     MaterialConsumptionResponse,
     InventoryStatusResponse,
     PurchaseOrderResponse,
     ReorderResponse,
+    SupplierSearchResult,
+    SupplierResponse,
 )
 from agents.inventory_agent import InventoryAgent
+from agents.supplier_directory import SupplierDirectory
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/inventory", tags=["Inventory"])
 
 _inventory = InventoryAgent()
+_directory = SupplierDirectory()
 
 
 @router.post(
@@ -97,3 +105,57 @@ async def trigger_reorder() -> ReorderResponse:
         ],
         total_pos_generated=len(pos),
     )
+
+
+@router.get(
+    "/reorder-with-suppliers",
+    summary="Reorder recommendations with nearest verified supplier suggestions",
+)
+async def reorder_with_suppliers(
+    lat: Optional[float] = Query(None, description="Your facility latitude for proximity matching"),
+    lng: Optional[float] = Query(None, description="Your facility longitude for proximity matching"),
+    radius_miles: float = Query(500.0, gt=0, le=3000, description="Supplier search radius in miles"),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Check reorder points and attach the nearest verified supplier suggestions to each PO.
+
+    Pass lat/lng to get geographically ranked suppliers; omit for alphabetical order.
+    """
+    logger.info("Reorder-with-suppliers check (lat=%s, lng=%s)", lat, lng)
+    try:
+        pos = _inventory.check_reorder_points()
+    except Exception as e:
+        logger.error("Reorder check error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Inventory reorder error")
+
+    enriched = []
+    for po in pos:
+        if lat is not None and lng is not None:
+            nearby = _directory.nearby(
+                db, lat=lat, lng=lng, radius_miles=radius_miles,
+                material=po.material, limit=3,
+            )
+            suppliers = [
+                {**SupplierResponse.model_validate(s).model_dump(), "distance_miles": d}
+                for s, d in nearby
+            ]
+        else:
+            raw, _ = _directory.search(db, material=po.material, verified_only=True, limit=3)
+            suppliers = [SupplierResponse.model_validate(s).model_dump() for s in raw]
+
+        enriched.append({
+            "po_id": po.po_id,
+            "material": po.material,
+            "quantity_kg": po.quantity_kg,
+            "reason": po.reason,
+            "current_stock_kg": po.current_stock_kg,
+            "reorder_point_kg": po.reorder_point_kg,
+            "generated_at": po.generated_at.isoformat(),
+            "suggested_suppliers": suppliers,
+        })
+
+    return {
+        "purchase_orders": enriched,
+        "total_pos_generated": len(enriched),
+    }

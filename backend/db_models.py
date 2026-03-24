@@ -11,7 +11,7 @@ from typing import Optional, List
 
 from sqlalchemy import (
     Boolean, DateTime, Float, ForeignKey,
-    Integer, String, Text,
+    Integer, JSON, String, Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -166,3 +166,33 @@ class JobFeedbackRecord(Base):
 
     def __repr__(self) -> str:
         return f"<JobFeedbackRecord {self.canonical_id} provenance={self.data_provenance}>"
+
+
+class Supplier(Base):
+    """US metal/materials supplier record."""
+
+    __tablename__ = "suppliers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=False)
+    state: Mapped[str] = mapped_column(String(50), nullable=False)
+    country: Mapped[str] = mapped_column(String(50), default="US")
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # JSON list of material strings (e.g. ["steel", "aluminum"])
+    materials: Mapped[list] = mapped_column(JSON, default=list)
+    # JSON list of category strings (e.g. ["metals", "raw_materials"])
+    categories: Mapped[list] = mapped_column(JSON, default=list)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    website: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # pmpa | msci | manual | user_submitted
+    data_source: Mapped[str] = mapped_column(String(50), default="manual")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    def __repr__(self) -> str:
+        return f"<Supplier id={self.id} name={self.name} state={self.state}>"

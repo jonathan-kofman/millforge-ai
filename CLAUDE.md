@@ -15,8 +15,9 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 4. **Rework dispatch** — ✅ automated. No human decides rework priority.
 5. **Energy procurement** — ✅ automated (PJM real-time LMP). No human decides when to run energy-intensive jobs.
 6. **Inventory reorder** — ✅ automated. No human monitors stock levels.
-7. **Production planning** — real data (Census ASM throughput). No human translates demand signals into capacity targets.
-8. **Exception handling** — this is what humans are for. Everything else is software.
+7. **Material sourcing** — ✅ directory active (50+ verified US suppliers, geo-search). No human searches for suppliers.
+8. **Production planning** — real data (Census ASM throughput). No human translates demand signals into capacity targets.
+9. **Exception handling** — this is what humans are for. Everything else is software.
 
 **Module audit against the lights-out lens:**
 
@@ -28,6 +29,7 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 | rework.py | ✅ Yes — auto-dispatches failures | automated | Core |
 | inventory_agent.py | ✅ Yes — auto-reorders stock | automated | Medium |
 | energy_optimizer.py | ✅ Yes — no human decides when to run energy-intensive jobs | automated (PJM real-time LMP) | Medium |
+| supplier_directory.py | ✅ Yes — no human searches for suppliers | directory_active (50+ US suppliers) | Medium |
 | production_planner.py | Partially — real Census ASM throughput data | real_data | Defer |
 | nl_scheduler.py | Assists human, not replaces | mock | Defer |
 | anomaly_detector.py | Assists human, not replaces | mock | Defer |
@@ -254,3 +256,56 @@ Endpoint: `GET /api/twin/accuracy`
 - `GET /api/twin/accuracy` → `routers/twin.py`
 
 Both routers registered in `main.py` after `rework_router`.
+
+## Supplier Directory Architecture
+
+US materials supplier database with geo-search — the data foundation for automated sourcing.
+
+### Data Model (`backend/db_models.py` — `Supplier`)
+
+Fields: `name, address, city, state, country, lat, lng, materials (JSON list), categories (JSON list), phone, website, email, verified (bool), data_source (str), created_at, updated_at`
+
+`data_source` values: `pmpa | msci | manual | user_submitted`
+
+### Agent (`backend/agents/supplier_directory.py`)
+
+`MATERIAL_CATEGORIES` dict: `metals | wood | plastics | composites | raw_materials` → list of material strings.
+
+`haversine_miles(lat1, lng1, lat2, lng2)` — great-circle distance in miles (Earth radius 3958.8 mi).
+
+`SupplierDirectory` methods:
+- `search(db, *, material, category, state, verified_only, skip, limit)` → `(list[Supplier], total_count)`
+- `get_by_id(db, supplier_id)` → `Optional[Supplier]`
+- `create(db, *, name, city, state, ...)` → `Supplier`
+- `nearby(db, *, lat, lng, radius_miles, material, limit)` → `[(Supplier, distance_miles)]` sorted by distance
+- `get_stats(db)` → `{total_suppliers, verified_suppliers, states_covered, state_list}`
+- `list_materials()` → `{categories, all_materials}` (static)
+
+### Endpoints (`backend/routers/suppliers.py`)
+
+- `GET /api/suppliers` — list/search with `?material=steel&state=OH&category=metals&verified_only=true&skip=0&limit=50`
+- `GET /api/suppliers/stats` — verified count + states covered (used by landing page)
+- `GET /api/suppliers/materials` — full material taxonomy
+- `GET /api/suppliers/nearby?lat=41.5&lng=-81.7&radius_miles=250&material=steel` — geo-sorted results
+- `GET /api/suppliers/{id}` — single supplier
+- `POST /api/suppliers` — user submission (verified=false, data_source="user_submitted")
+
+### Inventory Integration (`backend/routers/inventory.py`)
+
+`GET /api/inventory/reorder-with-suppliers?lat=...&lng=...&radius_miles=500` — reorder POs with nearest verified supplier suggestions attached. Pass lat/lng for geo-ranked results; omit for alphabetical.
+
+### Seed Data (`backend/scripts/seed_suppliers.py`)
+
+50+ real US metal distributors: Olympic Steel (5 branches), Metals USA (5), Chicago Tube and Iron (5), Ryerson (5), TW Metals (3), Chapel Steel (2), Metal Supermarkets (5), Earle M Jorgensen, Reliance Steel, Metals Depot, Alro Steel (3), Castle Metals, O'Neal Steel (2), Worthington Industries, Steel Technologies, Precision Castparts, Carpenter Technology, Haynes International, and more.
+
+Run: `python scripts/seed_suppliers.py [--clear]`
+
+### Frontend
+
+- `SupplierMap.jsx` — Leaflet.js map (CDN, no API key) with color-coded dots by category (orange=metals, blue=plastics, purple=composites, green=wood, yellow=raw_materials). Material filter input. Leaflet CSS/JS loaded via `index.html` CDN links.
+- Sourcing section in `App.jsx` — between energy widget and tab nav. Two-column: left copy + right map. Fetches `/api/suppliers/stats` for dynamic counts.
+- Supplier submission form in `ContactForm.jsx` — "Submit a supplier →" toggle in Get in Touch tab.
+
+### Health endpoint
+
+`material_sourcing: "directory_active"` — added as 8th touchpoint in `/health`.
