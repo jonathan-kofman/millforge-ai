@@ -143,6 +143,33 @@ SUPPLIERS = [
 ]
 
 
+def seed_suppliers(db) -> int:
+    """
+    Seed suppliers using an *existing* SQLAlchemy session.
+    Returns the number of rows inserted.  Skips any that raise.
+    """
+    directory = SupplierDirectory()
+    added = 0
+    for (name, address, city, state, lat, lng, materials, verified, source) in SUPPLIERS:
+        try:
+            directory.create(
+                db,
+                name=name,
+                address=address,
+                city=city,
+                state=state,
+                lat=lat,
+                lng=lng,
+                materials=materials,
+                verified=verified,
+                data_source=source,
+            )
+            added += 1
+        except Exception:
+            db.rollback()
+    return added
+
+
 def seed(clear_existing: bool = False) -> int:
     init_db()
     db = SessionLocal()

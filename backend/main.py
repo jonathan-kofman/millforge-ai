@@ -24,7 +24,8 @@ from routers.rework import router as rework_router
 from routers.learning import router as learning_router
 from routers.twin import router as twin_router
 from routers.suppliers import router as suppliers_router
-from database import init_db
+from database import init_db, SessionLocal
+from db_models import Supplier
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -44,6 +45,20 @@ async def lifespan(app: FastAPI):
     logger.info("MillForge backend starting up…")
     init_db()   # create tables if they don't exist
     logger.info("Database initialised.")
+    # Auto-seed supplier directory if empty
+    db = SessionLocal()
+    try:
+        count = db.query(Supplier).count()
+        if count == 0:
+            from scripts.seed_suppliers import seed_suppliers
+            n = seed_suppliers(db)
+            logger.info("Auto-seeded %d suppliers.", n)
+        else:
+            logger.info("Supplier table already populated (%d rows), skipping seed.", count)
+    except Exception as exc:
+        logger.warning("Supplier auto-seed failed: %s", exc)
+    finally:
+        db.close()
     yield
     logger.info("MillForge backend shutting down.")
 

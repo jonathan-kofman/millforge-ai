@@ -21,6 +21,7 @@ export default function SupplierMap() {
   const [stats, setStats] = useState(null);
   const [material, setMaterial] = useState("");
   const [loading, setLoading] = useState(false);
+  const [empty, setEmpty] = useState(false);
 
   // Initialize Leaflet map once
   useEffect(() => {
@@ -62,6 +63,8 @@ export default function SupplierMap() {
           mapInstance.current.removeLayer(layer);
         }
       });
+
+      setEmpty(data.suppliers.length === 0);
 
       data.suppliers.forEach((s) => {
         if (s.lat == null || s.lng == null) return;
@@ -130,11 +133,19 @@ export default function SupplierMap() {
       </div>
 
       {/* Map */}
-      <div
-        ref={mapRef}
-        className="w-full rounded-lg border border-gray-700 overflow-hidden"
-        style={{ height: "380px" }}
-      />
+      <div className="relative w-full rounded-lg border border-gray-700 overflow-hidden" style={{ height: "380px" }}>
+        <div ref={mapRef} className="w-full h-full" />
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60 z-10">
+            <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        {!loading && empty && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+            <p className="text-sm text-gray-500">Supplier data loading — check back shortly</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

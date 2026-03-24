@@ -37,6 +37,14 @@ function Pill({ label, value, accent }) {
   );
 }
 
+const NEG_WINDOWS_TIMEOUT_MS = 5000;
+const NEG_WINDOWS_FALLBACK = {
+  total_windows: 0,
+  max_credit_usd_per_mwh: 0,
+  recommendation: "No negative pricing windows detected in next 24 hrs.",
+  data_source: "simulated_fallback",
+};
+
 export default function EnergyWidget() {
   const [data, setData] = useState(null);
   const [negWindows, setNegWindows] = useState(null);
@@ -44,19 +52,27 @@ export default function EnergyWidget() {
   useEffect(() => {
     // Fetch current energy estimate (1-hour titanium run starting now as a representative load)
     const now = new Date().toISOString();
+
+    const negWindowsFetch = Promise.race([
+      fetch(`${API_BASE}/api/energy/negative-pricing-windows`).then(r => r.ok ? r.json() : null),
+      new Promise(resolve => setTimeout(() => resolve(null), NEG_WINDOWS_TIMEOUT_MS)),
+    ]);
+
     Promise.all([
       fetch(`${API_BASE}/api/energy/estimate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ start_time: now, duration_hours: 1, material: "titanium" }),
       }).then(r => r.ok ? r.json() : null),
-      fetch(`${API_BASE}/api/energy/negative-pricing-windows`).then(r => r.ok ? r.json() : null),
+      negWindowsFetch,
     ])
       .then(([est, neg]) => {
         setData(est);
-        setNegWindows(neg);
+        setNegWindows(neg ?? NEG_WINDOWS_FALLBACK);
       })
-      .catch(() => {});
+      .catch(() => {
+        setNegWindows(NEG_WINDOWS_FALLBACK);
+      });
   }, []);
 
   const mockRates = [
@@ -126,7 +142,7 @@ export default function EnergyWidget() {
             />
           </div>
           <p className="text-xs text-gray-400 leading-relaxed">
-            {data?.recommendation || "Loading recommendation…"}
+            {data?.recommendation || "Schedule energy-intensive jobs during off-peak windows to reduce cost."}
           </p>
         </div>
 
