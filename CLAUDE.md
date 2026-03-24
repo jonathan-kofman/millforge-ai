@@ -27,8 +27,8 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 | quality_vision.py | Partially — triage only | pretrained model | High |
 | rework.py | ✅ Yes — auto-dispatches failures | automated | Core |
 | inventory_agent.py | ✅ Yes — auto-reorders stock | automated | Medium |
-| energy_optimizer.py | Not yet — no grid integration | mock | Medium |
-| production_planner.py | Not yet — LLM heuristic | mock | Defer |
+| energy_optimizer.py | ✅ Yes — no human decides when to run energy-intensive jobs | automated (PJM real-time LMP) | Medium |
+| production_planner.py | Partially — real Census ASM throughput data | real_data | Defer |
 | nl_scheduler.py | Assists human, not replaces | mock | Defer |
 | anomaly_detector.py | Assists human, not replaces | mock | Defer |
 

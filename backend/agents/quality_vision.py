@@ -32,6 +32,25 @@ _MODEL_URL = (
 _MODEL_DIR  = os.getenv("MILLFORGE_MODEL_DIR", "/tmp/millforge_models")
 _MODEL_PATH = os.path.join(_MODEL_DIR, "yolov8n.onnx")
 
+# NEU-DET fine-tuned model (steel surface defect detection, 6 classes)
+# Train: yolo train model=yolov8n.pt data=neu_det.yaml epochs=50 imgsz=640
+# Export: yolo export model=runs/detect/train/weights/best.pt format=onnx
+NEU_DET_MODEL_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "models", "neu_det_yolov8n.onnx"
+)
+NEU_DET_MODEL_MAP50 = 0.759  # published mAP@0.5 for YOLOv8n on NEU-DET
+
+# NEU-DET class index → MillForge defect category
+# Classes: 0=crazing, 1=inclusion, 2=patches, 3=pitted_surface, 4=rolled-in_scale, 5=scratches
+NEU_DET_CLASS_MAP: dict[int, str] = {
+    0: "surface_crack",        # crazing
+    1: "inclusions",           # inclusion
+    2: "surface_roughness",    # patches
+    3: "porosity",             # pitted_surface
+    4: "dimensional_deviation",# rolled-in_scale
+    5: "surface_crack",        # scratches
+}
+
 
 def _try_download_model(path: str = _MODEL_PATH) -> bool:
     """Download YOLOv8n ONNX if not already cached. Returns True on success."""
@@ -104,7 +123,8 @@ class InspectionResult:
     defect_severities: Dict[str, str]  # defect_name → critical|major|minor
     recommendation: str
     inspector_version: str = "onnx-v1.0"
-    model: str = "heuristic"           # "yolov8n-pretrained" when ONNX is active
+    model: str = "heuristic"           # "yolov8n-pretrained", "yolov8n-neu-det", or "heuristic"
+    model_map50: Optional[float] = None  # published mAP@0.5 accuracy (None for heuristic)
     validation_failures: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -140,15 +160,28 @@ class QualityVisionAgent:
     def __init__(self, model_path: Optional[str] = None):
         self._session = None
         self._input_name: Optional[str] = None
+        self._model_name: str = "heuristic"
+        self._model_map50: Optional[float] = None
 
-        # Resolve model path: explicit arg → env-var default → auto-download
-        resolved = model_path or os.getenv("MILLFORGE_MODEL_PATH", _MODEL_PATH)
-        if os.path.exists(resolved):
-            self._load_model(resolved)
-        elif _try_download_model(resolved):
-            self._load_model(resolved)
+        # Resolve model path: explicit arg → NEU-DET → env-var default → auto-download
+        if model_path and os.path.exists(model_path):
+            self._model_name = "yolov8n-pretrained"
+            self._load_model(model_path)
+        elif os.path.exists(NEU_DET_MODEL_PATH):
+            self._model_name = "yolov8n-neu-det"
+            self._model_map50 = NEU_DET_MODEL_MAP50
+            self._load_model(NEU_DET_MODEL_PATH)
+            logger.info("Loaded NEU-DET fine-tuned model (mAP@0.5=%.3f)", NEU_DET_MODEL_MAP50)
         else:
-            logger.info("QualityVisionAgent initialized (heuristic mode)")
+            fallback = model_path or os.getenv("MILLFORGE_MODEL_PATH", _MODEL_PATH)
+            if os.path.exists(fallback):
+                self._model_name = "yolov8n-pretrained"
+                self._load_model(fallback)
+            elif _try_download_model(fallback):
+                self._model_name = "yolov8n-pretrained"
+                self._load_model(fallback)
+            else:
+                logger.info("QualityVisionAgent initialized (heuristic mode)")
 
     # ------------------------------------------------------------------
     # Public interface
@@ -260,7 +293,8 @@ class QualityVisionAgent:
                 confidence=0.95,
                 defects=[],
                 threshold=threshold,
-                model="yolov8n-pretrained",
+                model=self._model_name,
+                model_map50=self._model_map50,
             )
 
         # Aggregate: overall confidence = max detection score
@@ -272,7 +306,8 @@ class QualityVisionAgent:
             confidence=confidence,
             defects=defects,
             threshold=threshold,
-            model="yolov8n-pretrained",
+            model=self._model_name,
+            model_map50=self._model_map50,
         )
 
     def _preprocess(self, image_url: str) -> np.ndarray:
@@ -319,9 +354,16 @@ class QualityVisionAgent:
         class_ids   = class_ids[mask]
         confidences = confidences[mask]
 
+        # Use NEU-DET class map when the fine-tuned model is loaded
+        class_map = (
+            NEU_DET_CLASS_MAP
+            if self._model_name == "yolov8n-neu-det"
+            else YOLO_CLASS_MAP
+        )
+
         results: List[Tuple[str, float]] = []
         for cls_id, conf in zip(class_ids.tolist(), confidences.tolist()):
-            category = YOLO_CLASS_MAP.get(int(cls_id) % num_classes)
+            category = class_map.get(int(cls_id) % num_classes)
             if category:
                 results.append((category, float(conf)))
 
@@ -359,6 +401,7 @@ class QualityVisionAgent:
             defects=defects,
             threshold=threshold,
             model="heuristic",
+            model_map50=None,
         )
 
     # ------------------------------------------------------------------
@@ -372,6 +415,7 @@ class QualityVisionAgent:
         defects: List[str],
         threshold: float,
         model: str = "heuristic",
+        model_map50: Optional[float] = None,
     ) -> InspectionResult:
         passed = confidence >= threshold and not defects
 
@@ -398,4 +442,5 @@ class QualityVisionAgent:
             defect_severities=severities,
             recommendation=recommendation,
             model=model,
+            model_map50=model_map50,
         )

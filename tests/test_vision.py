@@ -19,6 +19,9 @@ from agents.quality_vision import (
     MATERIAL_PASS_THRESHOLDS,
     DEFAULT_PASS_THRESHOLD,
     YOLO_CLASS_MAP,
+    NEU_DET_CLASS_MAP,
+    NEU_DET_MODEL_PATH,
+    NEU_DET_MODEL_MAP50,
     INPUT_SIZE,
     CONF_THRESHOLD,
 )
@@ -52,6 +55,8 @@ def onnx_agent(tmp_path):
 
     agent._session = mock_session
     agent._input_name = "images"
+    agent._model_name = "yolov8n-pretrained"
+    agent._model_map50 = None
     return agent
 
 
@@ -355,3 +360,64 @@ class TestDefectSeverities:
         )
         errors = agent._validate(bad, {})
         assert any("invalid severity" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# NEU-DET model support
+# ---------------------------------------------------------------------------
+
+class TestNEUDETSupport:
+
+    def test_neu_det_class_map_has_six_entries(self):
+        """NEU-DET has exactly 6 classes (0–5)."""
+        assert len(NEU_DET_CLASS_MAP) == 6
+        assert set(NEU_DET_CLASS_MAP.keys()) == {0, 1, 2, 3, 4, 5}
+
+    def test_neu_det_class_map_values_are_valid_defects(self):
+        """Every NEU-DET class index must map to a known MillForge defect category."""
+        for idx, category in NEU_DET_CLASS_MAP.items():
+            assert category in DEFECT_TYPES, (
+                f"NEU-DET class {idx} maps to unknown defect '{category}'"
+            )
+
+    def test_heuristic_mode_has_no_model_map50(self, agent):
+        """In heuristic mode (no model file), model_map50 should be None."""
+        result = agent.inspect("http://example.com/part.jpg", material="steel")
+        assert result.model_map50 is None
+
+    def test_neu_det_model_map50_constant(self):
+        """Published NEU-DET mAP@0.5 accuracy constant must match paper value."""
+        assert NEU_DET_MODEL_MAP50 == pytest.approx(0.759, abs=0.001)
+
+    @pytest.mark.skipif(
+        not os.path.exists(NEU_DET_MODEL_PATH),
+        reason="NEU-DET ONNX model not trained/exported yet — run training pipeline first",
+    )
+    def test_neu_det_model_loaded_when_file_exists(self):
+        """When NEU-DET model file is present, agent uses it with correct metadata."""
+        agent = QualityVisionAgent()
+        assert agent._model_name == "yolov8n-neu-det"
+        assert agent._model_map50 == pytest.approx(NEU_DET_MODEL_MAP50)
+
+    def test_neu_det_takes_priority_over_generic_model(self, tmp_path, monkeypatch):
+        """NEU-DET path should be checked before the generic YOLOv8n fallback."""
+        import agents.quality_vision as qv_module
+
+        # Create a fake NEU-DET model file
+        fake_neu_det = tmp_path / "neu_det_yolov8n.onnx"
+        fake_neu_det.write_bytes(b"fake-onnx")
+
+        monkeypatch.setattr(qv_module, "NEU_DET_MODEL_PATH", str(fake_neu_det))
+
+        # Capture which model name was set when _load_model is called
+        captured_name = {}
+
+        def tracking_load(self, path):
+            captured_name["name"] = self._model_name
+            # Silently skip the actual ONNX load (fake bytes would fail)
+            # self._session stays None, but the name was already committed
+
+        monkeypatch.setattr(QualityVisionAgent, "_load_model", tracking_load)
+
+        agent = QualityVisionAgent()
+        assert captured_name.get("name") == "yolov8n-neu-det"

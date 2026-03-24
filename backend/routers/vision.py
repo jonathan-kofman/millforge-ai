@@ -78,5 +78,6 @@ async def inspect_part(
         recommendation=result.recommendation,
         inspector_version=result.inspector_version,
         model=result.model,
+        model_map50=result.model_map50,
         order_id=req.order_id,
     )

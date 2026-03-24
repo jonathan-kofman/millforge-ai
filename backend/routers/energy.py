@@ -45,5 +45,6 @@ async def estimate_energy(req: EnergyEstimateRequest) -> EnergyEstimateResponse:
         peak_rate=profile.peak_rate,
         off_peak_rate=profile.off_peak_rate,
         recommendation=profile.recommendation,
+        data_source=profile.data_source,
         validation_failures=profile.validation_failures,
     )

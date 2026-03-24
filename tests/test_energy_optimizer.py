@@ -14,6 +14,7 @@ from agents.energy_optimizer import (
     EnergyOptimizer,
     MOCK_HOURLY_RATES,
     MACHINE_POWER_KW,
+    _rates_cache,
 )
 
 
@@ -24,13 +25,13 @@ def optimizer():
 
 @pytest.fixture
 def off_peak_time():
-    """A datetime at 02:00 — known off-peak hour."""
+    """A datetime at 02:00 — known off-peak hour in simulated data."""
     return datetime(2026, 1, 15, 2, 0, 0)
 
 
 @pytest.fixture
 def peak_time():
-    """A datetime at 17:00 — known peak hour."""
+    """A datetime at 17:00 — known peak hour in simulated data."""
     return datetime(2026, 1, 15, 17, 0, 0)
 
 
@@ -64,19 +65,25 @@ def test_peak_costs_more_than_off_peak(optimizer, off_peak_time, peak_time):
 
 
 def test_peak_rate_and_off_peak_rate_correct(optimizer, off_peak_time):
+    """peak_rate >= off_peak_rate > 0, regardless of data source."""
     profile = optimizer.estimate_energy_cost(off_peak_time, 1.0, "steel")
-    assert profile.peak_rate == max(MOCK_HOURLY_RATES)
-    assert profile.off_peak_rate == min(MOCK_HOURLY_RATES)
+    assert profile.peak_rate >= profile.off_peak_rate
+    assert profile.off_peak_rate > 0
 
 
-def test_peak_recommendation_warns(optimizer, peak_time):
-    """Running during peak hours should produce a shift recommendation."""
+def test_peak_recommendation_warns(optimizer, peak_time, monkeypatch):
+    """Running during peak hours (above mean rate) should produce a shift recommendation."""
+    # Force simulated fallback so the test is deterministic
+    monkeypatch.setattr(optimizer, "hourly_rates", MOCK_HOURLY_RATES)
+    monkeypatch.setattr(optimizer, "data_source", "simulated_fallback")
     profile = optimizer.estimate_energy_cost(peak_time, 1.0, "steel")
     assert "off-peak" in profile.recommendation.lower()
 
 
-def test_off_peak_recommendation_favorable(optimizer, off_peak_time):
+def test_off_peak_recommendation_favorable(optimizer, off_peak_time, monkeypatch):
     """Running during off-peak hours should get a favorable recommendation."""
+    monkeypatch.setattr(optimizer, "hourly_rates", MOCK_HOURLY_RATES)
+    monkeypatch.setattr(optimizer, "data_source", "simulated_fallback")
     profile = optimizer.estimate_energy_cost(off_peak_time, 1.0, "steel")
     assert "favorable" in profile.recommendation.lower()
 
@@ -182,3 +189,82 @@ class TestEnergyValidation:
         profile = optimizer.estimate_energy_cost(off_peak_time, 2.0, "steel")
         assert call_count["n"] == 2
         assert profile.validation_failures == []
+
+
+# ---------------------------------------------------------------------------
+# Real data / data_source tests (new)
+# ---------------------------------------------------------------------------
+
+def test_profile_has_data_source_field(optimizer, off_peak_time):
+    """EnergyProfile must expose data_source (either real or fallback)."""
+    profile = optimizer.estimate_energy_cost(off_peak_time, 1.0, "steel")
+    assert profile.data_source in ("PJM_realtime", "simulated_fallback")
+
+
+def test_simulated_fallback_is_default_without_network(optimizer, off_peak_time, monkeypatch):
+    """When gridstatus network call fails, data_source should be simulated_fallback."""
+    import agents.energy_optimizer as eo_module
+
+    def mock_fetch():
+        return None  # simulate network failure
+
+    monkeypatch.setattr(eo_module, "_fetch_pjm_lmp", mock_fetch)
+    # Expire cache to force re-fetch
+    eo_module._rates_cache["fetched_at"] = None
+    optimizer._refresh_rates()
+
+    profile = optimizer.estimate_energy_cost(off_peak_time, 1.0, "steel")
+    assert profile.data_source == "simulated_fallback"
+
+
+def test_pjm_realtime_when_fetch_succeeds(optimizer, off_peak_time, monkeypatch):
+    """When fetch returns valid rates, data_source should be PJM_realtime."""
+    import agents.energy_optimizer as eo_module
+
+    fake_rates = [0.04 + i * 0.002 for i in range(24)]  # 24 valid $/kWh values
+
+    def mock_fetch():
+        return fake_rates
+
+    monkeypatch.setattr(eo_module, "_fetch_pjm_lmp", mock_fetch)
+    eo_module._rates_cache["fetched_at"] = None  # expire cache
+    optimizer._refresh_rates()
+
+    profile = optimizer.estimate_energy_cost(off_peak_time, 1.0, "steel")
+    assert profile.data_source == "PJM_realtime"
+
+
+def test_cache_reuses_rates_within_ttl(monkeypatch):
+    """Rates should not be re-fetched within the TTL window."""
+    import agents.energy_optimizer as eo_module
+    import time as time_module
+
+    call_count = {"n": 0}
+
+    def counting_fetch():
+        call_count["n"] += 1
+        return [0.05] * 24
+
+    monkeypatch.setattr(eo_module, "_fetch_pjm_lmp", counting_fetch)
+    eo_module._rates_cache["fetched_at"] = None  # start cold
+
+    eo_module._get_hourly_rates()
+    eo_module._get_hourly_rates()
+    eo_module._get_hourly_rates()
+
+    assert call_count["n"] == 1  # only one actual fetch within TTL
+
+
+def test_recommendation_threshold_is_relative(optimizer, monkeypatch):
+    """Recommendation logic must use mean rate as threshold, not a hardcoded value."""
+    # All hours set to same value — no hour is above mean, so always favorable
+    flat_rates = [0.05] * 24
+    monkeypatch.setattr(optimizer, "hourly_rates", flat_rates)
+    monkeypatch.setattr(optimizer, "data_source", "simulated_fallback")
+
+    for h in range(24):
+        t = datetime(2026, 1, 15, h, 0, 0)
+        profile = optimizer.estimate_energy_cost(t, 1.0, "steel")
+        assert "favorable" in profile.recommendation.lower(), (
+            f"Hour {h} with flat rates should be favorable, got: {profile.recommendation}"
+        )

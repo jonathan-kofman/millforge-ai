@@ -13,6 +13,11 @@ argon2-cffi==23.1.0
 numpy>=1.24.0
 pillow>=10.0.0
 onnxruntime>=1.17.0
+ultralytics>=8.0.0
+kaggle>=1.6.0
+# Grid / energy
+gridstatus>=0.27.0
+pandas>=2.0.0
 # AI
 anthropic>=0.40.0
 # Testing
