@@ -181,18 +181,6 @@ export default function App() {
               <p className="text-gray-400 text-sm leading-relaxed">
                 MillForge's inventory agent watches stock in real time. When a reorder point is hit, it surfaces the nearest verified supplier for that material — filtered by distance, category, and current schedule — and generates the purchase order automatically. No calls. No callbacks. No delays.
               </p>
-              {supplierStats && (
-                <div className="flex flex-wrap gap-6 mt-4">
-                  <div>
-                    <p className="text-2xl font-bold text-white">{supplierStats.verified_suppliers}</p>
-                    <p className="text-xs text-gray-500">verified US suppliers</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-white">{supplierStats.states_covered}</p>
-                    <p className="text-xs text-gray-500">states covered</p>
-                  </div>
-                </div>
-              )}
               <button
                 onClick={() => setActiveTab("contact")}
                 className="btn-secondary text-sm mt-2"

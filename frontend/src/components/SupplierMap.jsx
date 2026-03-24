@@ -23,19 +23,24 @@ export default function SupplierMap() {
   const [loading, setLoading] = useState(false);
   const [empty, setEmpty] = useState(false);
 
-  // Initialize Leaflet map once
+  // Initialize Leaflet map once — delayed so the container has height before L.map reads it
   useEffect(() => {
-    if (!window.L || mapInstance.current) return;
-    mapInstance.current = window.L.map(mapRef.current, {
-      center: [39.5, -98.35],
-      zoom: 4,
-      zoomControl: true,
-      scrollWheelZoom: false,
-    });
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(mapInstance.current);
+    const init = () => {
+      if (!window.L || mapInstance.current) return;
+      mapInstance.current = window.L.map(mapRef.current, {
+        center: [39.5, -98.35],
+        zoom: 4,
+        zoomControl: true,
+        scrollWheelZoom: false,
+      });
+      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(mapInstance.current);
+      mapInstance.current.invalidateSize();
+    };
+    const timer = setTimeout(init, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Fetch stats

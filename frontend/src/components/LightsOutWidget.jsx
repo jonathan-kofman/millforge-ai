@@ -15,6 +15,7 @@ const TOUCHPOINT_LABELS = {
   inventory_management: "Inventory Management",
   production_planning:  "Production Planning",
   rework_dispatch:      "Rework Dispatch",
+  material_sourcing:    "Material Sourcing",
 };
 
 export default function LightsOutWidget() {
