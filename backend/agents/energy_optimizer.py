@@ -7,8 +7,8 @@ to minimize cost and carbon footprint.
 """
 
 import logging
-from dataclasses import dataclass
-from typing import List, Dict
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ class EnergyProfile:
     peak_rate: float
     off_peak_rate: float
     recommendation: str
+    validation_failures: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -63,6 +64,9 @@ class EnergyOptimizer:
 
     Current state: Heuristic implementation using simulated energy prices.
 
+    Validation loop: output is validated after each attempt; retried up to
+    MAX_RETRIES times before returning the best result with validation_failures.
+
     Planned implementation:
     - Integrate with grid pricing API (e.g., CAISO, ERCOT, or EnergyHub)
     - Fetch real-time and day-ahead electricity prices
@@ -70,6 +74,8 @@ class EnergyOptimizer:
     - Shift non-critical jobs to off-peak windows using a MILP formulation
     - Provide carbon intensity scores alongside cost estimates
     """
+
+    MAX_RETRIES = 3
 
     def __init__(self):
         self.hourly_rates = MOCK_HOURLY_RATES
@@ -92,6 +98,55 @@ class EnergyOptimizer:
         Returns:
             EnergyProfile with cost estimates and optimization recommendation.
         """
+        failures: List[str] = []
+        best: Optional[EnergyProfile] = None
+
+        for attempt in range(self.MAX_RETRIES):
+            profile = self._do_estimate(start_time, duration_hours, material)
+            errors = self._validate_profile(profile, duration_hours)
+
+            if not errors:
+                profile.validation_failures = []
+                return profile
+
+            labeled = [f"[attempt {attempt + 1}] {e}" for e in errors]
+            failures.extend(labeled)
+            best = profile
+            logger.warning(
+                "Energy profile validation failed attempt %d: %s", attempt + 1, errors
+            )
+
+        assert best is not None
+        best.validation_failures = failures
+        return best
+
+    def _validate_profile(self, profile: EnergyProfile, duration_hours: float) -> List[str]:
+        """Return a list of constraint violations (empty = valid)."""
+        errors: List[str] = []
+
+        if profile.estimated_kwh < 0:
+            errors.append(f"estimated_kwh is negative: {profile.estimated_kwh}")
+
+        if profile.estimated_cost_usd < 0:
+            errors.append(f"estimated_cost_usd is negative: {profile.estimated_cost_usd}")
+
+        if profile.peak_rate < profile.off_peak_rate:
+            errors.append(
+                f"peak_rate ({profile.peak_rate}) < off_peak_rate ({profile.off_peak_rate})"
+            )
+
+        if profile.end_time <= profile.start_time:
+            errors.append("end_time is not after start_time")
+
+        return errors
+
+    def _do_estimate(
+        self,
+        start_time: datetime,
+        duration_hours: float,
+        material: str,
+    ) -> EnergyProfile:
+        """Core energy estimation logic."""
         power_kw = MACHINE_POWER_KW.get(material.lower(), MACHINE_POWER_KW["default"])
         total_kwh = power_kw * duration_hours
 

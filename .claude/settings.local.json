@@ -6,7 +6,31 @@
       "Bash(python:*)",
       "Bash(powershell -NonInteractive -ExecutionPolicy Bypass -File \"/c/Users/jonko/Downloads/millforge-ai/run_session.ps1\" -DryRun)",
       "Skill(update-config)",
-      "Bash(npx ecc-agentshield:*)"
+      "Bash(npx ecc-agentshield:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "Bash(git clone:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(npm ci:*)",
+      "Bash(mkdir -p ~/.claude/plugins/cache/claude-hud/claude-hud/0.0.11)",
+      "Bash(cp -r ~/tools/claude-hud/dist ~/.claude/plugins/cache/claude-hud/claude-hud/0.0.11/)",
+      "Bash(cp -r ~/tools/claude-hud/src ~/.claude/plugins/cache/claude-hud/claude-hud/0.0.11/)",
+      "Bash(cp ~/tools/claude-hud/package.json ~/.claude/plugins/cache/claude-hud/claude-hud/0.0.11/)",
+      "Bash(mkdir -p ~/.claude/skills/understand-anything)",
+      "Bash(for skill:*)",
+      "Bash(do cp:*)",
+      "Bash(echo \"copied $skill\")",
+      "Bash(done)",
+      "Bash(node ~/tools/claude-watch/dist/cli.js init)",
+      "Bash(docker compose:*)",
+      "Bash(docker info:*)",
+      "Bash(docker context:*)",
+      "Bash(python3:*)",
+      "Bash(find .claude/agents -type f -name *.py)"
     ]
   }
 }

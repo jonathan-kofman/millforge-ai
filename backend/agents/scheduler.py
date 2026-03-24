@@ -117,6 +117,7 @@ class Schedule:
     makespan_hours: float
     utilization_percent: float
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    validation_failures: List[str] = field(default_factory=list)
 
     @property
     def on_time_rate(self) -> float:
@@ -146,11 +147,16 @@ class Scheduler:
     setup times and parallel machine assignment using a greedy
     "earliest available machine" heuristic.
 
+    Validation loop: output is validated after each attempt; retried up to
+    MAX_RETRIES times before returning the best result with validation_failures.
+
     Future extension points:
     - Replace greedy machine assignment with ILP or genetic algorithm
     - Integrate real-time machine sensor data
     - Add AI-driven priority scoring via LLM
     """
+
+    MAX_RETRIES = 3
 
     def __init__(self, machine_count: int = MACHINE_COUNT):
         self.machine_count = machine_count
@@ -176,6 +182,63 @@ class Scheduler:
                 utilization_percent=0.0,
             )
 
+        failures: List[str] = []
+        best: Optional[Schedule] = None
+
+        for attempt in range(self.MAX_RETRIES):
+            schedule = self._do_optimize(orders, start_time)
+            errors = self._validate_schedule(schedule, orders)
+
+            if not errors:
+                schedule.validation_failures = []
+                return schedule
+
+            labeled = [f"[attempt {attempt + 1}] {e}" for e in errors]
+            failures.extend(labeled)
+            best = schedule
+            logger.warning("Schedule validation failed attempt %d: %s", attempt + 1, errors)
+
+        assert best is not None
+        best.validation_failures = failures
+        return best
+
+    def _validate_schedule(self, schedule: Schedule, orders: List[Order]) -> List[str]:
+        """Return a list of constraint violations (empty = valid)."""
+        errors: List[str] = []
+
+        if schedule.total_orders != len(orders):
+            errors.append(
+                f"total_orders mismatch: expected {len(orders)}, got {schedule.total_orders}"
+            )
+
+        if schedule.makespan_hours < 0:
+            errors.append(f"makespan_hours is negative: {schedule.makespan_hours}")
+
+        if not (0.0 <= schedule.utilization_percent <= 100.0):
+            errors.append(
+                f"utilization_percent out of range: {schedule.utilization_percent}"
+            )
+
+        order_ids = {o.order_id for o in orders}
+        scheduled_ids = {s.order.order_id for s in schedule.scheduled_orders}
+        missing = order_ids - scheduled_ids
+        if missing:
+            errors.append(f"orders not scheduled: {missing}")
+
+        for s in schedule.scheduled_orders:
+            if s.processing_start < s.setup_start:
+                errors.append(
+                    f"{s.order.order_id}: processing_start before setup_start"
+                )
+            if s.completion_time < s.processing_start:
+                errors.append(
+                    f"{s.order.order_id}: completion_time before processing_start"
+                )
+
+        return errors
+
+    def _do_optimize(self, orders: List[Order], start_time: Optional[datetime] = None) -> Schedule:
+        """Core EDD scheduling algorithm."""
         if start_time is None:
             start_time = datetime.now(timezone.utc).replace(tzinfo=None)
 

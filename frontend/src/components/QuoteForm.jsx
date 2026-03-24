@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "../config";
 
 const MATERIALS = ["steel", "aluminum", "titanium", "copper"];
 
@@ -26,7 +27,7 @@ export default function QuoteForm() {
     setError(null);
     setResult(null);
     try {
-      const res = await fetch("/api/quote", {
+      const res = await fetch(`${API_BASE}/api/quote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

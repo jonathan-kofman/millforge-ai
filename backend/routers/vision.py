@@ -74,6 +74,7 @@ async def inspect_part(
         passed=result.passed,
         confidence=result.confidence,
         defects_detected=result.defects_detected,
+        defect_severities=result.defect_severities,
         recommendation=result.recommendation,
         inspector_version=result.inspector_version,
         order_id=req.order_id,

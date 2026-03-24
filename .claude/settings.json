@@ -1,22 +1,19 @@
 {
+  "model": "sonnet",
+  "env": {
+    "MAX_THINKING_TOKENS": "10000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "haiku"
+  },
   "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "",
-        "command": "curl -s -X POST http://localhost:3853/api/events -H 'Content-Type: application/json' -d \"$(cat)\""
-      }
-    ],
     "Notification": [
-      {
-        "matcher": "",
-        "command": "curl -s -X POST http://localhost:3853/api/events -H 'Content-Type: application/json' -d \"$(cat)\""
-      }
+      {"matcher": "", "hooks": []}
+    ],
+    "PostToolUse": [
+      {"matcher": "", "hooks": []}
     ],
     "Stop": [
-      {
-        "matcher": "",
-        "command": "curl -s -X POST http://localhost:3853/api/events -H 'Content-Type: application/json' -d \"$(cat)\""
-      }
+      {"matcher": "", "hooks": []}
     ]
   }
 }

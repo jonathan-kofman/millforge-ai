@@ -7,5 +7,8 @@ from .schemas import (
     ContactRequest, ContactResponse,
     RegisterRequest, RegisterResponse, LoginRequest, LoginResponse,
     OrderCreateRequest, OrderUpdateRequest, OrderResponse, OrderListResponse,
+    InventoryConsumeRequest, MaterialConsumptionResponse,
+    InventoryStatusResponse, PurchaseOrderResponse, ReorderResponse,
+    WeeklyPlanRequest, WeeklyPlanResponse,
     ErrorResponse,
 )

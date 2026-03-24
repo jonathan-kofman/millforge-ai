@@ -129,3 +129,56 @@ def test_optimal_windows_costs_positive(optimizer):
     for w in windows:
         assert w["estimated_cost_usd"] > 0
         assert w["estimated_kwh"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Validation loop tests
+# ---------------------------------------------------------------------------
+
+class TestEnergyValidation:
+
+    def test_no_validation_failures_on_valid_profile(self, optimizer, off_peak_time):
+        profile = optimizer.estimate_energy_cost(off_peak_time, 2.0, "steel")
+        assert profile.validation_failures == []
+
+    def test_validation_catches_negative_kwh(self, optimizer, off_peak_time, monkeypatch):
+        _real = optimizer._do_estimate
+
+        def bad_do(start, dur, mat):
+            p = _real(start, dur, mat)
+            p.estimated_kwh = -1.0   # invalid
+            return p
+
+        monkeypatch.setattr(optimizer, "_do_estimate", bad_do)
+        profile = optimizer.estimate_energy_cost(off_peak_time, 2.0, "steel")
+        assert len(profile.validation_failures) > 0
+        assert any("estimated_kwh" in f for f in profile.validation_failures)
+
+    def test_validation_catches_negative_cost(self, optimizer, off_peak_time, monkeypatch):
+        _real = optimizer._do_estimate
+
+        def bad_do(start, dur, mat):
+            p = _real(start, dur, mat)
+            p.estimated_cost_usd = -5.0   # invalid
+            return p
+
+        monkeypatch.setattr(optimizer, "_do_estimate", bad_do)
+        profile = optimizer.estimate_energy_cost(off_peak_time, 2.0, "steel")
+        assert len(profile.validation_failures) > 0
+        assert any("estimated_cost_usd" in f for f in profile.validation_failures)
+
+    def test_retry_stops_on_first_valid(self, optimizer, off_peak_time, monkeypatch):
+        call_count = {"n": 0}
+        _real = optimizer._do_estimate
+
+        def side_effect(start, dur, mat):
+            call_count["n"] += 1
+            p = _real(start, dur, mat)
+            if call_count["n"] == 1:
+                p.estimated_kwh = -1.0   # bad first attempt
+            return p
+
+        monkeypatch.setattr(optimizer, "_do_estimate", side_effect)
+        profile = optimizer.estimate_energy_cost(off_peak_time, 2.0, "steel")
+        assert call_count["n"] == 2
+        assert profile.validation_failures == []

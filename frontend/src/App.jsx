@@ -5,6 +5,7 @@ import VisionDemo from "./components/VisionDemo";
 import ContactForm from "./components/ContactForm";
 import OrdersView from "./components/OrdersView";
 import AuthModal from "./components/AuthModal";
+import BenchmarkDemo from "./components/BenchmarkDemo";
 
 const PUBLIC_TABS = [
   { id: "quote",    label: "Instant Quote" },
@@ -82,30 +83,21 @@ export default function App() {
 
       {/* ── Hero ── */}
       <section className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-4">
-            Metal Parts in{" "}
-            <span className="text-forge-500">Days, Not Months</span>
+        <div className="max-w-6xl mx-auto px-4 py-14 text-center">
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-3">
+            MillForge —{" "}
+            <span className="text-forge-500">AI scheduling for metal manufacturing</span>
           </h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-            MillForge uses AI-driven production scheduling to compress lead times from 60–90 days to
-            under a week — without sacrificing quality.
+            Same machines. Same staff. From 62% on-time to 94%.
           </p>
-          <div className="flex justify-center gap-8 mt-10">
-            {[
-              { label: "Lead Time", before: "60–90 days", after: "3–7 days" },
-              { label: "On-Time Rate", before: "72%", after: "97%" },
-              { label: "Setup Waste", before: "28%", after: "8%" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">{stat.label}</p>
-                <p className="text-sm text-gray-500 line-through">{stat.before}</p>
-                <p className="text-2xl font-bold text-forge-500">{stat.after}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
+
+      {/* ── Benchmark demo ── */}
+      <div className="bg-gray-950 border-b border-gray-800">
+        <BenchmarkDemo />
+      </div>
 
       {/* ── Tab nav ── */}
       <nav className="bg-gray-900 border-b border-gray-800">

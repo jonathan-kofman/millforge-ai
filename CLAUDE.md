@@ -2,6 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Product Vision
+
+MillForge is an **intelligence layer** that sits on top of whatever constraints a job shop already has — their machines, their suppliers, their staff, their deals. It does not control lead times, replace physical infrastructure, or promise supply chain transformation.
+
+**The value proposition**: a job shop that was 60% on-time becomes 90%+ on-time with the same machines, same suppliers, same staff — just smarter sequencing.
+
+**Inputs**: the shop's real constraints (machine throughput, setup times, material changeovers, order priorities, due dates).
+**Outputs**: on-time delivery rate and machine utilisation.
+
+**The core demo is `/api/schedule/benchmark`**: it shows a three-way comparison of FIFO (naive baseline any shop can relate to) vs MillForge EDD vs MillForge SA on the same order set. The `on_time_improvement_pp` field is the number that wins the room.
+
+**Locked benchmark numbers (deterministic, 28-order dataset):**
+- FIFO: 60.7% on-time (±2pp, [58.7%, 62.7%])
+- EDD: 96.4% on-time (±2pp, [94.4%, 98.4%])
+- SA: 100.0% on-time (±1pp, [99.0%, 100.0%])
+- Improvement over FIFO: +39.3pp
+- Results are fully deterministic — identical every run
+
+When writing copy, docs, or code comments, always frame MillForge around *efficiency within existing constraints*, never around *replacing* those constraints or compressing lead times as a standalone claim.
+
 ## Commands
 
 ```bash
@@ -63,6 +83,28 @@ All request/response types are in `backend/models/schemas.py`. `MaterialType` is
 3. Create a router in `backend/routers/my_router.py` and register it in `main.py`
 4. Add Pydantic schemas to `models/schemas.py`
 5. Add tests to `tests/`
+
+## Quote Endpoint (`backend/routers/quote.py`)
+
+- Uses EDD-only (`Scheduler.estimate_lead_time()`) for lead time — SA was removed (avg ~180 ms delta, negligible difference)
+- Volume discount tiers: 0% / 5% (500+) / 10% (1000+) / 20% (10000+)
+- Unit prices by material in `UNIT_PRICE` dict
+
+## Rework Endpoint (`backend/routers/rework.py`)
+
+- `POST /api/schedule/rework` — converts failed inspection items to priority-1 rework orders
+- Severity → complexity × deadline: `critical=2.5×/24h`, `major=1.8×/48h`, `minor=1.3×/72h`
+- Rework order IDs prefixed `RW-{original_id}`
+- Uses `SAScheduler` for scheduling rework orders
+
+## E2E Smoke Test (`tests/test_e2e.py`)
+
+Full chain: schedule → inspect → energy → quote → rework (Step 6). Key assertions:
+- Rework order IDs start with `RW-{original_id}`
+- `machine_id` in rework schedule is a positive integer
+- Inspection response echoes the `order_id` submitted
+- Complexity boosts: `critical=2.5`, `major=1.8`, `minor=1.3`
+- Quote `total_price_usd > 0`
 
 ## Frontend Notes
 

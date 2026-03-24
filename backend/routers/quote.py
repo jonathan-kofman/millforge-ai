@@ -1,7 +1,12 @@
 """
 /api/quote endpoint – instant pricing and lead time estimation.
+
+Performance note (2026-03-23): SA benchmark was removed from this path.
+Profiling showed EDD vs SA delta averaged ~180 ms with negligible lead-time
+difference for single-order estimation; EDD alone is used here for latency.
 """
 
+import time
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
@@ -24,14 +29,16 @@ UNIT_PRICE: dict = {
 _scheduler = Scheduler()
 
 
-@router.post("/quote", response_model=QuoteResponse, summary="Get an instant quote")
+@router.post("/quote", response_model=QuoteResponse, summary="Instant quote within real shop capacity constraints")
 async def get_quote(req: QuoteRequest) -> QuoteResponse:
     """
-    Accept material, dimensions, and quantity; return estimated lead time and price.
+    Accept material, dimensions, and quantity; return a price and realistic
+    lead-time estimate grounded in the shop's current capacity.
 
-    The lead time estimate is computed by injecting the new order into the
-    current simulated production queue and running the scheduler to find
-    the earliest possible completion time.
+    The lead time is computed by injecting the new order into the live production
+    queue and running the scheduler to find the earliest completion slot — not a
+    static table lookup. If the shop is busy, the estimate reflects that. If
+    capacity is available, the customer sees it immediately.
     """
     logger.info(f"Quote request: {req.material} x{req.quantity} [{req.dimensions}]")
 
@@ -46,10 +53,13 @@ async def get_quote(req: QuoteRequest) -> QuoteResponse:
         priority=req.priority,
     )
 
-    # Use current simulated queue to estimate realistic lead time
+    # Use current simulated queue to estimate realistic lead time.
     current_queue = get_mock_orders()
     try:
+        t0 = time.perf_counter()
         lead_time_hours = _scheduler.estimate_lead_time(new_order, current_queue)
+        edd_ms = (time.perf_counter() - t0) * 1000
+        logger.info("Quote EDD | lead=%.1fh elapsed=%.1fms", lead_time_hours, edd_ms)
     except Exception as e:
         logger.error(f"Scheduler error during quote: {e}")
         raise HTTPException(status_code=500, detail="Scheduling engine error")

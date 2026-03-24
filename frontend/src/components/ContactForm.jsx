@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "../config";
 
 const DEFAULT_FORM = {
   name: "",
@@ -24,7 +25,7 @@ export default function ContactForm() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/contact", {
+      const res = await fetch(`${API_BASE}/api/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

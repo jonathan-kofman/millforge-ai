@@ -2,6 +2,7 @@
  * Collapsible panel that loads and displays GET /api/orders/schedule-history.
  */
 import { useState, useEffect } from "react";
+import { API_BASE } from "../config";
 
 function fmt(iso) {
   return new Date(iso).toLocaleString(undefined, {
@@ -22,7 +23,7 @@ export default function ScheduleHistoryPanel({ token, refreshKey }) {
     if (!open) return;
     setLoading(true);
     setError(null);
-    fetch("/api/orders/schedule-history?limit=10", { headers: authHeaders })
+    fetch(`${API_BASE}/api/orders/schedule-history?limit=10`, { headers: authHeaders })
       .then(r => { if (!r.ok) throw new Error("Failed to load history"); return r.json(); })
       .then(d => { setRuns(d.runs); setTotal(d.total); })
       .catch(e => setError(e.message))

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { API_BASE } from "../config";
 import GanttChart from "./GanttChart";
 import ScheduleHistoryPanel from "./ScheduleHistoryPanel";
 
@@ -37,7 +38,7 @@ export default function OrdersView({ token }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/orders", { headers: authHeaders });
+      const res = await fetch(`${API_BASE}/api/orders`, { headers: authHeaders });
       if (!res.ok) throw new Error("Failed to fetch orders");
       const data = await res.json();
       setOrders(data.orders);
@@ -56,7 +57,7 @@ export default function OrdersView({ token }) {
     setFormLoading(true);
     setFormError(null);
     try {
-      const res = await fetch("/api/orders", {
+      const res = await fetch(`${API_BASE}/api/orders`, {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({ ...form, quantity: Number(form.quantity), priority: Number(form.priority) }),
@@ -77,12 +78,12 @@ export default function OrdersView({ token }) {
 
   const handleDelete = async (orderId) => {
     if (!window.confirm(`Delete order ${orderId}?`)) return;
-    await fetch(`/api/orders/${orderId}`, { method: "DELETE", headers: authHeaders });
+    await fetch(`${API_BASE}/api/orders/${orderId}`, { method: "DELETE", headers: authHeaders });
     fetchOrders();
   };
 
   const handleStatusChange = async (orderId, newStatus) => {
-    await fetch(`/api/orders/${orderId}`, {
+    await fetch(`${API_BASE}/api/orders/${orderId}`, {
       method: "PATCH",
       headers: authHeaders,
       body: JSON.stringify({ status: newStatus }),
@@ -97,7 +98,7 @@ export default function OrdersView({ token }) {
     setScheduleError(null);
     setScheduleResult(null);
     try {
-      const res = await fetch("/api/orders/schedule?algorithm=sa", {
+      const res = await fetch(`${API_BASE}/api/orders/schedule?algorithm=sa`, {
         method: "POST",
         headers: authHeaders,
       });

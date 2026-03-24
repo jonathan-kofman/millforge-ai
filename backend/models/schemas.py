@@ -129,6 +129,7 @@ class ScheduleResponse(BaseModel):
     summary: ScheduleSummary
     algorithm: str = "edd"
     schedule: List[ScheduledOrderOutput]
+    validation_failures: List[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +139,7 @@ class ScheduleResponse(BaseModel):
 class BenchmarkEntry(BaseModel):
     algorithm: str
     on_time_rate_percent: float
+    avg_lateness_hours: float
     makespan_hours: float
     utilization_percent: float
     on_time_count: int
@@ -146,10 +148,15 @@ class BenchmarkEntry(BaseModel):
 
 
 class BenchmarkResponse(BaseModel):
-    edd: BenchmarkEntry
-    sa: BenchmarkEntry
-    on_time_improvement_pp: float   # percentage-point improvement SA vs EDD
+    fifo: BenchmarkEntry            # naive baseline: first-in first-out, no optimization
+    edd: BenchmarkEntry             # MillForge EDD: greedy earliest-due-date
+    sa: BenchmarkEntry              # MillForge SA: simulated annealing optimizer
+    on_time_improvement_pp: float   # percentage-point improvement SA vs FIFO (the MillForge delta)
     winner: str                     # "edd" or "sa"
+    order_count: int
+    machine_count: int
+    dataset_description: str
+    pressure: float = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +184,7 @@ class VisionInspectResponse(BaseModel):
     passed: bool
     confidence: float
     defects_detected: List[str]
+    defect_severities: Dict[str, str] = {}  # defect_name → critical|major|minor
     recommendation: str
     inspector_version: str
     order_id: Optional[str] = None
@@ -305,6 +313,267 @@ class ScheduleHistoryItem(BaseModel):
 class ScheduleHistoryResponse(BaseModel):
     total: int
     runs: List[ScheduleHistoryItem]
+
+
+# ---------------------------------------------------------------------------
+# /api/inventory
+# ---------------------------------------------------------------------------
+
+class InventoryConsumeRequest(BaseModel):
+    schedule_id: str = Field("manual", description="Identifier for the schedule run")
+    orders: List[Dict[str, Any]] = Field(
+        ..., description="List of scheduled orders with material and quantity fields"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "schedule_id": "SCHED-001",
+                "orders": [
+                    {"material": "steel", "quantity": 500},
+                    {"material": "aluminum", "quantity": 200},
+                ],
+            }
+        }
+    }
+
+
+class MaterialConsumptionResponse(BaseModel):
+    schedule_id: str
+    consumption_kg: Dict[str, float]
+    total_orders: int
+    computed_at: datetime
+    validation_failures: List[str] = []
+
+
+class InventoryStatusResponse(BaseModel):
+    stock_kg: Dict[str, float]
+    reorder_points: Dict[str, float]
+    items_below_reorder: List[str]
+    snapshot_at: datetime
+    validation_failures: List[str] = []
+
+
+class PurchaseOrderResponse(BaseModel):
+    po_id: str
+    material: str
+    quantity_kg: float
+    reason: str
+    current_stock_kg: float
+    reorder_point_kg: float
+    generated_at: datetime
+
+
+class ReorderResponse(BaseModel):
+    purchase_orders: List[PurchaseOrderResponse]
+    total_pos_generated: int
+    validation_failures: List[str] = []
+
+
+# ---------------------------------------------------------------------------
+# /api/planner
+# ---------------------------------------------------------------------------
+
+class DailyPlanItem(BaseModel):
+    day: str
+    material: str
+    units: int
+    machine_hours: float
+
+
+class WeeklyPlanRequest(BaseModel):
+    demand_signal: str = Field(
+        ...,
+        description="Natural language demand forecast (e.g. 'Rush 500 titanium parts for aerospace')",
+    )
+    capacity: Dict[str, float] = Field(
+        ...,
+        description="Available machine hours per material for the week",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "demand_signal": "Rush 500 titanium parts for aerospace, plus routine steel and aluminum",
+                "capacity": {"steel": 40.0, "aluminum": 30.0, "titanium": 20.0, "copper": 10.0},
+            }
+        }
+    }
+
+
+class WeeklyPlanResponse(BaseModel):
+    week_start: str
+    total_units_planned: int
+    daily_plans: List[DailyPlanItem]
+    capacity_utilization_percent: float
+    bottlenecks: List[str]
+    recommendations: List[str]
+    validation_failures: List[str] = []
+
+
+# ---------------------------------------------------------------------------
+# /api/energy
+# ---------------------------------------------------------------------------
+
+class EnergyEstimateRequest(BaseModel):
+    start_time: datetime
+    duration_hours: float = Field(..., gt=0)
+    material: MaterialType
+
+
+class EnergyEstimateResponse(BaseModel):
+    start_time: datetime
+    end_time: datetime
+    material: str
+    estimated_kwh: float
+    estimated_cost_usd: float
+    peak_rate: float
+    off_peak_rate: float
+    recommendation: str
+    validation_failures: List[str] = []
+
+
+# ---------------------------------------------------------------------------
+# /api/schedule/nl
+# ---------------------------------------------------------------------------
+
+class NLScheduleRequest(BaseModel):
+    instruction: str = Field(
+        ...,
+        description="Plain-English scheduling override (e.g. 'rush the titanium orders')",
+    )
+    orders: List[Dict[str, Any]] = Field(
+        ..., description="Order list to apply overrides to, then schedule"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "instruction": "Rush all titanium orders — aerospace deadline moved up",
+                "orders": [
+                    {
+                        "order_id": "ORD-001",
+                        "material": "titanium",
+                        "quantity": 50,
+                        "dimensions": "300x200x15mm",
+                        "due_date": "2025-06-01T08:00:00Z",
+                        "priority": 5,
+                        "complexity": 1.5,
+                    }
+                ],
+            }
+        }
+    }
+
+
+class PriorityOverrideItem(BaseModel):
+    order_id: str
+    new_priority: int
+    reason: str
+
+
+class NLScheduleResponse(BaseModel):
+    instruction: str
+    overrides_applied: List[PriorityOverrideItem]
+    override_summary: str
+    schedule: "ScheduleResponse"
+    validation_failures: List[str] = []
+
+
+# ---------------------------------------------------------------------------
+# /api/anomaly
+# ---------------------------------------------------------------------------
+
+class AnomalyDetectRequest(BaseModel):
+    orders: List[Dict[str, Any]] = Field(
+        ..., description="List of order dicts to analyse for anomalies"
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "orders": [
+                    {
+                        "order_id": "ORD-001",
+                        "material": "steel",
+                        "quantity": 500,
+                        "due_date": "2025-06-01T08:00:00Z",
+                        "priority": 2,
+                        "complexity": 1.0,
+                    }
+                ]
+            }
+        }
+    }
+
+
+class AnomalyItem(BaseModel):
+    order_id: str
+    anomaly_type: str
+    severity: str
+    description: str
+
+
+class AnomalyDetectResponse(BaseModel):
+    orders_analysed: int
+    anomalies: List[AnomalyItem]
+    summary: str
+    analysed_at: datetime
+    validation_failures: List[str] = []
+
+
+# ---------------------------------------------------------------------------
+# /api/schedule/rework
+# ---------------------------------------------------------------------------
+
+class ReworkItem(BaseModel):
+    order_id: str = Field(..., description="Original order ID to rework")
+    material: MaterialType
+    quantity: int = Field(..., gt=0)
+    defect_severity: str = Field(..., description="critical|major|minor")
+    dimensions: str = Field("100x100x10mm", description="Part dimensions")
+    due_date: Optional[datetime] = Field(
+        None,
+        description="Rework deadline. Defaults: critical=24h, major=48h, minor=72h from now.",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "order_id": "ORD-001",
+                "material": "steel",
+                "quantity": 50,
+                "defect_severity": "critical",
+                "dimensions": "200x100x10mm",
+            }
+        }
+    }
+
+
+class ReworkRequest(BaseModel):
+    items: List[ReworkItem] = Field(..., min_length=1)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "items": [
+                    {
+                        "order_id": "ORD-001",
+                        "material": "steel",
+                        "quantity": 50,
+                        "defect_severity": "critical",
+                        "dimensions": "200x100x10mm",
+                    }
+                ]
+            }
+        }
+    }
+
+
+class ReworkScheduleResponse(BaseModel):
+    rework_orders_count: int
+    complexity_boosts: Dict[str, float]  # rework order_id → complexity multiplier
+    schedule: ScheduleResponse
 
 
 # ---------------------------------------------------------------------------

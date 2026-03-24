@@ -1,8 +1,24 @@
 # MillForge
 
-**AI-powered software-defined metal mill.** Compresses metal part lead times from 60–90 days to 3–7 days through intelligent production scheduling, quality vision, and energy optimization.
+[![CI](https://github.com/jonathan-kofman/millforge-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/jonathan-kofman/millforge-ai/actions/workflows/ci.yml)
+
+**An intelligence layer for job shops.** MillForge takes a shop's real constraints — its machines, staff, suppliers, and deals — as inputs and optimises within them. The measurable output is on-time delivery rate and machine utilisation, not promises about lead times or new infrastructure.
+
+A shop that runs FIFO today and delivers 55% of orders on time can reach 85–95% on-time with the same equipment and same staff, just by sequencing work smarter.
 
 **GitHub**: https://github.com/jonathan-kofman/millforge-ai
+
+## The Core Demo
+
+`GET /api/schedule/benchmark` runs three strategies on the same order set:
+
+| Strategy | What it is |
+|----------|-----------|
+| `fifo` | Naive baseline — process jobs in arrival order, no optimisation |
+| `edd` | MillForge EDD — greedy earliest-due-date with setup-time awareness |
+| `sa` | MillForge SA — simulated annealing, minimises weighted tardiness |
+
+The `on_time_improvement_pp` field in the response is the number that matters: how many percentage points MillForge adds over the naive baseline on the shop's own order data.
 
 ## Quick Start
 
@@ -42,7 +58,7 @@ cd backend && python -m pytest ../tests/ -v
 Or with Make:
 ```bash
 make install    # install all deps
-make test       # run tests (113 tests)
+make test       # run tests
 make dev-backend
 make dev-frontend
 ```
@@ -55,19 +71,21 @@ millforge-ai/
 │   ├── main.py              # FastAPI app entry point
 │   ├── database.py          # SQLAlchemy engine + SessionLocal
 │   ├── db_models.py         # ORM models: User, OrderRecord, ScheduleRun, InspectionRecord
-│   ├── routers/             # quote, schedule, orders, vision, contact, auth
+│   ├── routers/             # quote, schedule, orders, vision, contact, auth, rework
 │   ├── models/schemas.py    # Pydantic request/response models
 │   ├── auth/                # JWT utils + dependency injection
 │   └── agents/
-│       ├── scheduler.py     # EDD scheduler (core POC)
-│       ├── sa_scheduler.py  # Simulated Annealing optimizer
-│       ├── quality_vision.py
-│       └── energy_optimizer.py
+│       ├── scheduler.py         # EDD scheduler (core)
+│       ├── sa_scheduler.py      # Simulated Annealing optimizer
+│       ├── quality_vision.py    # Mock CV inspection
+│       ├── energy_optimizer.py  # Energy cost estimation
+│       ├── inventory_agent.py   # Stock tracking and reorder
+│       └── production_planner.py # Weekly plan via Claude
 ├── frontend/
 │   └── src/
 │       ├── App.jsx
 │       └── components/      # QuoteForm, ScheduleViewer, VisionDemo, ContactForm, OrdersView
-├── tests/                   # 113 tests across all modules
+├── tests/                   # 278 tests across all modules
 ├── docs/                    # architecture, agents, api_spec, roadmap, CHANGELOG
 ├── docker-compose.yml
 ├── Makefile
@@ -78,10 +96,11 @@ millforge-ai/
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/quote` | No | Instant price + lead time estimate |
-| POST | `/api/schedule` | No | Optimize production schedule |
-| GET | `/api/schedule/demo` | No | Demo schedule with mock data |
-| GET | `/api/schedule/benchmark` | No | EDD vs SA comparison |
+| GET | `/api/schedule/benchmark` | No | **Core demo** — FIFO vs EDD vs SA on-time comparison |
+| POST | `/api/quote` | No | Instant quote within real shop capacity constraints |
+| POST | `/api/schedule` | No | Optimise production schedule within shop constraints |
+| GET | `/api/schedule/demo` | No | Demo schedule on built-in mock order set |
+| POST | `/api/schedule/rework` | No | Schedule rework orders from failed quality inspections |
 | POST | `/api/vision/inspect` | No | Quality inspection (mock CV) |
 | POST | `/api/contact` | No | Pilot interest form |
 | POST | `/api/auth/register` | No | Register user account |

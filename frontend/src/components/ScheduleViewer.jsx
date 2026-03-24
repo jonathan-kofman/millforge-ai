@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "../config";
 import BenchmarkPanel from "./BenchmarkPanel";
 
 const MATERIAL_COLORS = {
@@ -18,7 +19,7 @@ export default function ScheduleViewer() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/schedule/demo?algorithm=${algo}`);
+      const res = await fetch(`${API_BASE}/api/schedule/demo?algorithm=${algo}`);
       if (!res.ok) throw new Error("Failed to load demo schedule");
       setSchedule(await res.json());
     } catch (err) {

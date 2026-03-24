@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "../config";
 
 const DEMO_IMAGES = [
   { label: "Steel Plate",     url: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=400" },
@@ -21,7 +22,7 @@ export default function VisionDemo() {
     setError(null);
     setResult(null);
     try {
-      const res = await fetch("/api/vision/inspect", {
+      const res = await fetch(`${API_BASE}/api/vision/inspect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image_url: imageUrl, material, order_id: orderId }),

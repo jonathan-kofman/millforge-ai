@@ -158,3 +158,63 @@ def test_to_dict_serializable(scheduler, simple_orders, now):
     d = schedule.to_dict()
     # Should not raise
     json.dumps(d, default=str)
+
+
+# ---------------------------------------------------------------------------
+# Validation loop tests
+# ---------------------------------------------------------------------------
+
+class TestSchedulerValidation:
+
+    def test_no_validation_failures_on_valid_schedule(self, scheduler, simple_orders, now):
+        """Normal schedule produces no validation failures."""
+        schedule = scheduler.optimize(simple_orders, start_time=now)
+        assert schedule.validation_failures == []
+
+    def test_validation_catches_wrong_total_orders(self, scheduler, simple_orders, now, monkeypatch):
+        """_validate_schedule catches total_orders mismatch."""
+        from agents.scheduler import Schedule
+
+        original_do = scheduler._do_optimize
+
+        def bad_do(*a, **kw):
+            s = original_do(*a, **kw)
+            # Corrupt total_orders so validation fails every attempt
+            s.total_orders = 0
+            return s
+
+        monkeypatch.setattr(scheduler, "_do_optimize", bad_do)
+        schedule = scheduler.optimize(simple_orders, start_time=now)
+        assert len(schedule.validation_failures) > 0
+        assert any("total_orders" in f for f in schedule.validation_failures)
+
+    def test_validation_catches_utilization_out_of_range(self, scheduler, simple_orders, now, monkeypatch):
+        """_validate_schedule catches utilization_percent > 100."""
+        original_do = scheduler._do_optimize
+
+        def bad_do(*a, **kw):
+            s = original_do(*a, **kw)
+            s.utilization_percent = 150.0   # invalid
+            return s
+
+        monkeypatch.setattr(scheduler, "_do_optimize", bad_do)
+        schedule = scheduler.optimize(simple_orders, start_time=now)
+        assert len(schedule.validation_failures) > 0
+        assert any("utilization_percent" in f for f in schedule.validation_failures)
+
+    def test_retry_stops_on_first_valid(self, scheduler, simple_orders, now, monkeypatch):
+        """Stops retrying once a valid schedule is returned."""
+        call_count = {"n": 0}
+        original_do = scheduler._do_optimize
+
+        def side_effect(*a, **kw):
+            call_count["n"] += 1
+            s = original_do(*a, **kw)
+            if call_count["n"] == 1:
+                s.total_orders = 0   # bad first attempt
+            return s
+
+        monkeypatch.setattr(scheduler, "_do_optimize", side_effect)
+        schedule = scheduler.optimize(simple_orders, start_time=now)
+        assert call_count["n"] == 2
+        assert schedule.validation_failures == []

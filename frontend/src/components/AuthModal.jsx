@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "../config";
 
 export default function AuthModal({ onSuccess, onClose }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
@@ -13,7 +14,7 @@ export default function AuthModal({ onSuccess, onClose }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const url = mode === "login" ? "/api/auth/login" : "/api/auth/register";
+    const url = mode === "login" ? `${API_BASE}/api/auth/login` : `${API_BASE}/api/auth/register`;
     const body = mode === "login"
       ? { email: form.email, password: form.password }
       : { email: form.email, password: form.password, name: form.name, company: form.company || undefined };

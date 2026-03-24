@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "../config";
 
 export default function BenchmarkPanel() {
   const [data, setData] = useState(null);
@@ -9,7 +10,7 @@ export default function BenchmarkPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/schedule/benchmark");
+      const res = await fetch(`${API_BASE}/api/schedule/benchmark`);
       if (!res.ok) throw new Error("Benchmark request failed");
       setData(await res.json());
     } catch (err) {

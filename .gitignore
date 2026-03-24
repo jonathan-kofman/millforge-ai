@@ -5,6 +5,8 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.local
+frontend/.env.production
 
 # Database (dev SQLite file — never commit production data)
 backend/millforge.db
