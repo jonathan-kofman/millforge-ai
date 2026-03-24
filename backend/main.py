@@ -113,7 +113,7 @@ async def health():
         "scheduling":          "automated",
         "quoting":             "automated",
         "quality_inspection":  "pretrained",  # YOLOv8n ONNX placeholder
-        "energy_optimization": "automated",
+        "energy_optimization": "real_grid_data",  # PJM LMP + Electricity Maps carbon
         "inventory_management":"automated",
         "production_planning": "real_data",  # US Census ASM throughput benchmarks
         "rework_dispatch":     "automated",

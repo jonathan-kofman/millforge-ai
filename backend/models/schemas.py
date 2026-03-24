@@ -50,6 +50,7 @@ class QuoteResponse(BaseModel):
     currency: str = "USD"
     valid_until: datetime
     notes: str
+    carbon_footprint_kg_co2: Optional[float] = None
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +83,7 @@ class OrderInput(BaseModel):
 class ScheduleRequest(BaseModel):
     orders: List[OrderInput] = Field(..., min_length=1, description="List of orders to schedule")
     start_time: Optional[datetime] = Field(None, description="Production start time. Defaults to now.")
+    battery_soc_percent: Optional[float] = Field(None, ge=0.0, le=100.0, description="Battery state of charge (0–100%). Influences energy scheduling recommendations.")
 
     model_config = {
         "json_schema_extra": {
@@ -130,6 +132,7 @@ class ScheduleResponse(BaseModel):
     algorithm: str = "edd"
     schedule: List[ScheduledOrderOutput]
     validation_failures: List[str] = []
+    energy_analysis: Optional["EnergyAnalysis"] = None
 
 
 # ---------------------------------------------------------------------------
@@ -435,6 +438,81 @@ class EnergyEstimateResponse(BaseModel):
     recommendation: str
     data_source: str = "simulated_fallback"
     validation_failures: List[str] = []
+
+
+class EnergyAnalysis(BaseModel):
+    total_energy_kwh: float
+    current_schedule_cost_usd: float
+    optimal_schedule_cost_usd: float
+    potential_savings_usd: float
+    carbon_footprint_kg_co2: float
+    carbon_delta_kg_co2: float
+    battery_recommendation: Optional[str] = None
+    data_source: str = "simulated_fallback"
+
+
+class NegativePricingWindow(BaseModel):
+    hour: int
+    rate_usd_per_mwh: float
+    duration_hours: int = 1
+
+
+class NegativePricingResponse(BaseModel):
+    windows: List[NegativePricingWindow]
+    total_windows: int
+    max_credit_usd_per_mwh: float
+    recommendation: str
+    data_source: str = "simulated_fallback"
+
+
+class ArbitrageRequest(BaseModel):
+    daily_energy_kwh: float = Field(..., gt=0, description="Daily mill energy consumption in kWh")
+    flexible_load_percent: float = Field(0.3, ge=0.0, le=1.0, description="Fraction of load that can be shifted")
+
+
+class ArbitrageResponse(BaseModel):
+    daily_savings_usd: float
+    annual_savings_usd: float
+    peak_rate_usd_per_kwh: float
+    off_peak_rate_usd_per_kwh: float
+    optimal_shift_hours: List[int]
+    recommendation: str
+    data_source: str = "simulated_fallback"
+
+
+class ScenarioType(str, Enum):
+    SOLAR = "solar"
+    BATTERY = "battery"
+    SOLAR_BATTERY = "solar_battery"
+    WIND = "wind"
+    SMR = "smr"
+    GRID_ONLY = "grid_only"
+
+
+class ScenarioRequest(BaseModel):
+    scenario: ScenarioType = Field(..., description="On-site generation scenario to model")
+    annual_energy_kwh: float = Field(..., gt=0, description="Annual mill energy consumption in kWh")
+    capex_usd: Optional[float] = Field(None, gt=0, description="Override default capex estimate")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "scenario": "solar",
+                "annual_energy_kwh": 500000
+            }
+        }
+    }
+
+
+class ScenarioResponse(BaseModel):
+    scenario: str
+    capex_usd: float
+    lcoe_usd_per_kwh: float
+    annual_savings_usd: float
+    npv_10yr_usd: float
+    payback_years: Optional[float] = None
+    recommendation: str
+    data_source: str = "lazard_lcoe_v17_2024"
 
 
 # ---------------------------------------------------------------------------

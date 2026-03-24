@@ -17,10 +17,12 @@ from fastapi import APIRouter, HTTPException, Query
 from models.schemas import (
     ScheduleRequest, ScheduleResponse, ScheduleSummary,
     ScheduledOrderOutput, OrderInput, BenchmarkResponse, BenchmarkEntry,
+    EnergyAnalysis,
 )
 from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT, BASE_SETUP_MINUTES, MACHINE_COUNT
 from agents.sa_scheduler import SAScheduler
 from agents.benchmark_data import get_benchmark_orders, DATASET_DESCRIPTION, ORDER_COUNT
+from agents.energy_optimizer import EnergyOptimizer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Schedule"])
@@ -28,9 +30,10 @@ router = APIRouter(prefix="/api", tags=["Schedule"])
 # Instantiated once — SA is stateless between calls
 _edd = Scheduler()
 _sa  = SAScheduler()
+_energy = EnergyOptimizer()
 
 
-def _build_response(schedule, algorithm: str) -> ScheduleResponse:
+def _build_response(schedule, algorithm: str, energy_analysis: Optional[EnergyAnalysis] = None) -> ScheduleResponse:
     """Convert a Schedule domain object to a ScheduleResponse."""
     outputs = [
         ScheduledOrderOutput(
@@ -62,6 +65,7 @@ def _build_response(schedule, algorithm: str) -> ScheduleResponse:
         schedule=outputs,
         algorithm=algorithm,
         validation_failures=getattr(schedule, "validation_failures", []),
+        energy_analysis=energy_analysis,
     )
 
 
@@ -90,7 +94,26 @@ async def optimize_schedule(
         logger.error(f"Scheduler error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Scheduling engine error")
 
-    return _build_response(schedule, algorithm)
+    energy_analysis = None
+    try:
+        ea = _energy.compute_schedule_energy_analysis(
+            schedule.scheduled_orders,
+            battery_soc_percent=req.battery_soc_percent,
+        )
+        energy_analysis = EnergyAnalysis(
+            total_energy_kwh=ea["total_energy_kwh"],
+            current_schedule_cost_usd=ea["current_schedule_cost_usd"],
+            optimal_schedule_cost_usd=ea["optimal_schedule_cost_usd"],
+            potential_savings_usd=ea["potential_savings_usd"],
+            carbon_footprint_kg_co2=ea["carbon_footprint_kg_co2"],
+            carbon_delta_kg_co2=ea["carbon_delta_kg_co2"],
+            battery_recommendation=ea.get("battery_recommendation"),
+            data_source=ea.get("data_source", "simulated_fallback"),
+        )
+    except Exception as e:
+        logger.warning(f"Energy analysis failed (non-fatal): {e}")
+
+    return _build_response(schedule, algorithm, energy_analysis)
 
 
 @router.get("/schedule/demo", response_model=ScheduleResponse, summary="Demo schedule on built-in mock order set")

@@ -7,6 +7,7 @@ import OrdersView from "./components/OrdersView";
 import AuthModal from "./components/AuthModal";
 import BenchmarkDemo from "./components/BenchmarkDemo";
 import LightsOutWidget from "./components/LightsOutWidget";
+import EnergyWidget from "./components/EnergyWidget";
 
 const PUBLIC_TABS = [
   { id: "quote",    label: "Instant Quote" },
@@ -113,6 +114,39 @@ export default function App() {
           <p className="text-sm text-gray-500 text-center">Every milestone removes one more human touchpoint from routine production.</p>
         </div>
         <LightsOutWidget />
+      </div>
+
+      {/* ── Why we built this ── */}
+      <div className="bg-gray-950 border-b border-gray-800">
+        <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+          <p className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-8">
+            Why We Built This
+          </p>
+          <div className="max-w-[700px] mx-auto space-y-6">
+            <p className="text-white text-base sm:text-lg leading-relaxed">
+              Building precision parts for aerospace propulsion systems and
+              personal projects means ordering metal. And ordering metal in
+              America means waiting — weeks, then months, then more months.
+              It means routing orders through worse suppliers because the
+              better ones are in countries you can&apos;t work with. It means
+              watching your timeline collapse because a mill you never spoke
+              to, running software designed in the 1990s, put your order
+              behind seventeen others with no logic you can see.
+            </p>
+            <p className="text-[#9ca3af] text-base sm:text-lg leading-relaxed">
+              Every machinist Jonathan has worked alongside has the same story.
+              The scheduling is broken. The visibility is zero. The software
+              doesn&apos;t match the floor. MillForge AI exists because this problem
+              is everywhere, it costs real projects real time, and nobody has
+              fixed it.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Energy intelligence ── */}
+      <div className="bg-gray-950 border-b border-gray-800">
+        <EnergyWidget />
       </div>
 
       {/* ── Tab nav ── */}

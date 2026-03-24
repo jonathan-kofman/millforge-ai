@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 
 from models.schemas import QuoteRequest, QuoteResponse
 from agents.scheduler import Scheduler, Order, get_mock_orders
+from agents.energy_optimizer import EnergyOptimizer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Quote"])
@@ -27,6 +28,7 @@ UNIT_PRICE: dict = {
 }
 
 _scheduler = Scheduler()
+_energy = EnergyOptimizer()
 
 
 @router.post("/quote", response_model=QuoteResponse, summary="Instant quote within real shop capacity constraints")
@@ -78,6 +80,20 @@ async def get_quote(req: QuoteRequest) -> QuoteResponse:
         f"Volume discount applied: {discount*100:.0f}%."
     )
 
+    # Carbon footprint: estimate energy for processing, then convert to CO2
+    carbon_kg: float | None = None
+    try:
+        from agents.scheduler import THROUGHPUT as _TPUT
+        from agents.energy_optimizer import MACHINE_POWER_KW, _get_carbon_intensity
+        tput = _TPUT.get(req.material.value, 3.0)
+        proc_hours = (req.quantity / tput) * 1.0  # complexity=1.0 for quote estimate
+        power_kw = MACHINE_POWER_KW.get(req.material.value, 70)
+        kwh = proc_hours * power_kw
+        intensity, _ = _get_carbon_intensity()
+        carbon_kg = round(kwh * intensity, 2)
+    except Exception as e:
+        logger.warning(f"Carbon footprint calc failed (non-fatal): {e}")
+
     return QuoteResponse(
         quote_id=new_order.order_id,
         material=req.material.value,
@@ -89,6 +105,7 @@ async def get_quote(req: QuoteRequest) -> QuoteResponse:
         total_price_usd=round(total_price, 2),
         valid_until=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7),
         notes=notes,
+        carbon_footprint_kg_co2=carbon_kg,
     )
 
 

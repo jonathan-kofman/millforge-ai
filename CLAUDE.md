@@ -124,6 +124,34 @@ All request/response types are in `backend/models/schemas.py`. `MaterialType` is
 - Rework order IDs prefixed `RW-{original_id}`
 - Uses `SAScheduler` for scheduling rework orders
 
+## Energy Intelligence (`backend/agents/energy_optimizer.py`, `backend/routers/energy.py`)
+
+Energy is the other half of the lights-out problem — no human decides when to run energy-intensive jobs.
+
+**Endpoints:**
+- `GET /api/energy/negative-pricing-windows` — detect hours where grid electricity is free or negative (grid pays you to run)
+- `POST /api/energy/arbitrage-analysis` — compute daily/annual savings from shifting flexible load to off-peak hours
+- `POST /api/energy/scenario` — 10-year NPV analysis for on-site generation: `solar`, `battery`, `solar_battery`, `wind`, `smr`, `grid_only`
+
+**Energy analysis on every schedule response:**
+- `ScheduleRequest.battery_soc_percent: Optional[float]` — pass battery state-of-charge (0–100%) to get a battery recommendation in the response
+- `ScheduleResponse.energy_analysis` — `EnergyAnalysis` schema with `total_energy_kwh`, `current_schedule_cost_usd`, `optimal_schedule_cost_usd`, `potential_savings_usd`, `carbon_footprint_kg_co2`, `carbon_delta_kg_co2`, and optional `battery_recommendation`
+
+**Carbon footprint on every quote response:**
+- `QuoteResponse.carbon_footprint_kg_co2` — estimated CO2 for the order using `THROUGHPUT` (from `agents.scheduler`) × `MACHINE_POWER_KW` × `_get_carbon_intensity()`
+
+**Key implementation details:**
+- `_get_carbon_intensity()` is a **module-level function** (not an instance method of `EnergyOptimizer`) — import directly: `from agents.energy_optimizer import _get_carbon_intensity`
+- `THROUGHPUT` dict lives in `agents.scheduler`, NOT `agents.energy_optimizer`
+- `MACHINE_POWER_KW` dict maps material → kW draw (steel=75, aluminum=55, titanium=90, copper=65)
+- `US_GRID_CARBON_INTENSITY = 0.386` kg CO2/kWh — EPA 2023 average, used as fallback
+- `ELECTRICITY_MAPS_API_KEY` env var enables live carbon intensity from Electricity Maps API
+- PJM LMP data fetched via `gridstatus` library; `_fetch_pjm_lmp_raw()` preserves negative values for window detection
+- LCOE constants from Lazard v17 (2024): solar=0.045, battery=0.060, solar_battery=0.050, wind=0.035, SMR=0.065 $/kWh
+- NPV discount rate: SMR=6%, all others=8%
+- `ScenarioResponse.payback_years` is `Optional[float] = None` — `grid_only` scenario returns `None`
+- Arbitrage router derives `peak_rate` / `off_peak_rate` from `_get_hourly_rates()` directly (agent dict returns delta, not absolute rates)
+
 ## E2E Smoke Test (`tests/test_e2e.py`)
 
 Full chain: schedule → inspect → energy → quote → rework (Step 6). Key assertions:
