@@ -135,12 +135,12 @@ export default function ContactForm() {
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Schedule a call</p>
             <a
-              href="https://calendly.com/jonathan-kofman"
+              href="https://calendly.com/jonkofm/30min"
               target="_blank"
               rel="noopener noreferrer"
               className="text-forge-400 hover:text-forge-300 transition-colors text-sm"
             >
-              Book a 20-minute call →
+              Book a 30-minute call →
             </a>
           </div>
 
