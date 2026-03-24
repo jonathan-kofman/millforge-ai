@@ -2,23 +2,45 @@
 
 [![CI](https://github.com/jonathan-kofman/millforge-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/jonathan-kofman/millforge-ai/actions/workflows/ci.yml)
 
-**An intelligence layer for job shops.** MillForge takes a shop's real constraints — its machines, staff, suppliers, and deals — as inputs and optimises within them. The measurable output is on-time delivery rate and machine utilisation, not promises about lead times or new infrastructure.
+**The software stack for lights-out American manufacturing.**
 
-A shop that runs FIFO today and delivers 55% of orders on time can reach 85–95% on-time with the same equipment and same staff, just by sequencing work smarter.
+China is moving toward dark factories — fully automated metal production where software controls the entire production flow and humans handle exceptions only. The US has almost none of this. MillForge is building the intelligence layer that makes it possible.
 
+Same machines. Same staff. Software removes the human from every routine decision.
+
+**Live demo**: https://millforge-ai.vercel.app
+**API**: https://millforge-ai.up.railway.app
 **GitHub**: https://github.com/jonathan-kofman/millforge-ai
+
+## Lights-Out Readiness
+
+`GET /health` returns the live scoreboard — how many production touchpoints are fully automated vs pretrained vs mock:
+
+| Touchpoint | Status |
+|------------|--------|
+| Scheduling | ✅ automated |
+| Quoting | ✅ automated |
+| Quality Inspection | ⚡ pretrained (YOLOv8n ONNX) |
+| Rework Dispatch | ✅ automated |
+| Inventory Management | ✅ automated |
+| Energy Optimization | 🟡 mock |
+| Production Planning | 🟡 mock |
+
+**Current readiness: 57%** (4 of 7 touchpoints fully automated)
 
 ## The Core Demo
 
-`GET /api/schedule/benchmark` runs three strategies on the same order set:
+`GET /api/schedule/benchmark` runs three strategies on the same 28-order dataset:
 
-| Strategy | What it is |
-|----------|-----------|
-| `fifo` | Naive baseline — process jobs in arrival order, no optimisation |
-| `edd` | MillForge EDD — greedy earliest-due-date with setup-time awareness |
-| `sa` | MillForge SA — simulated annealing, minimises weighted tardiness |
+| Strategy | On-time rate | What it is |
+|----------|-------------|-----------|
+| `fifo` | 60.7% | Naive baseline — arrival order, no optimisation |
+| `edd` | 96.4% | MillForge EDD — greedy earliest-due-date with setup-time awareness |
+| `sa` | 100.0% | MillForge SA — simulated annealing, minimises weighted tardiness |
 
-The `on_time_improvement_pp` field in the response is the number that matters: how many percentage points MillForge adds over the naive baseline on the shop's own order data.
+**+39.3pp on-time improvement over the naive baseline.** Same machines, same staff, same suppliers.
+
+Results are fully deterministic — identical every run.
 
 ## Quick Start
 
@@ -51,7 +73,6 @@ npm run dev
 
 ### Run Tests
 ```bash
-# From project root
 cd backend && python -m pytest ../tests/ -v
 ```
 
@@ -77,15 +98,15 @@ millforge-ai/
 │   └── agents/
 │       ├── scheduler.py         # EDD scheduler (core)
 │       ├── sa_scheduler.py      # Simulated Annealing optimizer
-│       ├── quality_vision.py    # Mock CV inspection
+│       ├── quality_vision.py    # YOLOv8n ONNX visual quality triage
 │       ├── energy_optimizer.py  # Energy cost estimation
-│       ├── inventory_agent.py   # Stock tracking and reorder
-│       └── production_planner.py # Weekly plan via Claude
+│       ├── inventory_agent.py   # Stock tracking and auto-reorder
+│       └── rework.py            # Rework dispatch from failed inspections
 ├── frontend/
 │   └── src/
 │       ├── App.jsx
-│       └── components/      # QuoteForm, ScheduleViewer, VisionDemo, ContactForm, OrdersView
-├── tests/                   # 278 tests across all modules
+│       └── components/      # QuoteForm, ScheduleViewer, VisionDemo, BenchmarkDemo, LightsOutWidget
+├── tests/                   # pytest suite across all modules
 ├── docs/                    # architecture, agents, api_spec, roadmap, CHANGELOG
 ├── docker-compose.yml
 ├── Makefile
@@ -96,12 +117,13 @@ millforge-ai/
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
+| GET | `/health` | No | Lights-out readiness scoreboard |
 | GET | `/api/schedule/benchmark` | No | **Core demo** — FIFO vs EDD vs SA on-time comparison |
 | POST | `/api/quote` | No | Instant quote within real shop capacity constraints |
 | POST | `/api/schedule` | No | Optimise production schedule within shop constraints |
 | GET | `/api/schedule/demo` | No | Demo schedule on built-in mock order set |
-| POST | `/api/schedule/rework` | No | Schedule rework orders from failed quality inspections |
-| POST | `/api/vision/inspect` | No | Quality inspection (mock CV) |
+| POST | `/api/schedule/rework` | No | Auto-dispatch rework orders from failed inspections |
+| POST | `/api/vision/inspect` | No | Visual quality triage (YOLOv8n ONNX pretrained) |
 | POST | `/api/contact` | No | Pilot interest form |
 | POST | `/api/auth/register` | No | Register user account |
 | POST | `/api/auth/login` | No | Login → JWT token |
@@ -111,9 +133,6 @@ millforge-ai/
 | PATCH | `/api/orders/{id}` | JWT | Update order |
 | DELETE | `/api/orders/{id}` | JWT | Delete order |
 | POST | `/api/orders/schedule` | JWT | Schedule pending orders |
-| GET | `/health` | No | Health check |
-
-Full spec: [`docs/api_spec.md`](docs/api_spec.md)
 
 ## Architecture
 

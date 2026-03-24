@@ -90,10 +90,10 @@ app.include_router(schedule.router)
 app.include_router(vision.router)
 app.include_router(contact.router)
 app.include_router(inventory_router)
-app.include_router(planner_router)
+app.include_router(planner_router,     include_in_schema=False)
 app.include_router(energy_router)
-app.include_router(anomaly_router)
-app.include_router(nl_schedule_router)
+app.include_router(anomaly_router,     include_in_schema=False)
+app.include_router(nl_schedule_router, include_in_schema=False)
 app.include_router(rework_router)
 
 
