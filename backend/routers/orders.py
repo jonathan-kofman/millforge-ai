@@ -21,6 +21,7 @@ from agents.sa_scheduler import SAScheduler
 from models.schemas import (
     OrderCreateRequest, OrderResponse, OrderUpdateRequest,
     OrderListResponse, OrderScheduleResponse, ScheduleSummary, ScheduledOrderOutput,
+    ScheduleHistoryItem, ScheduleHistoryResponse,
 )
 
 # Instantiated once at module level — stateless between calls
@@ -108,6 +109,32 @@ async def list_orders(
         total=total,
         orders=[_to_response(r) for r in records],
     )
+
+
+@router.get("/schedule-history", response_model=ScheduleHistoryResponse, summary="List past schedule runs")
+async def list_schedule_history(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ScheduleHistoryResponse:
+    """Return the authenticated user's past ScheduleRun records, newest first."""
+    q = db.query(ScheduleRun).filter(ScheduleRun.created_by_id == user.id)
+    total = q.count()
+    runs = q.order_by(ScheduleRun.created_at.desc()).offset(offset).limit(limit).all()
+    items = [
+        ScheduleHistoryItem(
+            id=r.id,
+            algorithm=r.algorithm,
+            order_ids=r.order_ids,
+            summary=r.summary,
+            on_time_rate=r.on_time_rate,
+            makespan_hours=r.makespan_hours,
+            created_at=r.created_at,
+        )
+        for r in runs
+    ]
+    return ScheduleHistoryResponse(total=total, runs=items)
 
 
 @router.get("/{order_id}", response_model=OrderResponse)

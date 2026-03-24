@@ -287,6 +287,27 @@ class OrderScheduleResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# /api/orders/schedule-history
+# ---------------------------------------------------------------------------
+
+class ScheduleHistoryItem(BaseModel):
+    id: int
+    algorithm: str
+    order_ids: List[str]
+    summary: Dict[str, Any]
+    on_time_rate: float
+    makespan_hours: float
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ScheduleHistoryResponse(BaseModel):
+    total: int
+    runs: List[ScheduleHistoryItem]
+
+
+# ---------------------------------------------------------------------------
 # Generic error response
 # ---------------------------------------------------------------------------
 

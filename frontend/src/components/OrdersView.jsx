@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import GanttChart from "./GanttChart";
+import ScheduleHistoryPanel from "./ScheduleHistoryPanel";
 
 const STATUS_COLORS = {
   pending:     "bg-yellow-900/50 text-yellow-300",
@@ -27,6 +29,7 @@ export default function OrdersView({ token }) {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleResult, setScheduleResult] = useState(null);
   const [scheduleError, setScheduleError] = useState(null);
+  const [historyKey, setHistoryKey] = useState(0);  // bump to refresh history panel
 
   const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
@@ -105,6 +108,7 @@ export default function OrdersView({ token }) {
       const data = await res.json();
       setScheduleResult(data);
       fetchOrders(); // refresh statuses
+      setHistoryKey(k => k + 1); // refresh history panel
     } catch (err) {
       setScheduleError(err.message);
     } finally {
@@ -170,33 +174,41 @@ export default function OrdersView({ token }) {
               </div>
             ))}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs min-w-[600px]">
-              <thead>
-                <tr className="text-left text-gray-600 border-b border-gray-800">
-                  {["Order", "Machine", "Material", "Start", "Done", "On Time"].map(h => (
-                    <th key={h} className="pb-1 pr-3 font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/50">
-                {scheduleResult.schedule.map(s => (
-                  <tr key={s.order_id}>
-                    <td className="py-1 pr-3 font-mono text-gray-400">{s.order_id}</td>
-                    <td className="py-1 pr-3 text-gray-400">M{s.machine_id}</td>
-                    <td className="py-1 pr-3 text-gray-400 capitalize">{s.material}</td>
-                    <td className="py-1 pr-3 text-gray-500">{new Date(s.processing_start).toLocaleString()}</td>
-                    <td className="py-1 pr-3 text-gray-500">{new Date(s.completion_time).toLocaleString()}</td>
-                    <td className="py-1">
-                      <span className={s.on_time ? "text-green-400" : "text-red-400"}>
-                        {s.on_time ? "✓" : "✗"}
-                      </span>
-                    </td>
+          <GanttChart schedule={scheduleResult.schedule} />
+
+          {/* Detail table toggle */}
+          <details className="mt-3">
+            <summary className="text-xs text-gray-600 hover:text-gray-400 cursor-pointer select-none">
+              Show detail table
+            </summary>
+            <div className="overflow-x-auto mt-2">
+              <table className="w-full text-xs min-w-[600px]">
+                <thead>
+                  <tr className="text-left text-gray-600 border-b border-gray-800">
+                    {["Order", "Machine", "Material", "Start", "Done", "On Time"].map(h => (
+                      <th key={h} className="pb-1 pr-3 font-medium">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-800/50">
+                  {scheduleResult.schedule.map(s => (
+                    <tr key={s.order_id}>
+                      <td className="py-1 pr-3 font-mono text-gray-400">{s.order_id}</td>
+                      <td className="py-1 pr-3 text-gray-400">M{s.machine_id}</td>
+                      <td className="py-1 pr-3 text-gray-400 capitalize">{s.material}</td>
+                      <td className="py-1 pr-3 text-gray-500">{new Date(s.processing_start).toLocaleString()}</td>
+                      <td className="py-1 pr-3 text-gray-500">{new Date(s.completion_time).toLocaleString()}</td>
+                      <td className="py-1">
+                        <span className={s.on_time ? "text-green-400" : "text-red-400"}>
+                          {s.on_time ? "✓" : "✗"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
           <button
             className="mt-3 text-xs text-gray-600 hover:text-gray-400"
             onClick={() => setScheduleResult(null)}
@@ -301,6 +313,9 @@ export default function OrdersView({ token }) {
           </table>
         </div>
       )}
+
+      {/* Schedule history accordion */}
+      <ScheduleHistoryPanel token={token} refreshKey={historyKey} />
     </div>
   );
 }
