@@ -2,13 +2,9 @@
 
 [![CI](https://github.com/jonathan-kofman/millforge-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/jonathan-kofman/millforge-ai/actions/workflows/ci.yml)
 
-**Built by a founder who operates CNC mills every day. Powered by AI.**
+Most metal mills have 8 to 30 week lead times not because the machines are slow — but because everything around them is manual and fragmented.
 
-Jonathan Kofman machines parts daily at Northeastern's Advanced Manufacturing lab — aluminum, steel, and titanium on HAAS and Tormach machines. His grandfather spent 40+ years in aluminum die manufacturing. He built MillForge because he lives the scheduling problem himself.
-
-China is moving toward dark factories — fully automated metal production where software controls the entire production flow and humans handle exceptions only. The US has almost none of this. MillForge is the intelligence layer that makes it possible.
-
-Same machines. Same staff. Software removes the human from every routine decision.
+**MillForge AI** replaces the scheduling chaos with software that optimizes, quotes, inspects, and reschedules automatically.
 
 **Live demo**: https://millforge-ai.vercel.app
 **API**: https://millforge-ai.up.railway.app
