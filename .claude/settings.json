@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "command": "curl -s -X POST http://localhost:3853/api/events -H 'Content-Type: application/json' -d \"$(cat)\""
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "command": "curl -s -X POST http://localhost:3853/api/events -H 'Content-Type: application/json' -d \"$(cat)\""
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "command": "curl -s -X POST http://localhost:3853/api/events -H 'Content-Type: application/json' -d \"$(cat)\""
+      }
+    ]
+  }
+}
