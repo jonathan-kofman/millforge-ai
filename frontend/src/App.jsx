@@ -60,7 +60,6 @@ export default function App() {
             <div>
               <span className="text-xl font-bold text-white tracking-tight">Mill</span>
               <span className="text-xl font-bold text-forge-500 tracking-tight">Forge</span>
-              <span className="ml-2 text-xs bg-forge-500/20 text-forge-500 px-2 py-0.5 rounded-full font-medium">POC</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -84,12 +83,21 @@ export default function App() {
 
       {/* ── Hero ── */}
       <section className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-4 py-14 text-center">
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-3">
-            <span className="text-forge-500">Built by a founder who operates CNC mills every day. Powered by AI.</span>
+        <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+          {/* Pull quote */}
+          <div className="max-w-2xl mx-auto mb-10 border-l-4 border-forge-500 pl-5 text-left">
+            <p className="text-sm sm:text-base text-gray-300 italic leading-relaxed">
+              &ldquo;Ordered 5 months ago. They just told me it&apos;ll be another 2 months. I could&apos;ve grown the aluminum myself.&rdquo;
+            </p>
+            <p className="mt-2 text-xs text-gray-500">— American manufacturer, 2024</p>
+          </div>
+          {/* Headline */}
+          <h1 className="text-5xl sm:text-6xl font-extrabold text-white mb-4 leading-tight">
+            MillForge AI ends the wait.
           </h1>
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-            Same machines. Same staff. Software removes the human from every routine decision.
+          {/* Subheadline */}
+          <p className="text-base sm:text-lg text-gray-400 max-w-2xl mx-auto">
+            AI scheduling that compresses 8 to 30 week lead times — on your existing machines, with your existing staff. No ERP replacement. Deploys in days.
           </p>
         </div>
       </section>
