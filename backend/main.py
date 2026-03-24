@@ -51,8 +51,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MillForge API",
     description=(
-        "AI-powered production scheduling for software-defined metal mills. "
-        "Compresses lead times from months to days."
+        "Production scheduling optimization for job shops. "
+        "Improves on-time delivery rate by up to 39pp on the same machines and constraints."
     ),
     version="0.2.0",
     contact={"name": "MillForge Team"},
