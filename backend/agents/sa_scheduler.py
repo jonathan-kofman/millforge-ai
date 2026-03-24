@@ -26,7 +26,7 @@ import math
 import random
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 
 from .scheduler import (
     Order, Schedule, ScheduledOrder, Scheduler,

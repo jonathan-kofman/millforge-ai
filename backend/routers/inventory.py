@@ -3,7 +3,7 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -15,7 +15,6 @@ from models.schemas import (
     InventoryStatusResponse,
     PurchaseOrderResponse,
     ReorderResponse,
-    SupplierSearchResult,
     SupplierResponse,
 )
 from agents.inventory_agent import InventoryAgent

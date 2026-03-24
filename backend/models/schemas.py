@@ -2,7 +2,7 @@
 Pydantic request/response schemas for the MillForge API.
 """
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum

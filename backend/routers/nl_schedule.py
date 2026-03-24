@@ -12,7 +12,6 @@ from fastapi import APIRouter, HTTPException
 
 from models.schemas import (
     NLScheduleRequest, NLScheduleResponse, PriorityOverrideItem,
-    OrderInput,
 )
 from agents.nl_scheduler import NLSchedulerAgent
 from agents.sa_scheduler import SAScheduler

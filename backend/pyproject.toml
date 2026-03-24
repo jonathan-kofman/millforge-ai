@@ -1,0 +1,7 @@
+[tool.ruff.lint]
+# E402: module-level import not at top of file — intentional in main.py (load_dotenv first)
+# E501: line too long — not enforced
+ignore = ["E402", "E501"]
+
+[tool.ruff]
+exclude = ["tune_benchmark.py"]

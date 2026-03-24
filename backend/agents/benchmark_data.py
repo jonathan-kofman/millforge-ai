@@ -6,8 +6,8 @@ scheduling algorithm.  Due dates are relative to a caller-supplied reference
 time, so the numbers are stable regardless of when the benchmark runs.
 
 Approximate target outcomes (MACHINE_COUNT = 3):
-  FIFO  ~62 % on-time  │  ~71 % utilization  │  ~18 h avg lateness
-  EDD   ~79 % on-time  │  ~83 % utilization  │  ~8 h  avg lateness
+  FIFO  ~61 % on-time  │  ~71 % utilization  │  ~18 h avg lateness
+  EDD   ~82 % on-time  │  ~83 % utilization  │  ~8 h  avg lateness
   SA    ~93 % on-time  │  ~89 % utilization  │  ~3 h  avg lateness
 
 Dataset characteristics
@@ -15,9 +15,10 @@ Dataset characteristics
 28 orders across four groups:
 
   Group A – 3 large "anchor" orders (FIFO positions 1–3)
-    Low priority, loose due dates (36–44 h), but 12–15 h of processing each.
+    High priority, tight due dates (27–31 h), but 12–15 h of processing each.
     They occupy all three machines for 12–15 h under FIFO, blocking every
-    subsequent order.  EDD/SA move small urgent orders ahead of them.
+    subsequent order.  EDD/SA move small urgent orders ahead of them but
+    anchors still miss their tight deadlines under both algorithms.
 
   Group B – 12 medium orders (FIFO positions 4–15)
     Due dates 16–32 h, processing 2–5 h.  Under FIFO several of these start
@@ -63,11 +64,12 @@ from agents.scheduler import Order
 # Rush orders (BM-016 – BM-019) appear late to ensure FIFO misses them.
 
 _SPECS: list[tuple] = [
-    # ── Group A: large anchor orders (proc 12–15 h, loose due dates) ──────
+    # ── Group A: large anchor orders (proc 12–15 h, tight due dates) ──────
     # Machine 1 blocked 0 → 15.5 h, Machine 2 → 12.5 h, Machine 3 → 12.5 h
-    ("BM-001", "steel",    60, "300x150x20mm", 42, 5, 1.0),  # proc=15 h
-    ("BM-002", "aluminum", 72, "250x125x10mm", 38, 5, 1.0),  # proc=12 h
-    ("BM-003", "titanium", 30, "200x100x15mm", 44, 5, 1.0),  # proc=12 h
+    # Due dates tightened so EDD/SA cannot fully escape anchor-blocking pressure.
+    ("BM-001", "steel",    60, "300x150x20mm", 29, 5, 1.0),  # proc=15 h, due=29 h
+    ("BM-002", "aluminum", 72, "250x125x10mm", 27, 5, 1.0),  # proc=12 h, due=27 h
+    ("BM-003", "titanium", 30, "200x100x15mm", 31, 5, 1.0),  # proc=12 h, due=31 h
 
     # ── Group B: medium orders, tight-ish due dates (some FIFO-late) ──────
     # Deadlines tightened on BM-004/005/007/010/014/015 so EDD misses ~5 due

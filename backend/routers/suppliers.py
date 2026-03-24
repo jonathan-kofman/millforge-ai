@@ -121,7 +121,7 @@ async def get_supplier(supplier_id: int, db: Session = Depends(get_db)) -> Suppl
 )
 async def seed_endpoint(db: Session = Depends(get_db)):
     from db_models import Supplier as SupplierModel
-    from scripts.seed_suppliers import seed_suppliers, SUPPLIERS
+    from scripts.seed_suppliers import seed_suppliers
     count = db.query(SupplierModel).count()
     if count > 0:
         return {"status": "already_seeded", "count": count}

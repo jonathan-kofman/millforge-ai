@@ -190,7 +190,7 @@ class AnomalyDetector:
                         order_id=oid,
                         anomaly_type="impossible_deadline",
                         severity="warning",
-                        description=f"due_date is less than 1 hour from now",
+                        description="due_date is less than 1 hour from now",
                     ))
             except (ValueError, TypeError):
                 pass
