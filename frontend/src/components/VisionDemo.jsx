@@ -43,8 +43,9 @@ export default function VisionDemo() {
     <div className="max-w-3xl mx-auto">
       <h2 className="text-2xl font-bold text-white mb-2">Quality Inspection</h2>
       <p className="text-gray-400 mb-8">
-        Simulate AI-driven visual quality inspection. In production, this calls a fine-tuned
-        computer vision model. Currently returns a simulated assessment.
+        AI-driven visual quality triage — no human does first-pass inspection.
+        Uses a YOLOv8n ONNX model as a pretrained placeholder; swap in a fine-tuned
+        metal defect detector to go fully lights-out.
       </p>
 
       <div className="grid sm:grid-cols-2 gap-6">
@@ -153,9 +154,20 @@ export default function VisionDemo() {
 
               <p className="text-sm text-gray-300">{result.recommendation}</p>
 
-              <p className="text-xs text-gray-600 mt-3">
-                Inspector: {result.inspector_version}
-              </p>
+              <div className="flex items-center justify-between mt-3">
+                <p className="text-xs text-gray-600">
+                  Inspector: {result.inspector_version}
+                </p>
+                {result.model && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    result.model === "yolov8n-pretrained"
+                      ? "bg-blue-900/40 text-blue-400"
+                      : "bg-gray-800 text-gray-500"
+                  }`}>
+                    {result.model}
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>
