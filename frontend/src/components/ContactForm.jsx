@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { API_BASE } from "../config";
 
-const DEFAULT_FORM = { name: "", email: "", company: "", message: "" };
+const DEFAULT_FORM = { name: "", email: "", company: "", cnc_machines: "", primary_materials: [], avg_lead_time: "", message: "" };
 const DEFAULT_SUPPLIER = { name: "", city: "", state: "", address: "", materials: "", website: "", phone: "" };
 
 export default function ContactForm() {
@@ -18,8 +18,17 @@ export default function ContactForm() {
   const [supplierError, setSupplierError] = useState(null);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    if (type === "checkbox") {
+      setForm((f) => ({
+        ...f,
+        primary_materials: checked
+          ? [...f.primary_materials, value]
+          : f.primary_materials.filter((m) => m !== value),
+      }));
+    } else {
+      setForm((f) => ({ ...f, [name]: value }));
+    }
   };
 
   const handleSupplierChange = (e) => {
@@ -72,7 +81,13 @@ export default function ContactForm() {
       const res = await fetch(`${API_BASE}/api/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, pilot_interest: true }),
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          company: form.company,
+          message: `${form.message ? form.message + "\n\n" : ""}CNC machines: ${form.cnc_machines || "not specified"}\nMaterials: ${form.primary_materials.join(", ") || "not specified"}\nAvg lead time: ${form.avg_lead_time || "not specified"}`,
+          pilot_interest: true,
+        }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -91,12 +106,29 @@ export default function ContactForm() {
     <div className="max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold text-white mb-2">Get in Touch</h2>
       <p className="text-gray-400 mb-8">
-        Interested in piloting MillForge AI at your facility? Reach out directly or fill out the form.
+        Interested in piloting MillForge AI at your facility? Book a call or send a message below.
       </p>
+
+      {/* ── Primary CTA — Calendly ── */}
+      <div className="mb-10 text-center">
+        <a
+          href="https://calendly.com/jonkofm/30min"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block bg-forge-500 hover:bg-forge-600 text-white font-bold px-10 py-4 rounded-xl text-base transition-colors duration-150 shadow-lg"
+        >
+          Book a 30-minute floor review →
+        </a>
+        <p className="text-xs text-gray-600 mt-3">
+          Starts in shadow mode — MillForge proposes schedules, your planners approve.<br />
+          No changes to machines or ERP until you&apos;re ready.
+        </p>
+      </div>
 
       <div className="grid sm:grid-cols-2 gap-8">
         {/* ── Left: contact form ── */}
         <div>
+          <p className="text-sm text-gray-500 mb-4">Or send a message</p>
           {submitted ? (
             <div className="card text-center py-10">
               <p className="text-lg font-semibold text-white mb-2">Message received.</p>
@@ -145,15 +177,62 @@ export default function ContactForm() {
               </div>
 
               <div>
-                <label className="label">Message *</label>
+                <label className="label">Number of CNC machines</label>
+                <select
+                  name="cnc_machines"
+                  value={form.cnc_machines}
+                  onChange={handleChange}
+                  className="input"
+                >
+                  <option value="">Select range…</option>
+                  <option value="1-5">1–5</option>
+                  <option value="6-15">6–15</option>
+                  <option value="16-50">16–50</option>
+                  <option value="50+">50+</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Primary materials</label>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {["Steel", "Aluminum", "Titanium", "Other"].map((m) => (
+                    <label key={m} className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        value={m}
+                        checked={form.primary_materials.includes(m)}
+                        onChange={handleChange}
+                        className="accent-orange-500"
+                      />
+                      {m}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Average quoted lead time</label>
+                <select
+                  name="avg_lead_time"
+                  value={form.avg_lead_time}
+                  onChange={handleChange}
+                  className="input"
+                >
+                  <option value="">Select…</option>
+                  <option value="Under 2 weeks">Under 2 weeks</option>
+                  <option value="2-8 weeks">2–8 weeks</option>
+                  <option value="8+ weeks">8+ weeks</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Message</label>
                 <textarea
                   name="message"
                   value={form.message}
                   onChange={handleChange}
-                  className="input h-28 resize-none"
-                  placeholder="Tell us about your production environment and what challenges you're facing…"
-                  required
-                  minLength={10}
+                  className="input h-24 resize-none"
+                  placeholder="Anything else you'd like us to know…"
                 />
               </div>
 
@@ -179,18 +258,6 @@ export default function ContactForm() {
               className="text-forge-400 hover:text-forge-300 transition-colors text-sm"
             >
               kofman.j@northeastern.edu
-            </a>
-          </div>
-
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Schedule a call</p>
-            <a
-              href="https://calendly.com/jonkofm/30min"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-forge-400 hover:text-forge-300 transition-colors text-sm"
-            >
-              Book a 30-minute call →
             </a>
           </div>
 

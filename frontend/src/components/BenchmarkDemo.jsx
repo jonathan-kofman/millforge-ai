@@ -96,9 +96,9 @@ function Stat({ label, value, accent }) {
 
 // ── Algorithm card ────────────────────────────────────────────────────────────
 const ALGO_META = {
-  fifo: { label: "FIFO Baseline",          color: "#6b7280", ringColor: "#6b7280", desc: "Arrival order — no optimisation" },
-  edd:  { label: "EDD (MillForge AI Greedy)", color: "#3b82f6", ringColor: "#3b82f6", desc: "Earliest due date with setup-time awareness" },
-  sa:   { label: "SA (MillForge AI Best)",    color: "#f97316", ringColor: "#f97316", desc: "Simulated annealing — minimises tardiness" },
+  fifo: { label: "FIFO Baseline",          color: "#6b7280", ringColor: "#6b7280", desc: "Arrival order — no optimisation",              shopLabel: "How most shops run today" },
+  edd:  { label: "EDD (MillForge AI Greedy)", color: "#3b82f6", ringColor: "#3b82f6", desc: "Earliest due date with setup-time awareness", shopLabel: "MillForge default — fast and reliable" },
+  sa:   { label: "SA (MillForge AI Best)",    color: "#f97316", ringColor: "#f97316", desc: "Simulated annealing — minimises tardiness",   shopLabel: "MillForge optimized — best for complex schedules" },
 };
 
 function AlgoCard({ algo, entry, isWinner, rushDiff }) {
@@ -140,6 +140,7 @@ function AlgoCard({ algo, entry, isWinner, rushDiff }) {
           Rush impact: {rushDiff > 0 ? "+" : ""}{rushDiff}pp
         </div>
       )}
+      <p className="text-xs text-gray-600 text-center">{meta.shopLabel}</p>
     </div>
   );
 }
@@ -201,6 +202,11 @@ export default function BenchmarkDemo() {
           Same 28 orders. Same machines. See what AI scheduling actually does to your on-time rate.
         </p>
       </div>
+
+      {/* ── Demo explainer ── */}
+      <p className="text-xs text-gray-500 text-center max-w-lg mx-auto mb-5">
+        Drag the slider to change schedule pressure. Inject a rush order to see how each strategy handles disruption — same 28 jobs, same machines every time.
+      </p>
 
       {/* ── Controls ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -292,13 +298,16 @@ export default function BenchmarkDemo() {
 
             <div className="flex-1 min-w-48">
               {improvement !== null && improvement > 0 && (
-                <div className="rounded-xl bg-orange-500/10 border border-orange-800 px-5 py-4">
-                  <p className="text-3xl font-extrabold text-orange-400">+{improvement}pp</p>
-                  <p className="text-sm text-gray-300 mt-1">
+                <div className="rounded-xl bg-orange-500/10 border border-orange-800 px-5 py-5">
+                  <p className="text-5xl font-extrabold text-orange-400">+{improvement}pp</p>
+                  <p className="text-sm text-gray-300 mt-2 font-semibold">
                     on-time improvement, SA vs FIFO baseline
                   </p>
                   <p className="text-xs text-gray-500 mt-2">
                     Same machines · same staff · same suppliers
+                  </p>
+                  <p className="text-xs text-gray-600 mt-3 border-t border-gray-800 pt-3">
+                    Based on simulated 28-order dataset. Results vary by shop configuration.
                   </p>
                 </div>
               )}

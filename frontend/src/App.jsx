@@ -102,20 +102,67 @@ export default function App() {
             </p>
             <p className="mt-2 text-xs text-gray-500">— American manufacturer, 2024</p>
           </div>
+          {/* ICP */}
+          <p className="text-sm sm:text-base text-forge-400 font-medium mb-3">
+            For CNC job shops and metal mills drowning in backlog and rush orders.
+          </p>
           {/* Headline */}
           <h1 className="text-5xl sm:text-6xl font-extrabold text-white mb-4 leading-tight">
             MillForge AI ends the wait.
           </h1>
           {/* Subheadline */}
-          <p className="text-base sm:text-lg text-gray-400 max-w-2xl mx-auto">
-            AI scheduling that compresses 8 to 30 week lead times — on your existing machines, with your existing staff. No ERP replacement. Deploys in days.
+          <p className="text-lg sm:text-xl text-gray-200 font-semibold max-w-2xl mx-auto mb-3">
+            AI scheduler that lifts on-time delivery from 60% to 95%+<br className="hidden sm:block" /> using your existing machines and staff.
           </p>
+          <p className="text-sm text-gray-500 max-w-xl mx-auto mb-8">
+            Not an ERP. Not a quoting portal. Not a CAM package.<br className="hidden sm:block" /> Just better scheduling — starting day one.
+          </p>
+          {/* Primary CTA */}
+          <a
+            href="https://calendly.com/jonkofm/30min"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block bg-forge-500 hover:bg-forge-600 text-white font-bold px-8 py-4 rounded-xl text-base transition-colors duration-150 shadow-lg"
+          >
+            Book a 30-minute floor review →
+          </a>
         </div>
       </section>
 
       {/* ── Benchmark demo ── */}
       <div className="bg-gray-950 border-b border-gray-800">
         <BenchmarkDemo />
+      </div>
+
+      {/* ── Social proof / micro-case ── */}
+      <div className="bg-gray-950 border-b border-gray-800">
+        <div className="max-w-4xl mx-auto px-4 py-14 text-center">
+          <p className="text-xs font-bold tracking-widest text-orange-500 uppercase mb-6">
+            In a Simulated 10-Machine Mill
+          </p>
+          <p className="text-gray-400 text-sm mb-6">
+            3 anchor orders. 4 rush orders. Mixed steel, aluminum, titanium.
+          </p>
+          <div className="flex flex-wrap justify-center gap-8 mb-8">
+            <div className="text-center">
+              <p className="text-4xl font-extrabold text-gray-500">60.7%</p>
+              <p className="text-xs text-gray-600 mt-1">FIFO on-time</p>
+            </div>
+            <div className="text-center">
+              <p className="text-4xl font-extrabold text-orange-400">100%</p>
+              <p className="text-xs text-gray-500 mt-1">MillForge SA on-time</p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-600 mb-8">
+            Same week. Same staff. Based on simulated 28-order dataset — results vary by shop configuration.
+          </p>
+          <div className="max-w-xl mx-auto border-l-4 border-forge-500 pl-5 text-left">
+            <p className="text-sm text-gray-300 italic leading-relaxed">
+              &ldquo;The scheduling is broken. The visibility is zero. The software doesn&apos;t match the floor.&rdquo;
+            </p>
+            <p className="mt-2 text-xs text-gray-500">— Machine shop operator feedback</p>
+          </div>
+        </div>
       </div>
 
       {/* ── Lights-out readiness widget ── */}
@@ -129,7 +176,7 @@ export default function App() {
       {/* ── Why we built this ── */}
       <div className="bg-gray-950 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-          <p className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-8">
+          <p className="text-sm font-bold tracking-widest text-orange-500 uppercase mb-8">
             Why We Built This
           </p>
           <div className="max-w-[700px] mx-auto space-y-6">
@@ -155,14 +202,14 @@ export default function App() {
       </div>
 
       {/* ── Energy intelligence ── */}
-      <div className="bg-gray-950 border-b border-gray-800">
+      <div className="bg-gray-900 border-b border-gray-800">
         <EnergyWidget />
       </div>
 
       {/* ── Supplier sourcing section ── */}
-      <div className="bg-gray-950 border-b border-gray-800">
+      <div className="bg-gray-900 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-16">
-          <p className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-4 text-center">
+          <p className="text-sm font-bold tracking-widest text-orange-500 uppercase mb-4 text-center">
             Materials Sourcing
           </p>
           <h2 className="text-3xl sm:text-4xl font-bold text-white text-center mb-3">

@@ -87,7 +87,7 @@ export default function EnergyWidget() {
   return (
     <section className="max-w-6xl mx-auto px-4 py-12">
       <div className="text-center mb-8">
-        <p className="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-2">
+        <p className="text-sm font-bold tracking-widest text-orange-500 uppercase mb-2">
           Energy Intelligence
         </p>
         <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
