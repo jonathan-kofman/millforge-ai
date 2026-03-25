@@ -18,6 +18,7 @@ function categoryColor(categories) {
 export default function SupplierMap() {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
   const [stats, setStats] = useState(null);
   const [material, setMaterial] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,6 +39,7 @@ export default function SupplierMap() {
         maxZoom: 19,
       }).addTo(mapInstance.current);
       mapInstance.current.invalidateSize();
+      setMapReady(true);
     };
     const timer = setTimeout(init, 100);
     return () => clearTimeout(timer);
@@ -95,11 +97,12 @@ export default function SupplierMap() {
     }
   };
 
-  // Initial load and on material filter change
+  // Initial load and on material filter change — wait for map to be ready
   useEffect(() => {
+    if (!mapReady) return;
     loadSuppliers(material);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [material]);
+  }, [mapReady, material]);
 
   return (
     <div className="space-y-4">
