@@ -118,6 +118,7 @@ All request/response types are in `backend/models/schemas.py`. `MaterialType` is
 - Uses EDD-only (`Scheduler.estimate_lead_time()`) for lead time — SA was removed (avg ~180 ms delta, negligible difference)
 - Volume discount tiers: 0% / 5% (500+) / 10% (1000+) / 20% (10000+)
 - Unit prices by material in `UNIT_PRICE` dict
+- **Shift calendar**: `QuoteRequest.shifts_per_day` (1–3) and `hours_per_shift` (4–12) are optional. When both provided, raw scheduled hours are scaled by `24 / (shifts_per_day * hours_per_shift)` to convert continuous-machine hours to real calendar days. Omitting either field preserves original behavior (assumes 24h operation).
 
 ## Rework Endpoint (`backend/routers/rework.py`)
 
@@ -148,7 +149,7 @@ Energy is the other half of the lights-out problem — no human decides when to 
 - `MACHINE_POWER_KW` dict maps material → kW draw (steel=75, aluminum=55, titanium=90, copper=65)
 - `US_GRID_CARBON_INTENSITY = 0.386` kg CO2/kWh — EPA 2023 average, used as fallback
 - `ELECTRICITY_MAPS_API_KEY` env var enables live carbon intensity from Electricity Maps API
-- PJM LMP data fetched via `gridstatus` library; `_fetch_pjm_lmp_raw()` preserves negative values for window detection
+- PJM LMP data fetched via `gridstatus` library (in `requirements-optional.txt`); `_fetch_pjm_lmp_raw()` preserves negative values for window detection; falls back to `MOCK_HOURLY_RATES` when `gridstatus` is not installed
 - LCOE constants from Lazard v17 (2024): solar=0.045, battery=0.060, solar_battery=0.050, wind=0.035, SMR=0.065 $/kWh
 - NPV discount rate: SMR=6%, all others=8%
 - `ScenarioResponse.payback_years` is `Optional[float] = None` — `grid_only` scenario returns `None`
@@ -163,12 +164,30 @@ Full chain: schedule → inspect → energy → quote → rework (Step 6). Key a
 - Complexity boosts: `critical=2.5`, `major=1.8`, `minor=1.3`
 - Quote `total_price_usd > 0`
 
+## Auth & Session (`backend/routers/auth_router.py`, `backend/auth/`)
+
+- Session stored in **httpOnly cookie** (`millforge_session`) — not localStorage. XSS-safe.
+- Cookie settings: `SameSite=none; Secure=true` in prod (Railway env), `SameSite=lax; Secure=false` in dev (Vite proxies same-origin).
+- Prod detection: `_COOKIE_SECURE = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("COOKIE_SECURE"))`
+- Token extraction order in `auth/dependencies.py`: cookie first, then `Authorization: Bearer` header (backward-compatible for API clients and tests).
+- `GET /api/auth/me` — returns current user from cookie; called on every page load to restore session.
+- `POST /api/auth/logout` — deletes the cookie server-side.
+- All authenticated frontend fetches use `credentials: "include"` — no `Authorization` headers in the browser.
+
+## Onboarding & Shop Config (`backend/routers/onboarding.py`, `backend/db_models.py ShopConfig`)
+
+- `ShopConfig` stores per-user shop settings: `shop_name`, `machine_count`, `materials`, `shifts_per_day` (default 2), `hours_per_shift` (default 8), `baseline_otd`, `scheduling_method`, `weekly_order_volume`.
+- `shifts_per_day` and `hours_per_shift` feed into quote lead-time scaling (see Quote Endpoint above).
+- `_apply_column_migrations()` in `database.py` runs `ALTER TABLE ADD COLUMN` at startup to safely add new columns to existing databases. Uses try/except to skip columns that already exist (SQLite and Postgres compatible).
+- Onboarding wizard Step 1 collects: shop name, machine count, shifts per day, hours per shift.
+
 ## Frontend Notes
 
 - Tailwind custom components (`btn-primary`, `card`, `input`, `label`) are defined in `src/index.css` under `@layer components`
 - Custom `forge-*` color palette is in `tailwind.config.js`
 - All API calls go through relative `/api/...` paths — Vite proxies to backend in dev
 - Error state pattern: `const [loading, error, result]` with early `setError(null)` on each request
+- All authenticated components use `credentials: "include"` on fetch — no token props, no localStorage.
 
 ## Real Data Sources
 

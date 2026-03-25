@@ -10,25 +10,23 @@ function fmt(iso) {
   });
 }
 
-export default function ScheduleHistoryPanel({ token, refreshKey }) {
+export default function ScheduleHistoryPanel({ refreshKey }) {
   const [open, setOpen]       = useState(false);
   const [runs, setRuns]       = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
 
-  const authHeaders = { Authorization: `Bearer ${token}` };
-
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError(null);
-    fetch(`${API_BASE}/api/orders/schedule-history?limit=10`, { headers: authHeaders })
+    fetch(`${API_BASE}/api/orders/schedule-history?limit=10`, { credentials: "include" })
       .then(r => { if (!r.ok) throw new Error("Failed to load history"); return r.json(); })
       .then(d => { setRuns(d.runs); setTotal(d.total); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [open, token, refreshKey]);
+  }, [open, refreshKey]);
 
   return (
     <div className="mt-4 border border-gray-800 rounded-lg overflow-hidden">

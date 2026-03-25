@@ -36,3 +36,20 @@ def init_db() -> None:
     # Import here so all models are registered on Base.metadata
     from db_models import User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission, MachineStateLog, JobFeedbackRecord, InventoryStock, Supplier  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    _apply_column_migrations()
+
+
+def _apply_column_migrations() -> None:
+    """Add columns to existing tables that predate them. Safe to run repeatedly."""
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE shop_configs ADD COLUMN shifts_per_day INTEGER DEFAULT 2",
+        "ALTER TABLE shop_configs ADD COLUMN hours_per_shift INTEGER DEFAULT 8",
+    ]
+    with engine.connect() as conn:
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists

@@ -29,17 +29,12 @@ export default function App() {
   const [supplierStats, setSupplierStats] = useState(null);
   const [onboardingStatus, setOnboardingStatus] = useState(null);
   const [showWizard, setShowWizard] = useState(false);
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem("millforge_user");
-      return stored ? JSON.parse(stored) : null;
-    } catch { return null; }
-  });
+  const [user, setUser] = useState(null);
 
-  const fetchOnboardingStatus = async (token) => {
+  const fetchOnboardingStatus = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/onboarding/status`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (!res.ok) return;
       const data = await res.json();
@@ -49,40 +44,41 @@ export default function App() {
   };
 
   const handleAuthSuccess = (data) => {
-    const userData = {
-      token: data.access_token,
-      email: data.email,
-      name: data.name,
-      user_id: data.user_id,
-    };
-    setUser(userData);
-    localStorage.setItem("millforge_user", JSON.stringify(userData));
+    setUser({ email: data.email, name: data.name, user_id: data.user_id });
     setShowAuth(false);
     setActiveTab("orders");
-    fetchOnboardingStatus(data.access_token);
+    fetchOnboardingStatus();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {}
     setUser(null);
     setOnboardingStatus(null);
     setShowWizard(false);
-    localStorage.removeItem("millforge_user");
     setActiveTab("quote");
   };
 
+  // Restore session from httpOnly cookie on page load
   useEffect(() => {
+    fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setUser({ email: data.email, name: data.name, user_id: data.user_id });
+          fetchOnboardingStatus();
+        }
+      })
+      .catch(() => {});
     fetch(`${API_BASE}/api/suppliers/stats`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => d && setSupplierStats(d))
       .catch(() => {});
   }, []);
-
-  // Re-fetch onboarding status for returning users (already logged in)
-  useEffect(() => {
-    if (user?.token && onboardingStatus === null) {
-      fetchOnboardingStatus(user.token);
-    }
-  }, [user]);
 
   const TABS = [...PUBLIC_TABS, ...(user ? AUTH_TABS : [])];
 
@@ -322,7 +318,7 @@ export default function App() {
                 </button>
               </div>
             )}
-            <OrdersView token={user.token} />
+            <OrdersView />
           </>
         )}
       </main>
@@ -345,7 +341,6 @@ export default function App() {
       {/* ── Onboarding Wizard ── */}
       {showWizard && user && (
         <OnboardingWizard
-          token={user.token}
           onComplete={() => {
             setShowWizard(false);
             setOnboardingStatus((s) => ({ ...s, is_complete: true, configured: true }));

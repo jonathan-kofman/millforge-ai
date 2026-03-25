@@ -66,6 +66,12 @@ async def get_quote(req: QuoteRequest) -> QuoteResponse:
         logger.error(f"Scheduler error during quote: {e}")
         raise HTTPException(status_code=500, detail="Scheduling engine error")
 
+    # Scale to calendar days based on shift schedule.
+    # If shifts_per_day/hours_per_shift provided, the scheduler assumes 24h
+    # continuous — divide by actual productive hours per day to get real days.
+    if req.shifts_per_day and req.hours_per_shift:
+        productive_hours_per_day = req.shifts_per_day * req.hours_per_shift
+        lead_time_hours = lead_time_hours * (24 / productive_hours_per_day)
     lead_time_days = lead_time_hours / 24
 
     # Price calculation: base unit price × quantity with volume discount

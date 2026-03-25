@@ -9,7 +9,7 @@ const SCHEDULING_METHODS = [
   { value: "erp",    label: "ERP System" },
 ];
 
-export default function OnboardingWizard({ token, onComplete, onSkip }) {
+export default function OnboardingWizard({ onComplete, onSkip }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -17,16 +17,13 @@ export default function OnboardingWizard({ token, onComplete, onSkip }) {
   const [form, setForm] = useState({
     shop_name: "",
     machine_count: "",
+    shifts_per_day: "2",
+    hours_per_shift: "8",
     materials: [],
     weekly_order_volume: "",
     scheduling_method: "",
     baseline_otd: "",
   });
-
-  const authHeaders = {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  };
 
   const save = async (payload, nextStep) => {
     setSaving(true);
@@ -34,7 +31,8 @@ export default function OnboardingWizard({ token, onComplete, onSkip }) {
     try {
       const res = await fetch(`${API_BASE}/api/onboarding/shop-config`, {
         method: "PUT",
-        headers: authHeaders,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ ...payload, wizard_step: nextStep }),
       });
       if (!res.ok) {
@@ -100,6 +98,8 @@ export default function OnboardingWizard({ token, onComplete, onSkip }) {
                 save({
                   shop_name: form.shop_name || null,
                   machine_count: form.machine_count ? Number(form.machine_count) : null,
+                  shifts_per_day: form.shifts_per_day ? Number(form.shifts_per_day) : null,
+                  hours_per_shift: form.hours_per_shift ? Number(form.hours_per_shift) : null,
                 }, 1)
               }
               onSkip={skipAll}
@@ -173,6 +173,30 @@ function Step1({ form, setForm, onNext, onSkip, saving }) {
             value={form.machine_count}
             onChange={(e) => setForm((f) => ({ ...f, machine_count: e.target.value }))}
           />
+        </div>
+        <div>
+          <label className="label">Shifts per day</label>
+          <select
+            className="input"
+            value={form.shifts_per_day}
+            onChange={(e) => setForm((f) => ({ ...f, shifts_per_day: e.target.value }))}
+          >
+            <option value="1">1 shift</option>
+            <option value="2">2 shifts</option>
+            <option value="3">3 shifts (24h)</option>
+          </select>
+        </div>
+        <div>
+          <label className="label">Hours per shift</label>
+          <select
+            className="input"
+            value={form.hours_per_shift}
+            onChange={(e) => setForm((f) => ({ ...f, hours_per_shift: e.target.value }))}
+          >
+            <option value="8">8 hours</option>
+            <option value="10">10 hours</option>
+            <option value="12">12 hours</option>
+          </select>
         </div>
       </div>
       <div className="flex gap-2 mt-5">

@@ -143,6 +143,9 @@ class ShopConfig(Base):
     baseline_otd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     scheduling_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     weekly_order_volume: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Shift calendar — how many production hours per day the shop runs
+    shifts_per_day: Mapped[int] = mapped_column(Integer, default=2)
+    hours_per_shift: Mapped[int] = mapped_column(Integer, default=8)
     # wizard_step: 0 = not started, 1/2/3 = partial, 3 = complete
     wizard_step: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

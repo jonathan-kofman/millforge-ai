@@ -1,6 +1,9 @@
 """
 FastAPI dependency functions for authentication.
 
+Token extraction order: httpOnly cookie ("millforge_session") first,
+then Authorization: Bearer header as fallback (for API clients / tests).
+
 Usage in routes:
     @router.get("/protected")
     async def protected(user: User = Depends(get_current_user)):
@@ -14,7 +17,7 @@ Usage in routes:
 
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -25,8 +28,16 @@ from .jwt_utils import decode_token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
+def _extract_token(
+    request: Request,
+    bearer: Optional[str] = Depends(oauth2_scheme),
+) -> Optional[str]:
+    """Cookie takes precedence over Bearer header."""
+    return request.cookies.get("millforge_session") or bearer
+
+
 def get_current_user(
-    token: Optional[str] = Depends(oauth2_scheme),
+    token: Optional[str] = Depends(_extract_token),
     db: Session = Depends(get_db),
 ) -> User:
     """Require a valid JWT. Raises 401 if missing or invalid."""
@@ -53,7 +64,7 @@ def get_current_user(
 
 
 def get_current_user_optional(
-    token: Optional[str] = Depends(oauth2_scheme),
+    token: Optional[str] = Depends(_extract_token),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
     """Return the current user if authenticated, or None. Does not raise."""

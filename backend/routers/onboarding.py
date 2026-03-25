@@ -33,6 +33,8 @@ def _to_response(cfg: ShopConfig) -> ShopConfigResponse:
         baseline_otd=cfg.baseline_otd,
         scheduling_method=cfg.scheduling_method,
         weekly_order_volume=cfg.weekly_order_volume,
+        shifts_per_day=cfg.shifts_per_day,
+        hours_per_shift=cfg.hours_per_shift,
         wizard_step=cfg.wizard_step,
         is_complete=cfg.is_complete,
         created_at=cfg.created_at,
@@ -91,6 +93,10 @@ async def upsert_shop_config(
         cfg.scheduling_method = req.scheduling_method
     if req.weekly_order_volume is not None:
         cfg.weekly_order_volume = req.weekly_order_volume
+    if req.shifts_per_day is not None:
+        cfg.shifts_per_day = req.shifts_per_day
+    if req.hours_per_shift is not None:
+        cfg.hours_per_shift = req.hours_per_shift
     # wizard_step advances but never regresses
     if req.wizard_step > (cfg.wizard_step or 0):
         cfg.wizard_step = req.wizard_step

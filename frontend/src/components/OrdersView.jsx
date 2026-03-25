@@ -18,7 +18,7 @@ const BLANK_FORM = {
   quantity: 100, priority: 5, notes: "",
 };
 
-export default function OrdersView({ token }) {
+export default function OrdersView() {
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -32,13 +32,11 @@ export default function OrdersView({ token }) {
   const [scheduleError, setScheduleError] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);  // bump to refresh history panel
 
-  const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/orders`, { headers: authHeaders });
+      const res = await fetch(`${API_BASE}/api/orders`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch orders");
       const data = await res.json();
       setOrders(data.orders);
@@ -48,7 +46,7 @@ export default function OrdersView({ token }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -59,7 +57,8 @@ export default function OrdersView({ token }) {
     try {
       const res = await fetch(`${API_BASE}/api/orders`, {
         method: "POST",
-        headers: authHeaders,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ ...form, quantity: Number(form.quantity), priority: Number(form.priority) }),
       });
       if (!res.ok) {
@@ -78,14 +77,15 @@ export default function OrdersView({ token }) {
 
   const handleDelete = async (orderId) => {
     if (!window.confirm(`Delete order ${orderId}?`)) return;
-    await fetch(`${API_BASE}/api/orders/${orderId}`, { method: "DELETE", headers: authHeaders });
+    await fetch(`${API_BASE}/api/orders/${orderId}`, { method: "DELETE", credentials: "include" });
     fetchOrders();
   };
 
   const handleStatusChange = async (orderId, newStatus) => {
     await fetch(`${API_BASE}/api/orders/${orderId}`, {
       method: "PATCH",
-      headers: authHeaders,
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ status: newStatus }),
     });
     fetchOrders();
@@ -100,7 +100,7 @@ export default function OrdersView({ token }) {
     try {
       const res = await fetch(`${API_BASE}/api/orders/schedule?algorithm=sa`, {
         method: "POST",
-        headers: authHeaders,
+        credentials: "include",
       });
       if (!res.ok) {
         const err = await res.json();
@@ -216,7 +216,7 @@ export default function OrdersView({ token }) {
               onClick={async () => {
                 const res = await fetch(
                   `${API_BASE}/api/schedule/export-pdf?schedule_id=${scheduleResult.schedule_run_id}`,
-                  { headers: { Authorization: `Bearer ${token}` } }
+                  { credentials: "include" }
                 );
                 if (!res.ok) return;
                 const blob = await res.blob();
@@ -337,7 +337,7 @@ export default function OrdersView({ token }) {
       )}
 
       {/* Schedule history accordion */}
-      <ScheduleHistoryPanel token={token} refreshKey={historyKey} />
+      <ScheduleHistoryPanel refreshKey={historyKey} />
     </div>
   );
 }

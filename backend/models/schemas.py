@@ -25,6 +25,8 @@ class QuoteRequest(BaseModel):
     quantity: int = Field(..., gt=0, le=100_000, description="Number of units")
     due_date: Optional[datetime] = Field(None, description="Requested delivery date (ISO 8601). Defaults to 30 days from now.")
     priority: int = Field(5, ge=1, le=10, description="Order priority: 1=urgent, 10=low")
+    shifts_per_day: Optional[int] = Field(None, ge=1, le=3, description="Production shifts per day (1–3). Omit to assume 24h continuous operation.")
+    hours_per_shift: Optional[int] = Field(None, ge=4, le=12, description="Hours per shift (4–12). Used with shifts_per_day to convert scheduled hours to calendar days.")
 
     model_config = {
         "json_schema_extra": {
@@ -241,6 +243,13 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user_id: int
+    email: str
+    name: str
+    company: Optional[str] = None
+
+
+class MeResponse(BaseModel):
     user_id: int
     email: str
     name: str
@@ -786,6 +795,8 @@ class ShopConfigRequest(BaseModel):
     baseline_otd: Optional[float] = Field(None, ge=0.0, le=100.0)
     scheduling_method: Optional[str] = None
     weekly_order_volume: Optional[int] = Field(None, ge=0)
+    shifts_per_day: Optional[int] = Field(None, ge=1, le=3)
+    hours_per_shift: Optional[int] = Field(None, ge=4, le=12)
     wizard_step: int = Field(0, ge=0, le=3)
 
 
@@ -799,6 +810,8 @@ class ShopConfigResponse(BaseModel):
     baseline_otd: Optional[float] = None
     scheduling_method: Optional[str] = None
     weekly_order_volume: Optional[int] = None
+    shifts_per_day: int = 2
+    hours_per_shift: int = 8
     wizard_step: int
     is_complete: bool
     created_at: datetime

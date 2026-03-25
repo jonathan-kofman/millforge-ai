@@ -8,6 +8,8 @@ const DEFAULT_FORM = {
   dimensions: "200x100x10mm",
   quantity: 500,
   priority: 5,
+  shifts_per_day: "",
+  hours_per_shift: "",
 };
 
 export default function QuoteForm() {
@@ -27,10 +29,15 @@ export default function QuoteForm() {
     setError(null);
     setResult(null);
     try {
+      const payload = {
+        ...form,
+        shifts_per_day: form.shifts_per_day ? Number(form.shifts_per_day) : undefined,
+        hours_per_shift: form.hours_per_shift ? Number(form.hours_per_shift) : undefined,
+      };
       const res = await fetch(`${API_BASE}/api/quote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -103,6 +110,37 @@ export default function QuoteForm() {
             <span>Urgent (1)</span>
             <span className="font-medium text-forge-500">Current: {form.priority}</span>
             <span>Low (10)</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Shifts per day <span className="text-gray-600 font-normal">(optional)</span></label>
+            <select
+              name="shifts_per_day"
+              value={form.shifts_per_day}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="">— assume 24h —</option>
+              <option value="1">1 shift</option>
+              <option value="2">2 shifts</option>
+              <option value="3">3 shifts</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Hours per shift <span className="text-gray-600 font-normal">(optional)</span></label>
+            <select
+              name="hours_per_shift"
+              value={form.hours_per_shift}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="">— assume 24h —</option>
+              <option value="8">8 hours</option>
+              <option value="10">10 hours</option>
+              <option value="12">12 hours</option>
+            </select>
           </div>
         </div>
 

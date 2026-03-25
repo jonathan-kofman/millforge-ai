@@ -3,6 +3,10 @@
 #
 #   pip install -r requirements-optional.txt
 #
+# Grid / energy intelligence (PJM real-time LMP)
+gridstatus>=0.27.0
+pandas>=2.0.0
+# Vision model training
 ultralytics>=8.0.0
 scikit-learn>=1.3.0
 joblib>=1.3.0
