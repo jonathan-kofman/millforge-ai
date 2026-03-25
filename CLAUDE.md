@@ -216,6 +216,34 @@ Every module falls back gracefully when real data is unavailable (CI-safe). The 
 | `production_planner.py` | US Census ASM throughput | EIA API NAICS 332721 — Precision Turned Products; `EIA_API_KEY` env var set to real key (defaults to DEMO_KEY with 100 req/day limit) | `THROUGHPUT` constants (internal benchmarks) | 24 hours |
 | `quality_vision.py` | NEU-DET fine-tuned YOLOv8n (mAP50=0.759) | `backend/models/neu_det_yolov8n.onnx` (train via `backend/scripts/train_vision_model.py` using Kaggle API with `KAGGLE_USERNAME`/`KAGGLE_KEY`) | Generic YOLOv8n ONNX → heuristic hash | N/A (file-based) |
 
+## Vision Model Training (`backend/scripts/train_vision_model.py`)
+
+Full pipeline: Kaggle download → Pascal VOC → YOLO conversion → YOLOv8n fine-tune → ONNX export.
+
+**Prerequisites:** `pip install -r backend/requirements-optional.txt` (ultralytics, kaggle<2.0). Set `KAGGLE_USERNAME` and `KAGGLE_KEY` in `.env`.
+
+**Pipeline steps (run `python scripts/train_vision_model.py` from `backend/`):**
+1. `check_prerequisites()` — verifies ultralytics installed; auto-downloads NEU-DET from Kaggle if `data/NEU-DET/` missing
+2. `download_dataset()` — writes Kaggle creds to `~/.kaggle/kaggle.json`, calls `kaggle.api.dataset_download_files("kaustubhdikshit/neu-surface-defect-database")`
+3. `prepare_dataset()` — converts Pascal VOC XML annotations to YOLO label format under `data/neu_det_yolo/`; skips if already converted
+4. `xml_to_yolo(xml_path, img_w, img_h)` — parses `<bndbox>` → normalized `cx cy w h`; maps to `CLASS_INDEX`
+5. `train()` — `YOLO("yolov8n.pt").train(epochs=50, imgsz=640)`; finds most-recently-modified `neu_det_train*/weights/best.pt`
+6. `export_onnx(weights_path)` — exports to ONNX at `backend/models/neu_det_yolov8n.onnx`; backend auto-switches to `onnx_inference` on restart
+
+**Classes (6):** `crazing`, `inclusion`, `patches`, `pitted_surface`, `rolled-in_scale`, `scratches`
+
+**Dataset layout expected:**
+```
+data/NEU-DET/train/images/<class>/*.jpg
+data/NEU-DET/train/annotations/<class>/*.xml
+data/NEU-DET/validation/images/<class>/*.jpg
+data/NEU-DET/validation/annotations/<class>/*.xml
+```
+
+**Output:** `backend/models/neu_det_yolov8n.onnx` (replaces heuristic mock; mAP50=0.759 achieved on NEU-DET)
+
+**Manual fallback:** Download from `https://www.kaggle.com/datasets/kaustubhdikshit/neu-surface-defect-database` and unzip so `data/NEU-DET/train/images/` exists.
+
 **Adding new real data sources:**
 1. Write a `_fetch_X()` function that returns `None` on any failure
 2. Wrap with a module-level cache dict + TTL check in `_get_X()`
