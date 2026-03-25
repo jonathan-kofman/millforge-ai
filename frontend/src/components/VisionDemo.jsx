@@ -2,9 +2,9 @@ import { useState } from "react";
 import { API_BASE } from "../config";
 
 const DEMO_IMAGES = [
-  { label: "Steel Plate",     url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800" },
-  { label: "Aluminum Rod",    url: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=800" },
-  { label: "Titanium Billet", url: "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=800" },
+  { label: "Crazing (steel surface)",   url: "/demo/crazing_1.jpg" },
+  { label: "Inclusion defect",          url: "/demo/inclusion_1.jpg" },
+  { label: "Pitted surface",            url: "/demo/pitted_surface_1.jpg" },
 ];
 
 const MATERIALS = ["steel", "aluminum", "titanium", "copper"];
@@ -113,7 +113,7 @@ export default function VisionDemo() {
               src={imageUrl}
               alt="Part to inspect"
               className="w-full h-48 object-cover"
-              onError={(e) => { e.target.src = "https://placehold.co/400x200?text=Image+not+found"; }}
+              onError={(e) => { e.target.style.display = "none"; }}
             />
           </div>
 

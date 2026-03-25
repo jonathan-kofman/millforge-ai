@@ -31,6 +31,7 @@ export default function OrdersView() {
   const [scheduleResult, setScheduleResult] = useState(null);
   const [scheduleError, setScheduleError] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);  // bump to refresh history panel
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -76,8 +77,8 @@ export default function OrdersView() {
   };
 
   const handleDelete = async (orderId) => {
-    if (!window.confirm(`Delete order ${orderId}?`)) return;
     await fetch(`${API_BASE}/api/orders/${orderId}`, { method: "DELETE", credentials: "include" });
+    setConfirmDeleteId(null);
     fetchOrders();
   };
 
@@ -325,9 +326,16 @@ export default function OrdersView() {
                     </select>
                   </td>
                   <td className="py-2">
-                    <button onClick={() => handleDelete(o.order_id)} className="text-xs text-red-500 hover:text-red-400">
-                      Delete
-                    </button>
+                    {confirmDeleteId === o.order_id ? (
+                      <span className="flex items-center gap-2">
+                        <button onClick={() => handleDelete(o.order_id)} className="text-xs text-red-400 font-semibold hover:text-red-300">Confirm</button>
+                        <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-500 hover:text-gray-400">Cancel</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => setConfirmDeleteId(o.order_id)} className="text-xs text-red-500 hover:text-red-400">
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

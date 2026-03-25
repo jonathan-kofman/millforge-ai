@@ -45,12 +45,21 @@ const NEG_WINDOWS_FALLBACK = {
   data_source: "simulated_fallback",
 };
 
+const MOCK_RATES = [
+  0.08, 0.07, 0.07, 0.06, 0.06, 0.07,
+  0.09, 0.12, 0.15, 0.16, 0.15, 0.14,
+  0.14, 0.13, 0.14, 0.16, 0.18, 0.19,
+  0.17, 0.14, 0.12, 0.11, 0.10, 0.09,
+];
+
 export default function EnergyWidget() {
   const [data, setData] = useState(null);
   const [negWindows, setNegWindows] = useState(null);
+  const [rates, setRates] = useState(MOCK_RATES);
+  const [ratesLive, setRatesLive] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    // Fetch current energy estimate (1-hour titanium run starting now as a representative load)
     const now = new Date().toISOString();
 
     const negWindowsFetch = Promise.race([
@@ -63,26 +72,40 @@ export default function EnergyWidget() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ start_time: now, duration_hours: 1, material: "titanium" }),
-      }).then(r => r.ok ? r.json() : null),
+      }).then(r => r.ok ? r.json() : null).catch(() => null),
       negWindowsFetch,
+      fetch(`${API_BASE}/api/energy/rates`).then(r => r.ok ? r.json() : null).catch(() => null),
     ])
-      .then(([est, neg]) => {
+      .then(([est, neg, ratesData]) => {
+        if (!est && !neg) { setLoadError(true); return; }
         setData(est);
         setNegWindows(neg ?? NEG_WINDOWS_FALLBACK);
+        if (ratesData?.rates_usd_per_kwh?.length === 24) {
+          setRates(ratesData.rates_usd_per_kwh);
+          setRatesLive(ratesData.data_source === "EIA_realtime");
+        }
       })
       .catch(() => {
+        setLoadError(true);
         setNegWindows(NEG_WINDOWS_FALLBACK);
       });
   }, []);
 
-  const mockRates = [
-    0.08, 0.07, 0.07, 0.06, 0.06, 0.07,
-    0.09, 0.12, 0.15, 0.16, 0.15, 0.14,
-    0.14, 0.13, 0.14, 0.16, 0.18, 0.19,
-    0.17, 0.14, 0.12, 0.11, 0.10, 0.09,
-  ];
-
   const isLive = data?.data_source === "EIA_realtime";
+
+  if (loadError) {
+    return (
+      <section className="max-w-6xl mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <p className="text-sm font-bold tracking-widest text-orange-500 uppercase mb-2">Energy Intelligence</p>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">The other half of the problem.</h2>
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-6 text-center text-gray-500 text-sm">
+          Energy data unavailable — backend offline or rate-limited.
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="max-w-6xl mx-auto px-4 py-12">
@@ -119,8 +142,8 @@ export default function EnergyWidget() {
               value={data?.off_peak_rate != null ? `$${data.off_peak_rate.toFixed(3)}` : "—"}
             />
           </div>
-          <SparkLine rates={mockRates} />
-          <p className="text-xs text-gray-600">24-hour pricing curve (simulated)</p>
+          <SparkLine rates={rates} />
+          <p className="text-xs text-gray-600">{ratesLive ? "EIA live 24-hour curve" : "24-hour pricing curve (simulated)"}</p>
         </div>
 
         {/* Best window card */}

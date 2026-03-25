@@ -30,13 +30,22 @@ const TOUCHPOINT_LABELS = {
 
 export default function LightsOutWidget() {
   const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/health`)
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject())
       .then(setData)
-      .catch(() => {});
+      .catch(() => setError(true));
   }, []);
+
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-4 border-b border-gray-800">
+        <p className="text-xs text-gray-600 text-center">Lights-out status unavailable — backend offline.</p>
+      </div>
+    );
+  }
 
   if (!data?.lights_out_readiness) return null;
 
@@ -48,7 +57,10 @@ export default function LightsOutWidget() {
         {/* Progress bar block */}
         <div className="flex-shrink-0 w-full sm:w-56">
           <div className="flex items-baseline justify-between mb-1.5">
-            <span className="text-sm font-semibold text-white">
+            <span
+              className="text-sm font-semibold text-white cursor-help"
+              title="Lights-out manufacturing: software controls the full production flow; humans handle exceptions only. Each green touchpoint is one fewer human in the loop."
+            >
               Lights-out readiness
             </span>
             <span className="text-lg font-bold text-forge-500">{readiness_percent}%</span>

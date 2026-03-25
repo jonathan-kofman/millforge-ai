@@ -177,6 +177,28 @@ async def get_carbon_intensity():
         }
 
 
+@router.get(
+    "/rates",
+    summary="Get 24-hour hourly electricity rate curve",
+)
+async def get_hourly_rates():
+    """
+    Returns the 24-hour hourly rate curve ($/kWh) used for energy scheduling decisions.
+    Uses live EIA demand-based pricing when EIA_API_KEY is set; falls back to simulated curve.
+    """
+    from agents.energy_optimizer import _get_hourly_rates as _fetch_rates
+    try:
+        rates, data_source = _fetch_rates()
+    except Exception as exc:
+        logger.error("Hourly rates error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Rate data error")
+    return {
+        "rates_usd_per_kwh": rates,
+        "data_source": data_source,
+        "hours": list(range(len(rates))),
+    }
+
+
 @router.post(
     "/scenario",
     response_model=ScenarioResponse,
