@@ -28,6 +28,7 @@ from routers.learning import router as learning_router
 from routers.twin import router as twin_router
 from routers.suppliers import router as suppliers_router
 from routers.onboarding import router as onboarding_router
+from routers.cad import router as cad_router
 from database import init_db, SessionLocal
 from db_models import Supplier
 from routers.vision import get_vision_model_name as _get_vision_model_name
@@ -150,6 +151,7 @@ app.include_router(learning_router)
 app.include_router(twin_router)
 app.include_router(suppliers_router)
 app.include_router(onboarding_router)
+app.include_router(cad_router)
 
 
 # ---------------------------------------------------------------------------

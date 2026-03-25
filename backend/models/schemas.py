@@ -334,6 +334,18 @@ class ScheduleHistoryResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# /api/orders/from-cad
+# ---------------------------------------------------------------------------
+
+class CadParseResponse(BaseModel):
+    dimensions: str = Field(..., description="Bounding box dimensions e.g. '45.2x32.1x18.7mm'")
+    complexity: int = Field(..., ge=1, le=10, description="Complexity score derived from triangle count")
+    estimated_volume_cm3: float = Field(..., description="Bounding box volume proxy in cm³")
+    triangle_count: int = Field(..., description="Total triangles in the STL mesh")
+    source: str = Field("stl_upload", description="Data source identifier")
+
+
+# ---------------------------------------------------------------------------
 # /api/inventory
 # ---------------------------------------------------------------------------
 

@@ -345,3 +345,26 @@ Run: `python scripts/seed_suppliers.py [--clear]`
 ### Health endpoint
 
 `material_sourcing: "directory_active"` — added as 8th touchpoint in `/health`.
+
+## CAD Upload / ARIA-OS Integration (`backend/agents/cad_parser.py`, `backend/routers/cad.py`)
+
+`POST /api/orders/from-cad` — accepts an STL file upload and returns extracted order parameters. This is the bridge that connects ARIA CAD output directly to the MillForge scheduling pipeline: no human translates geometry into job parameters.
+
+**Agent (`backend/agents/cad_parser.py`):**
+- `extract_from_stl(file_bytes: bytes) -> dict` — parses binary or ASCII STL via `numpy-stl`
+- Bounding box dimensions from `m.vectors.reshape(-1, 3).min/max(axis=0)` → `"{x}x{y}x{z}mm"`
+- `complexity = min(10, max(1, triangle_count // 1000))` — 1 complexity point per 1000 triangles, clamped to [1, 10]
+- `estimated_volume_cm3 = (x * y * z) / 1000` — bounding box volume proxy in cm³
+
+**Router (`backend/routers/cad.py`):**
+- `POST /api/orders/from-cad` — `UploadFile` (`.stl` only); returns `CadParseResponse`
+- 400 if non-STL extension or empty file; 422 if STL is malformed
+- Response fields map directly to `OrderCreateRequest` — caller can pass result straight to `POST /api/orders`
+
+**Schema:** `CadParseResponse` in `backend/models/schemas.py` — `dimensions`, `complexity`, `estimated_volume_cm3`, `triangle_count`, `source="stl_upload"`
+
+**Dependency:** `numpy-stl>=3.0.0` in `backend/requirements.txt`
+
+**Tests:** `tests/test_cad_parser.py` — dimensions/volume accuracy, complexity scaling (including clamp at 10), HTTP validation (wrong extension, empty file, valid STL)
+
+**ARIA-OS integration note:** When ARIA generates a toolpath, it exports the stock STL to this endpoint. The response pre-fills a draft order; the operator confirms or schedules immediately. This removes the "engineer reads CAD and fills in a form" touchpoint.
