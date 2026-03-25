@@ -30,6 +30,10 @@ export default function App() {
   const [onboardingStatus, setOnboardingStatus] = useState(null);
   const [showWizard, setShowWizard] = useState(false);
   const [user, setUser] = useState(null);
+  const [navOpen, setNavOpen] = useState(false);
+  const [captureEmail, setCaptureEmail] = useState("");
+  const [captureSubmitted, setCaptureSubmitted] = useState(false);
+  const [captureLoading, setCaptureLoading] = useState(false);
 
   const fetchOnboardingStatus = async () => {
     try {
@@ -48,6 +52,25 @@ export default function App() {
     setShowAuth(false);
     setActiveTab("orders");
     fetchOnboardingStatus();
+  };
+
+  const handleEmailCapture = async (e) => {
+    e.preventDefault();
+    setCaptureLoading(true);
+    try {
+      await fetch(`${API_BASE}/api/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: captureEmail, email: captureEmail, message: "Requested sample report", source: "email_capture" }),
+      });
+    } catch {}
+    setCaptureSubmitted(true);
+    setCaptureLoading(false);
+  };
+
+  const scrollTo = (id) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    setNavOpen(false);
   };
 
   const handleLogout = async () => {
@@ -94,35 +117,51 @@ export default function App() {
               <span className="text-xl font-bold text-forge-500 tracking-tight">Forge AI</span>
             </div>
           </div>
+
+          {/* Desktop nav links */}
+          <nav className="hidden sm:flex items-center gap-6">
+            <button onClick={() => scrollTo("benchmark-section")} className="text-sm text-gray-400 hover:text-white transition-colors">How It Works</button>
+            <button onClick={() => scrollTo("benchmark-section")} className="text-sm text-gray-400 hover:text-white transition-colors">Demo</button>
+            <button onClick={() => scrollTo("suppliers-section")} className="text-sm text-gray-400 hover:text-white transition-colors">Suppliers</button>
+            <button onClick={() => { setActiveTab("contact"); scrollTo("tab-nav"); }} className="text-sm text-gray-400 hover:text-white transition-colors">Contact</button>
+          </nav>
+
           <div className="flex items-center gap-3">
+            {/* Mobile hamburger */}
+            <button
+              className="sm:hidden text-gray-400 hover:text-white text-xl leading-none"
+              onClick={() => setNavOpen(v => !v)}
+              aria-label="Toggle menu"
+            >
+              {navOpen ? "✕" : "☰"}
+            </button>
             {user ? (
               <>
-                <span className="text-sm text-gray-400 hidden sm:block">
-                  {user.name}
-                </span>
-                <button onClick={handleLogout} className="btn-secondary text-sm py-1.5">
-                  Sign Out
-                </button>
+                <span className="text-sm text-gray-400 hidden sm:block">{user.name}</span>
+                <button onClick={handleLogout} className="btn-secondary text-sm py-1.5">Sign Out</button>
               </>
             ) : (
-              <button onClick={() => setShowAuth(true)} className="btn-primary text-sm py-1.5">
-                Sign In
-              </button>
+              <button onClick={() => setShowAuth(true)} className="btn-primary text-sm py-1.5">Sign In</button>
             )}
           </div>
         </div>
+
+        {/* Mobile nav dropdown */}
+        {navOpen && (
+          <div className="sm:hidden border-t border-gray-800 bg-gray-950">
+            <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-3">
+              <button onClick={() => scrollTo("benchmark-section")} className="text-sm text-gray-400 hover:text-white text-left transition-colors">How It Works</button>
+              <button onClick={() => scrollTo("benchmark-section")} className="text-sm text-gray-400 hover:text-white text-left transition-colors">Demo</button>
+              <button onClick={() => scrollTo("suppliers-section")} className="text-sm text-gray-400 hover:text-white text-left transition-colors">Suppliers</button>
+              <button onClick={() => { setActiveTab("contact"); scrollTo("tab-nav"); }} className="text-sm text-gray-400 hover:text-white text-left transition-colors">Contact</button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* ── Hero ── */}
       <section className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-          {/* Pull quote */}
-          <div className="max-w-2xl mx-auto mb-10 border-l-4 border-forge-500 pl-5 text-left">
-            <p className="text-sm sm:text-base text-gray-300 italic leading-relaxed">
-              &ldquo;Ordered 5 months ago. They just told me it&apos;ll be another 2 months. I could&apos;ve grown the aluminum myself.&rdquo;
-            </p>
-            <p className="mt-2 text-xs text-gray-500">— American manufacturer, 2024</p>
-          </div>
           {/* ICP */}
           <p className="text-sm sm:text-base text-forge-400 font-medium mb-3">
             For CNC job shops and metal mills drowning in backlog and rush orders.
@@ -135,8 +174,11 @@ export default function App() {
           <p className="text-lg sm:text-xl text-gray-200 font-semibold max-w-2xl mx-auto mb-3">
             AI scheduler that lifts on-time delivery from 60% to 95%+<br className="hidden sm:block" /> using your existing machines and staff.
           </p>
+          <p className="text-sm text-gray-500 max-w-xl mx-auto mb-2">
+            Not an ERP. Not a quoting portal. Not a CAM package.
+          </p>
           <p className="text-sm text-gray-500 max-w-xl mx-auto mb-8">
-            Not an ERP. Not a quoting portal. Not a CAM package.<br className="hidden sm:block" /> Just better scheduling — starting day one.
+            It&apos;s a scheduling layer that sits on top of whatever you already use.
           </p>
           {/* Primary CTA */}
           <a
@@ -147,14 +189,48 @@ export default function App() {
           >
             Book a 30-minute floor review →
           </a>
-          <p className="text-xs text-gray-600 mt-3">
+          <p className="text-xs text-gray-600 mt-3 mb-8">
             No commitment. We run your order history through MillForge and show you the on-time delta.
           </p>
+
+          {/* Email capture — lower-friction CTA */}
+          <div className="mb-10">
+            <p className="text-xs text-gray-500 mb-3">Not ready for a call?</p>
+            {captureSubmitted ? (
+              <p className="text-sm text-forge-400">Got it — we&apos;ll send the sample report shortly.</p>
+            ) : (
+              <form onSubmit={handleEmailCapture} className="flex flex-col sm:flex-row items-center justify-center gap-2 max-w-md mx-auto">
+                <input
+                  type="email"
+                  required
+                  value={captureEmail}
+                  onChange={e => setCaptureEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forge-500 focus:border-transparent text-sm w-full sm:w-auto"
+                />
+                <button
+                  type="submit"
+                  disabled={captureLoading}
+                  className="bg-gray-700 hover:bg-gray-600 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  {captureLoading ? "Sending…" : "Get a sample report →"}
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* Pull quote — social proof below CTA */}
+          <div className="max-w-2xl mx-auto border-l-4 border-forge-500 pl-5 text-left">
+            <p className="text-sm sm:text-base text-gray-300 italic leading-relaxed">
+              &ldquo;Ordered 5 months ago. They just told me it&apos;ll be another 2 months. I could&apos;ve grown the aluminum myself.&rdquo;
+            </p>
+            <p className="mt-2 text-xs text-gray-500">— American manufacturer, 2024</p>
+          </div>
         </div>
       </section>
 
       {/* ── Benchmark demo ── */}
-      <div className="bg-gray-950 border-b border-gray-800">
+      <div id="benchmark-section" className="bg-gray-950 border-b border-gray-800">
         <BenchmarkDemo />
       </div>
 
@@ -170,11 +246,11 @@ export default function App() {
           <div className="flex flex-wrap justify-center gap-8 mb-8">
             <div className="text-center">
               <p className="text-4xl font-extrabold text-gray-500">60.7%</p>
-              <p className="text-xs text-gray-600 mt-1">FIFO on-time</p>
+              <p className="text-xs text-gray-600 mt-1">Before MillForge: 60.7% on-time</p>
             </div>
             <div className="text-center">
               <p className="text-4xl font-extrabold text-orange-400">96.4%</p>
-              <p className="text-xs text-gray-500 mt-1">MillForge SA on-time</p>
+              <p className="text-xs text-gray-500 mt-1">After MillForge: 96.4% on-time</p>
             </div>
           </div>
           <p className="text-xs text-gray-600 mb-8">
@@ -197,8 +273,27 @@ export default function App() {
         <LightsOutWidget />
       </div>
 
-      {/* ── Why we built this ── */}
+      {/* ── Pricing anchor ── */}
       <div className="bg-gray-950 border-b border-gray-800">
+        <div className="max-w-3xl mx-auto px-4 py-14 text-center">
+          <p className="text-sm font-bold tracking-widest text-orange-500 uppercase mb-4">Pricing</p>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-6">Simple, transparent pricing.</h2>
+          <p className="text-gray-300 text-base mb-2">Starts at <span className="text-white font-semibold">$299/month</span> for shops with up to 10 machines.</p>
+          <p className="text-gray-400 text-sm mb-2">Scales with shop size. Most customers see ROI within 30 days.</p>
+          <p className="text-gray-500 text-sm mb-8">No implementation fees. No ERP replacement. Cancel anytime.</p>
+          <a
+            href="https://calendly.com/jonkofm/30min"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-forge-400 hover:text-forge-300 text-sm font-medium transition-colors"
+          >
+            → Book a call to discuss your shop&apos;s specific needs
+          </a>
+        </div>
+      </div>
+
+      {/* ── Why we built this ── */}
+      <div id="how-it-works" className="bg-gray-950 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-16 text-center">
           <p className="text-sm font-bold tracking-widest text-orange-500 uppercase mb-8">
             Why We Built This
@@ -231,7 +326,7 @@ export default function App() {
       </div>
 
       {/* ── Supplier sourcing section ── */}
-      <div className="bg-gray-900 border-b border-gray-800">
+      <div id="suppliers-section" className="bg-gray-900 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-16">
           <p className="text-sm font-bold tracking-widest text-orange-500 uppercase mb-4 text-center">
             Materials Sourcing
@@ -268,7 +363,7 @@ export default function App() {
       </div>
 
       {/* ── Tab nav ── */}
-      <nav className="bg-gray-900 border-b border-gray-800">
+      <nav id="tab-nav" className="bg-gray-900 border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 flex gap-1 overflow-x-auto">
           {TABS.map((tab) => (
             <button
@@ -326,7 +421,15 @@ export default function App() {
       {/* ── Footer ── */}
       <footer className="border-t border-gray-800 bg-gray-950">
         <div className="max-w-6xl mx-auto px-4 py-6 text-center text-xs text-gray-600">
-          MillForge AI · 2026 · Built by Jonathan Kofman, Northeastern Advanced Manufacturing
+          MillForge AI · 2026 · Built by Jonathan Kofman ·{" "}
+          <a
+            href="https://www.linkedin.com/in/jonathan-kofman/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            LinkedIn →
+          </a>
         </div>
       </footer>
 

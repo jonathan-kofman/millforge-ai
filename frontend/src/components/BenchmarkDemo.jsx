@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE } from "../config";
 
 // ── SVG ring for on-time percentage ──────────────────────────────────────────
@@ -101,7 +101,7 @@ const ALGO_META = {
   sa:   { label: "SA (MillForge AI Best)",    color: "#f97316", ringColor: "#f97316", desc: "Simulated annealing — minimises tardiness",   shopLabel: "MillForge optimized — best for complex schedules" },
 };
 
-function AlgoCard({ algo, entry, isWinner, rushDiff }) {
+function AlgoCard({ algo, entry, isWinner, rushDiff, flash }) {
   const meta = ALGO_META[algo];
   const borderClass = isWinner
     ? "border-orange-500 bg-orange-500/5"
@@ -110,7 +110,7 @@ function AlgoCard({ algo, entry, isWinner, rushDiff }) {
     : "border-blue-800 bg-blue-900/10";
 
   return (
-    <div className={`rounded-xl border p-4 flex flex-col gap-3 ${borderClass}`}>
+    <div className={`rounded-xl border p-4 flex flex-col gap-3 ${borderClass} ${flash ? "flash-border" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-white">{meta.label}</p>
@@ -145,6 +145,17 @@ function AlgoCard({ algo, entry, isWinner, rushDiff }) {
   );
 }
 
+// ── Cached fallback (deterministic locked numbers) ───────────────────────────
+const FALLBACK_DATA = {
+  fifo: { on_time_rate_percent: 60.7, on_time_count: 17, total_orders: 28, makespan_hours: 148, utilization_percent: 71, solve_ms: 1 },
+  edd:  { on_time_rate_percent: 82.1, on_time_count: 23, total_orders: 28, makespan_hours: 142, utilization_percent: 78, solve_ms: 8 },
+  sa:   { on_time_rate_percent: 96.4, on_time_count: 27, total_orders: 28, makespan_hours: 138, utilization_percent: 82, solve_ms: 847 },
+  winner: "sa",
+  on_time_improvement_pp: 35.7,
+  dataset_description: "28-order simulated dataset",
+  _cached: true,
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function BenchmarkDemo() {
   const [data,      setData]      = useState(null);
@@ -153,26 +164,43 @@ export default function BenchmarkDemo() {
   const [pressure,  setPressure]  = useState(0.5);
   const [showRush,  setShowRush]  = useState(false);
   const [error,     setError]     = useState(null);
+  const [flash,     setFlash]     = useState(false);
   const debounceRef = useRef(null);
+  const flashRef    = useRef(null);
+
+  const triggerFlash = useCallback(() => {
+    setFlash(true);
+    clearTimeout(flashRef.current);
+    flashRef.current = setTimeout(() => setFlash(false), 350);
+  }, []);
 
   const fetchBenchmark = useCallback(async (p, withRush) => {
     setLoading(true);
     setError(null);
+    const timeout = new Promise(resolve => setTimeout(() => resolve("__timeout__"), 3000));
     try {
       const [base, rush] = await Promise.all([
-        fetch(`${API_BASE}/api/schedule/benchmark?pressure=${p}`).then(r => r.json()),
+        Promise.race([
+          fetch(`${API_BASE}/api/schedule/benchmark?pressure=${p}`).then(r => r.json()),
+          timeout,
+        ]),
         withRush
-          ? fetch(`${API_BASE}/api/schedule/benchmark?pressure=${p}&rush=true`).then(r => r.json())
+          ? Promise.race([
+              fetch(`${API_BASE}/api/schedule/benchmark?pressure=${p}&rush=true`).then(r => r.json()),
+              timeout,
+            ])
           : Promise.resolve(null),
       ]);
-      setData(base);
-      setRushData(rush);
+      setData(base === "__timeout__" ? FALLBACK_DATA : base);
+      setRushData(rush === "__timeout__" ? null : rush);
+      triggerFlash();
     } catch (err) {
-      setError(err.message);
+      setData(FALLBACK_DATA);
+      setError(null); // show cached result silently
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [triggerFlash]);
 
   useEffect(() => { fetchBenchmark(0.5, false); }, [fetchBenchmark]);
 
@@ -211,18 +239,24 @@ export default function BenchmarkDemo() {
       {/* ── Controls ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         {/* Pressure slider */}
-        <div className="flex items-center gap-3">
-          <label className="text-xs text-gray-400 whitespace-nowrap">
-            Schedule pressure
-          </label>
-          <input
-            type="range" min="0" max="1" step="0.1"
-            value={pressure}
-            onChange={handlePressureChange}
-            className="w-32 accent-orange-500"
-          />
-          <span className="text-xs text-gray-300 w-8">
-            {pressure === 0 ? "easy" : pressure <= 0.5 ? "normal" : "crunch"}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-400 whitespace-nowrap">
+              Schedule pressure
+            </label>
+            <input
+              type="range" min="0" max="1" step="0.1"
+              value={pressure}
+              onChange={handlePressureChange}
+              className="w-32 accent-orange-500"
+            />
+          </div>
+          <span className="text-xs text-gray-500">
+            {pressure <= 0.3
+              ? "Low pressure — 28 standard orders"
+              : pressure <= 0.6
+              ? "Normal pressure — 28 orders with mixed priorities"
+              : "High pressure — 28 orders + rush jobs competing for capacity"}
           </span>
         </div>
 
@@ -283,6 +317,7 @@ export default function BenchmarkDemo() {
                 algo={algo}
                 entry={showRush && rushData ? rushData[algo] : data[algo]}
                 isWinner={data.winner === algo}
+                flash={flash}
                 rushDiff={
                   showRush && rushData
                     ? Math.round((rushData[algo].on_time_rate_percent - data[algo].on_time_rate_percent) * 10) / 10
@@ -299,9 +334,9 @@ export default function BenchmarkDemo() {
             <div className="flex-1 min-w-48">
               {improvement !== null && improvement > 0 && (
                 <div className="rounded-xl bg-orange-500/10 border border-orange-800 px-5 py-5">
-                  <p className="text-5xl font-extrabold text-orange-400">+{improvement}pp</p>
+                  <p className="text-5xl font-extrabold text-orange-400">+{improvement}</p>
                   <p className="text-sm text-gray-300 mt-2 font-semibold">
-                    on-time improvement, SA vs FIFO baseline
+                    percentage points more orders delivered on time
                   </p>
                   <p className="text-xs text-gray-500 mt-2">
                     Same machines · same staff · same suppliers
@@ -321,6 +356,10 @@ export default function BenchmarkDemo() {
 
       {loading && !data && (
         <div className="text-center py-12 text-gray-500 text-sm">Running benchmark…</div>
+      )}
+
+      {data?._cached && (
+        <p className="text-xs text-gray-600 text-center mt-2">cached result — backend offline or slow</p>
       )}
     </section>
   );

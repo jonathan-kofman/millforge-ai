@@ -1,3 +1,12 @@
+@keyframes flash-border {
+  0%   { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); }
+  50%  { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+}
+.flash-border {
+  animation: flash-border 0.3s ease-out;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
