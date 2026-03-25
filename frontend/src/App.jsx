@@ -177,7 +177,7 @@ export default function App() {
               <p className="text-xs text-gray-600 mt-1">FIFO on-time</p>
             </div>
             <div className="text-center">
-              <p className="text-4xl font-extrabold text-orange-400">100%</p>
+              <p className="text-4xl font-extrabold text-orange-400">96.4%</p>
               <p className="text-xs text-gray-500 mt-1">MillForge SA on-time</p>
             </div>
           </div>

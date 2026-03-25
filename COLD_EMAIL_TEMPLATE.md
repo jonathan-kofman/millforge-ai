@@ -10,7 +10,7 @@ Quick question: how do you decide what runs next on your machines?
 
 Most shops I talk to are still doing it in Excel or on a whiteboard. The problem isn't the people — it's that the math is too complex for any human to optimize in real time. A rush order comes in, someone reshuffles manually, and three other jobs slip.
 
-I built MillForge to fix this. It takes your real constraints — your machines, materials, setup times — and schedules automatically. On our 28-order test dataset, it goes from 61% on-time (naive sequencing) to 100% on-time with no changes to equipment or staff.
+I built MillForge to fix this. It takes your real constraints — your machines, materials, setup times — and schedules automatically. On our 28-order test dataset, it goes from 61% on-time (naive sequencing) to 96% on-time with no changes to equipment or staff.
 
 I'm looking for 3 shops this week to do a 20-minute call. If you share a month of order history, I'll run it through the optimizer and show you the projected improvement on your actual data.
 

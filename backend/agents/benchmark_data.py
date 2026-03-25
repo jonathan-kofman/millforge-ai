@@ -8,7 +8,7 @@ time, so the numbers are stable regardless of when the benchmark runs.
 Approximate target outcomes (MACHINE_COUNT = 3):
   FIFO  ~61 % on-time  │  ~71 % utilization  │  ~18 h avg lateness
   EDD   ~82 % on-time  │  ~83 % utilization  │  ~8 h  avg lateness
-  SA    ~93 % on-time  │  ~89 % utilization  │  ~3 h  avg lateness
+  SA    ~96 % on-time  │  ~89 % utilization  │  ~3 h  avg lateness  (seed=123)
 
 Dataset characteristics
 -----------------------

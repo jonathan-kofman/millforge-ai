@@ -34,10 +34,10 @@ Most metal mills have 8 to 30 week lead times not because the machines are slow 
 | Strategy | On-time rate | What it is |
 |----------|-------------|-----------|
 | `fifo` | 60.7% | Naive baseline — arrival order, no optimisation |
-| `edd` | 96.4% | MillForge EDD — greedy earliest-due-date with setup-time awareness |
-| `sa` | 100.0% | MillForge SA — simulated annealing, minimises weighted tardiness |
+| `edd` | 82.1% | MillForge EDD — greedy earliest-due-date with setup-time awareness |
+| `sa` | 96.4% | MillForge SA — simulated annealing, minimises weighted tardiness |
 
-**+39.3pp on-time improvement over the naive baseline.** Same machines, same staff, same suppliers.
+**+35.7pp on-time improvement over the naive baseline.** Same machines, same staff, same suppliers.
 
 Results are fully deterministic — identical every run.
 

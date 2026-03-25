@@ -43,11 +43,11 @@ MillForge is the intelligence layer for lights-out American metal mills — star
 **The benchmark demo is `/api/schedule/benchmark`**: three-way comparison of FIFO (naive baseline) vs MillForge EDD vs MillForge SA on the same order set. The `on_time_improvement_pp` field is the number that wins the room.
 
 **Locked benchmark numbers (deterministic, 28-order dataset):**
-- FIFO: 60.7% on-time (±2pp, [58.7%, 62.7%])
-- EDD: 96.4% on-time (±2pp, [94.4%, 98.4%])
-- SA: 100.0% on-time (±1pp, [99.0%, 100.0%])
-- Improvement over FIFO: +39.3pp
-- Results are fully deterministic — identical every run
+- FIFO: 60.7% on-time (17/28)
+- EDD: 82.1% on-time (23/28)
+- SA: 96.4% on-time (27/28) — seed=123
+- Improvement over FIFO: +35.7pp (SA)
+- Results are fully deterministic — identical every run (same reference_time passed to both order generation and optimizer)
 
 When writing copy, docs, or code comments, frame MillForge around *removing human touchpoints from routine production*, not scheduling assistance or lead time compression.
 
