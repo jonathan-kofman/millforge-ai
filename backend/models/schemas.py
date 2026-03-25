@@ -194,6 +194,7 @@ class VisionInspectResponse(BaseModel):
     model: Optional[str] = None            # "yolov8n-neu-det", "yolov8n-pretrained", or "heuristic"
     model_map50: Optional[float] = None    # published mAP@0.5 accuracy; None for heuristic
     order_id: Optional[str] = None
+    inspection_mode: str = "heuristic"     # "onnx" when real model is loaded, else "heuristic"
 
 
 # ---------------------------------------------------------------------------

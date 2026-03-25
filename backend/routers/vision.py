@@ -12,9 +12,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
-from db_models import InspectionRecord, OrderRecord
+from db_models import InspectionRecord, OrderRecord, User
 from models.schemas import VisionInspectRequest, VisionInspectResponse
-from agents.quality_vision import QualityVisionAgent
+from agents.quality_vision import QualityVisionAgent, MODEL_AVAILABLE
+from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Vision"])
@@ -84,6 +85,7 @@ async def inspect_part(
         model=result.model,
         model_map50=result.model_map50,
         order_id=req.order_id,
+        inspection_mode="onnx" if MODEL_AVAILABLE else "heuristic",
     )
 
 
@@ -93,6 +95,7 @@ async def inspect_part(
 )
 async def trigger_training(
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Kick off YOLOv8n training on NEU Surface Defect Database in background.

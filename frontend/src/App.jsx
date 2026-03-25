@@ -152,7 +152,7 @@ export default function App() {
             Book a 30-minute floor review →
           </a>
           <p className="text-xs text-gray-600 mt-3">
-            Starts in shadow mode — MillForge proposes schedules, your planners approve.
+            No commitment. We run your order history through MillForge and show you the on-time delta.
           </p>
         </div>
       </section>
@@ -166,7 +166,7 @@ export default function App() {
       <div className="bg-gray-950 border-b border-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-14 text-center">
           <p className="text-xs font-bold tracking-widest text-orange-500 uppercase mb-6">
-            In a Simulated 10-Machine Mill
+            In a Simulated 3-Machine Mill
           </p>
           <p className="text-gray-400 text-sm mb-6">
             3 anchor orders. 4 rush orders. Mixed steel, aluminum, titanium.

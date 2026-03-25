@@ -153,12 +153,13 @@ async def get_carbon_intensity():
         }
     try:
         import httpx
-        response = httpx.get(
-            "https://api.electricitymap.org/v3/carbon-intensity/latest",
-            params={"zone": "US-PJM"},
-            headers={"auth-token": api_key},
-            timeout=5.0
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.electricitymap.org/v3/carbon-intensity/latest",
+                params={"zone": "US-PJM"},
+                headers={"auth-token": api_key},
+                timeout=5.0,
+            )
         logger.info("Carbon intensity: Electricity Maps response status=%s", response.status_code)
         data = response.json()
         return {
