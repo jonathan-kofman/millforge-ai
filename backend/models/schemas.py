@@ -2,7 +2,7 @@
 Pydantic request/response schemas for the MillForge API.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -201,7 +201,7 @@ class VisionInspectResponse(BaseModel):
 
 class ContactRequest(BaseModel):
     name: str = Field(..., min_length=2)
-    email: str = Field(..., description="Contact email address")
+    email: EmailStr = Field(..., description="Contact email address")
     company: Optional[str] = None
     message: str = Field(..., min_length=10)
     pilot_interest: bool = Field(False, description="Interested in pilot program")
@@ -217,7 +217,7 @@ class ContactResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class RegisterRequest(BaseModel):
-    email: str = Field(..., description="User email address")
+    email: EmailStr = Field(..., description="User email address")
     password: str = Field(..., min_length=8, description="Password (min 8 chars)")
     name: str = Field(..., min_length=2)
     company: Optional[str] = None
@@ -232,7 +232,7 @@ class RegisterResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
 

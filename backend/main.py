@@ -134,6 +134,16 @@ app.include_router(onboarding_router)
 # ---------------------------------------------------------------------------
 # Root / health
 # ---------------------------------------------------------------------------
+
+def _energy_status() -> str:
+    """Return health label based on whether gridstatus is installed."""
+    try:
+        import gridstatus  # noqa: F401
+        return "real_grid_data"
+    except ImportError:
+        return "simulated_fallback"
+
+
 @app.get("/", tags=["Health"])
 async def root():
     return {"service": "MillForge API", "status": "ok", "version": "0.3.0"}
@@ -144,8 +154,8 @@ async def health():
     touchpoints = {
         "scheduling":          "automated",
         "quoting":             "automated",
-        "quality_inspection":  "pretrained",  # YOLOv8n ONNX placeholder
-        "energy_optimization": "real_grid_data",  # PJM LMP + Electricity Maps carbon
+        "quality_inspection":  "mock",         # heuristic hash — no model file deployed
+        "energy_optimization": _energy_status(),  # PJM LMP when gridstatus available, else simulated
         "inventory_management":"automated",
         "production_planning": "real_data",  # US Census ASM throughput benchmarks
         "rework_dispatch":     "automated",

@@ -418,9 +418,10 @@ class EnergyOptimizer:
             optimal_cost += power_kw * duration_h * min_rate
 
         carbon_kg = total_kwh * carbon_intensity
-        # Carbon saved vs optimal (cheapest window also has lowest marginal carbon)
-        carbon_optimal = total_kwh * carbon_intensity * (optimal_cost / total_cost if total_cost > 0 else 1.0)
-        carbon_delta = round(carbon_kg - carbon_optimal, 3)
+        # Carbon delta is 0 — price-based shifting does not reduce carbon intensity.
+        # Time-resolved grid mix data (Electricity Maps) would be required for a
+        # true marginal emissions delta. Until then, report 0.0 to avoid false claims.
+        carbon_delta = 0.0
 
         result: Dict = {
             "total_energy_kwh": round(total_kwh, 2),
@@ -564,10 +565,19 @@ class EnergyOptimizer:
         effective_capex = capex_usd if capex_usd is not None else defaults["capex_usd"]
         discount_rate = defaults["discount_rate"]
 
-        # Annual savings = energy × (grid_rate - lcoe)
-        annual_savings = annual_energy_kwh * (grid_rate - lcoe)
+        # IRA 2022: 30% investment tax credit for solar and battery installations
+        IRA_CREDIT_SCENARIOS = {"solar", "battery", "solar_battery"}
+        IRA_CREDIT_RATE = 0.30
+        if scenario in IRA_CREDIT_SCENARIOS:
+            effective_capex = effective_capex * (1.0 - IRA_CREDIT_RATE)
+
+        # Annual O&M cost ($2,000/yr applies to all on-site generation scenarios)
+        OM_ANNUAL_USD = 2_000.0
+
+        # Annual savings = energy × (grid_rate - lcoe) minus O&M
+        annual_savings = annual_energy_kwh * (grid_rate - lcoe) - OM_ANNUAL_USD
         payback_years = (
-            round(effective_capex / annual_savings, 1)
+            min(round(effective_capex / annual_savings, 1), 99.0)
             if annual_savings > 0 else None
         )
 

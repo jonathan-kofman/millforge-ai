@@ -8,7 +8,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from auth.dependencies import get_current_user
 from database import get_db
+from db_models import User
 from models.schemas import (
     SupplierCreate,
     SupplierListResponse,
@@ -117,9 +119,12 @@ async def get_supplier(supplier_id: int, db: Session = Depends(get_db)) -> Suppl
 
 @router.post(
     "/seed",
-    summary="Manually trigger supplier seed (idempotent)",
+    summary="Manually trigger supplier seed (idempotent — requires auth)",
 )
-async def seed_endpoint(db: Session = Depends(get_db)):
+async def seed_endpoint(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
     from db_models import Supplier as SupplierModel
     from scripts.seed_suppliers import seed_suppliers
     count = db.query(SupplierModel).count()

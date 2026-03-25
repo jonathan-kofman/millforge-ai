@@ -11,7 +11,7 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 **Hierarchy of human touchpoints to eliminate (in order of priority):**
 1. **Scheduling** — ✅ automated. No human decides what runs next.
 2. **Quoting** — ✅ automated. No human calculates lead time or price.
-3. **Quality triage** — ⚡ pretrained (ONNX/YOLOv8n placeholder). No human does first-pass visual inspection.
+3. **Quality triage** — 🔬 mock (heuristic hash, no model deployed). No human does first-pass visual inspection.
 4. **Rework dispatch** — ✅ automated. No human decides rework priority.
 5. **Energy procurement** — ✅ automated (PJM real-time LMP). No human decides when to run energy-intensive jobs.
 6. **Inventory reorder** — ✅ automated. No human monitors stock levels.
@@ -25,7 +25,7 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 |--------|---------------|--------|----------|
 | scheduler.py | ✅ Yes — no human schedules jobs | automated | Core |
 | quote.py | ✅ Yes — no human prices orders | automated | Core |
-| quality_vision.py | Partially — triage only | pretrained model | High |
+| quality_vision.py | Partially — triage only | mock (heuristic, no model deployed) | High |
 | rework.py | ✅ Yes — auto-dispatches failures | automated | Core |
 | inventory_agent.py | ✅ Yes — auto-reorders stock | automated | Medium |
 | energy_optimizer.py | ✅ Yes — no human decides when to run energy-intensive jobs | automated (PJM real-time LMP) | Medium |

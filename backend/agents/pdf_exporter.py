@@ -23,7 +23,6 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
 )
 from reportlab.graphics.shapes import Drawing, Rect, Line, String
-from reportlab.graphics import renderPDF
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 # Material → RGB colour tuple (0–1 scale)

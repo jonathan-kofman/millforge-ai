@@ -49,12 +49,16 @@ def _send_notification(req: ContactRequest, submitted_at: datetime) -> None:
     if not smtp_email or not smtp_password:
         raise ValueError("SMTP_EMAIL or SMTP_PASSWORD not configured")
 
-    company_str = req.company or "—"
+    def _s(v: str) -> str:
+        """Strip newlines to prevent SMTP header injection."""
+        return v.replace("\n", "").replace("\r", "")
+
+    company_str = _s(req.company or "—")
     timestamp_str = submitted_at.strftime("%Y-%m-%d %H:%M:%S UTC")
-    subject = f"New MillForge AI Contact — {req.name} from {company_str}"
+    subject = f"New MillForge AI Contact — {_s(req.name)} from {company_str}"
     body = (
-        f"Name: {req.name}\n"
-        f"Email: {req.email}\n"
+        f"Name: {_s(req.name)}\n"
+        f"Email: {_s(str(req.email))}\n"
         f"Company: {company_str}\n"
         f"Message: {req.message}\n"
         f"Submitted: {timestamp_str}\n"

@@ -18,13 +18,14 @@ Most metal mills have 8 to 30 week lead times not because the machines are slow 
 |------------|--------|
 | Scheduling | ✅ automated |
 | Quoting | ✅ automated |
-| Quality Inspection | ⚡ pretrained (YOLOv8n ONNX) |
+| Quality Inspection | 🔬 mock (heuristic — no model deployed) |
 | Rework Dispatch | ✅ automated |
 | Inventory Management | ✅ automated |
-| Energy Optimization | ✅ automated (PJM real-time LMP) |
+| Energy Optimization | ✅ automated (PJM real-time LMP when gridstatus available) |
+| Material Sourcing | ✅ directory active (50+ verified US suppliers, geo-search) |
 | Production Planning | 📊 real data (US Census ASM) |
 
-**Current readiness: 71%** (5 of 7 touchpoints fully automated)
+**Current readiness: 75%** (6 of 8 touchpoints fully automated)
 
 ## The Core Demo
 

@@ -7,7 +7,6 @@ The wizard drives the frontend onboarding flow shown to new users with no orders
 
 import json
 import logging
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session

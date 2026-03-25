@@ -33,6 +33,7 @@ SETUP_MATRIX: Dict[tuple, int] = {
     ("copper", "steel"): 50,
     ("aluminum", "copper"): 35,
     ("copper", "aluminum"): 35,
+    ("copper", "copper"): 15,
 }
 
 # Machine throughput: units per hour by material

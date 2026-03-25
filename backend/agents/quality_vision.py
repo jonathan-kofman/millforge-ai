@@ -373,6 +373,14 @@ class QualityVisionAgent:
     # Deterministic heuristic fallback (no model file)
     # ------------------------------------------------------------------
 
+    # Per-material defect bias: most likely defect type for each material
+    _MATERIAL_DEFECT_BIAS: Dict[str, str] = {
+        "steel":    "surface_crack",
+        "aluminum": "porosity",
+        "titanium": "inclusions",
+        "copper":   "surface_roughness",
+    }
+
     def _heuristic_inspect(
         self,
         image_url: str,
@@ -382,18 +390,23 @@ class QualityVisionAgent:
         """
         Produce a deterministic result based on a hash of the image_url.
         Different URLs → different, but repeatable outcomes.
+        Confidence range 0.15–0.95 to reflect realistic inspection uncertainty.
         """
         digest = int(hashlib.sha256(image_url.encode()).hexdigest(), 16)
-        # Map into [0.70, 0.99] range
-        confidence = 0.70 + (digest % 29) / 100.0
+        # Map into [0.15, 0.95] — wider range reflects realistic model uncertainty
+        confidence = 0.15 + (digest % 81) / 100.0
 
         passed = confidence >= threshold
         defects: List[str] = []
         if not passed:
             n = 1 + (digest // 100 % 2)
-            # Deterministic defect selection
-            defects = [DEFECT_TYPES[(digest // (10 ** i)) % len(DEFECT_TYPES)] for i in range(n)]
-            defects = list(dict.fromkeys(defects))  # dedupe preserving order
+            # Bias toward material-specific defect type; fall back to hash selection
+            mat_key = (material or "").lower()
+            biased = self._MATERIAL_DEFECT_BIAS.get(mat_key)
+            candidates = [biased] if biased else []
+            for i in range(n):
+                candidates.append(DEFECT_TYPES[(digest // (10 ** i)) % len(DEFECT_TYPES)])
+            defects = list(dict.fromkeys(candidates))[:n]  # dedupe, cap at n
 
         return self._make_result(
             image_url=image_url,
