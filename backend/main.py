@@ -15,7 +15,7 @@ load_dotenv()
 from routers import quote, schedule, vision, contact
 from routers.auth_router import router as auth_router
 from routers.orders import router as orders_router
-from routers.inventory import router as inventory_router
+from routers.inventory import router as inventory_router, _inventory
 from routers.planner import router as planner_router
 from routers.energy import router as energy_router
 from routers.anomaly import router as anomaly_router
@@ -47,6 +47,15 @@ async def lifespan(app: FastAPI):
     logger.info("MillForge backend starting up…")
     init_db()   # create tables if they don't exist
     logger.info("Database initialised.")
+    # Load inventory stock from DB (seed if empty)
+    db = SessionLocal()
+    try:
+        _inventory._load_stock_from_db(db)
+        logger.info("Inventory stock loaded from DB.")
+    except Exception as exc:
+        logger.warning("Inventory stock load failed: %s", exc)
+    finally:
+        db.close()
     # Auto-seed supplier directory if empty
     db = SessionLocal()
     try:

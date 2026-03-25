@@ -17,8 +17,8 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import get_db
-from db_models import User, ScheduleRun
-from auth.dependencies import get_current_user
+from db_models import User, ScheduleRun, ShopConfig
+from auth.dependencies import get_current_user, get_current_user_optional
 from models.schemas import (
     ScheduleRequest, ScheduleResponse, ScheduleSummary,
     ScheduledOrderOutput, OrderInput, BenchmarkResponse, BenchmarkEntry,
@@ -81,6 +81,8 @@ def _build_response(schedule, algorithm: str, energy_analysis: Optional[EnergyAn
 async def optimize_schedule(
     req: ScheduleRequest,
     algorithm: str = Query("sa", enum=["edd", "sa"], description="edd = greedy EDD, sa = simulated annealing"),
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional),
 ) -> ScheduleResponse:
     """
     Optimize a production schedule for the provided order list using the shop's
@@ -94,7 +96,29 @@ async def optimize_schedule(
 
     orders = [_order_input_to_domain(o) for o in req.orders]
     start_time = req.start_time or datetime.now(timezone.utc).replace(tzinfo=None)
-    engine = _sa if algorithm == "sa" else _edd
+
+    # Determine machine count: use ShopConfig if authenticated, else default
+    machine_count = MACHINE_COUNT
+    if user:
+        try:
+            shop_config = db.query(ShopConfig).filter(ShopConfig.user_id == user.id).first()
+            if shop_config and shop_config.machine_count:
+                machine_count = shop_config.machine_count
+                logger.info(f"Using user's ShopConfig machine_count: {machine_count}")
+        except Exception as e:
+            logger.warning(f"Failed to lookup user's ShopConfig: {e}")
+
+    # Create or reuse scheduler with the appropriate machine count
+    if algorithm == "sa":
+        if machine_count != MACHINE_COUNT:
+            engine = SAScheduler(machine_count=machine_count)
+        else:
+            engine = _sa
+    else:
+        if machine_count != MACHINE_COUNT:
+            engine = Scheduler(machine_count=machine_count)
+        else:
+            engine = _edd
 
     try:
         schedule = engine.optimize(orders, start_time=start_time)

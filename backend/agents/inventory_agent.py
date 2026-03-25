@@ -8,7 +8,7 @@ schedules, and generates purchase orders when stock hits reorder points.
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +127,12 @@ class InventoryAgent:
     """
     Inventory Agent.
 
-    Maintains an in-memory stock ledger.  Consume stock via
-    ``consume_from_schedule()``; check current levels via ``get_status()``;
+    Maintains an in-memory stock ledger (cache) backed by the DB.
+    Consume stock via ``consume_from_schedule()``; check current levels via ``get_status()``;
     generate purchase orders via ``check_reorder_points()``.
+
+    The DB (InventoryStock table) is the source of truth; the in-memory dict is a cache
+    that persists for the lifetime of the agent instance or until saved back to DB.
 
     Validation loop: each method validates its own output and retries up to
     MAX_RETRIES times before returning a result with populated
@@ -138,19 +141,62 @@ class InventoryAgent:
 
     MAX_RETRIES = 3
 
-    def __init__(self, initial_stock: Optional[Dict[str, float]] = None):
+    def __init__(
+        self,
+        initial_stock: Optional[Dict[str, float]] = None,
+        db_factory: Optional[Callable] = None,
+    ):
         self._stock: Dict[str, float] = dict(initial_stock or INITIAL_STOCK)
         self._po_counter = 0
+        self._db_factory = db_factory
         logger.info("InventoryAgent initialized: %s", self._stock)
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
+    def _load_stock_from_db(self, db) -> None:
+        """
+        Load all InventoryStock rows from the DB into self._stock.
+        If DB is empty, seed from INITIAL_STOCK and save back.
+        """
+        try:
+            from db_models import InventoryStock
+            rows = db.query(InventoryStock).all()
+            if rows:
+                self._stock = {row.material: row.quantity_kg for row in rows}
+                logger.info("Loaded stock from DB: %s", self._stock)
+            else:
+                logger.info("DB is empty, seeding from INITIAL_STOCK")
+                for material, qty in INITIAL_STOCK.items():
+                    self._save_stock_to_db(db, material, qty)
+                self._stock = dict(INITIAL_STOCK)
+        except Exception as e:
+            logger.warning("Failed to load stock from DB: %s. Using in-memory cache.", e)
+
+    def _save_stock_to_db(self, db, material: str, qty: float) -> None:
+        """
+        Upsert a single material stock level in the DB.
+        Called after any mutation to self._stock[material].
+        """
+        try:
+            from db_models import InventoryStock
+            row = db.query(InventoryStock).filter_by(material=material).first()
+            if row:
+                row.quantity_kg = qty
+            else:
+                row = InventoryStock(material=material, quantity_kg=qty)
+                db.add(row)
+            db.commit()
+            logger.debug("Saved %s stock to DB: %.2f kg", material, qty)
+        except Exception as e:
+            logger.warning("Failed to save %s stock to DB: %s", material, e)
+
     def consume_from_schedule(
         self,
         schedule_orders: List[dict],
         schedule_id: str = "unknown",
+        db=None,
     ) -> MaterialConsumption:
         """
         Deduct material consumption from stock based on a list of scheduled orders.
@@ -158,6 +204,7 @@ class InventoryAgent:
         Args:
             schedule_orders: List of dicts with at least {material, quantity}.
             schedule_id: Identifier for the schedule run (for traceability).
+            db: Optional SQLAlchemy session to persist stock changes to DB.
 
         Returns:
             MaterialConsumption with a breakdown of usage per material.
@@ -172,6 +219,11 @@ class InventoryAgent:
 
             if not errors:
                 result.validation_failures = []
+                # Persist stock changes to DB if session provided
+                if db:
+                    for material in result.consumption_kg.keys():
+                        if material in self._stock:
+                            self._save_stock_to_db(db, material, self._stock[material])
                 return result
 
             labeled = [f"[attempt {attempt + 1}] {e}" for e in errors]
@@ -196,10 +248,13 @@ class InventoryAgent:
             items_below_reorder=below,
         )
 
-    def check_reorder_points(self) -> List[PurchaseOrder]:
+    def check_reorder_points(self, db=None) -> List[PurchaseOrder]:
         """
         Inspect all stock levels and generate POs for anything at or below
         its reorder point.
+
+        Args:
+            db: Optional SQLAlchemy session to persist stock changes to DB.
 
         Returns:
             List of PurchaseOrder objects (may be empty).
@@ -213,6 +268,10 @@ class InventoryAgent:
             errors = self._validate_pos(pos, spec)
 
             if not errors:
+                # Persist stock changes to DB if session provided
+                if db:
+                    for material in self._stock.keys():
+                        self._save_stock_to_db(db, material, self._stock[material])
                 return pos
 
             labeled = [f"[attempt {attempt + 1}] {e}" for e in errors]

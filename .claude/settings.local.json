@@ -37,7 +37,8 @@
       "Read(//mnt/c/Users/jonko/**)",
       "Read(//c/Users/jonko/Downloads/**)",
       "Read(//c//**)",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(alembic init:*)"
     ]
   }
 }

@@ -44,6 +44,9 @@ def client():
     db_module.engine = test_engine
     db_module.SessionLocal = TestingSessionLocal
 
+    # Create all tables before running tests
+    Base.metadata.create_all(bind=test_engine)
+
     from main import app
     with TestClient(app) as c:
         yield c

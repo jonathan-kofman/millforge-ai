@@ -32,7 +32,10 @@ _directory = SupplierDirectory()
     response_model=MaterialConsumptionResponse,
     summary="Consume material stock from a scheduled production run",
 )
-async def consume_stock(req: InventoryConsumeRequest) -> MaterialConsumptionResponse:
+async def consume_stock(
+    req: InventoryConsumeRequest,
+    db: Session = Depends(get_db),
+) -> MaterialConsumptionResponse:
     """
     Deduct material consumption from inventory based on a set of production orders.
 
@@ -40,7 +43,7 @@ async def consume_stock(req: InventoryConsumeRequest) -> MaterialConsumptionResp
     """
     logger.info("Inventory consume: schedule_id=%s orders=%d", req.schedule_id, len(req.orders))
     try:
-        result = _inventory.consume_from_schedule(req.orders, req.schedule_id)
+        result = _inventory.consume_from_schedule(req.orders, req.schedule_id, db=db)
     except Exception as e:
         logger.error("Inventory consume error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Inventory agent error")
@@ -74,7 +77,7 @@ async def get_inventory_status() -> InventoryStatusResponse:
     response_model=ReorderResponse,
     summary="Check reorder points and generate purchase orders",
 )
-async def trigger_reorder() -> ReorderResponse:
+async def trigger_reorder(db: Session = Depends(get_db)) -> ReorderResponse:
     """
     Inspect all stock levels.  For each material at or below its reorder point,
     generate a purchase order and update the stock ledger.
@@ -84,7 +87,7 @@ async def trigger_reorder() -> ReorderResponse:
     """
     logger.info("Reorder check triggered")
     try:
-        pos = _inventory.check_reorder_points()
+        pos = _inventory.check_reorder_points(db=db)
     except Exception as e:
         logger.error("Reorder check error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Inventory reorder error")
@@ -123,7 +126,7 @@ async def reorder_with_suppliers(
     """
     logger.info("Reorder-with-suppliers check (lat=%s, lng=%s)", lat, lng)
     try:
-        pos = _inventory.check_reorder_points()
+        pos = _inventory.check_reorder_points(db=db)
     except Exception as e:
         logger.error("Reorder check error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Inventory reorder error")

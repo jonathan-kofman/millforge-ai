@@ -214,6 +214,20 @@ class JobFeedbackRecord(Base):
         return f"<JobFeedbackRecord {self.canonical_id} provenance={self.data_provenance}>"
 
 
+class InventoryStock(Base):
+    """Current stock level for each material — source of truth persisted to DB."""
+
+    __tablename__ = "inventory_stock"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    material: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    quantity_kg: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    def __repr__(self) -> str:
+        return f"<InventoryStock material={self.material} qty={self.quantity_kg} kg>"
+
+
 class Supplier(Base):
     """US metal/materials supplier record."""
 
