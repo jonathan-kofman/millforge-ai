@@ -82,14 +82,16 @@ export default function LightsOutWidget() {
           })}
         </div>
 
-        {/* Legend */}
+        {/* Legend — one entry per unique label */}
         <div className="flex-shrink-0 flex flex-row sm:flex-col gap-3 text-xs">
-          {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-            <div key={k} className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${v.dot}`} />
-              <span className={v.text}>{v.label}</span>
-            </div>
-          ))}
+          {Object.values(STATUS_CONFIG)
+            .filter((v, i, arr) => arr.findIndex(x => x.label === v.label) === i)
+            .map(v => (
+              <div key={v.label} className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${v.dot}`} />
+                <span className={v.text}>{v.label}</span>
+              </div>
+            ))}
         </div>
       </div>
     </div>
