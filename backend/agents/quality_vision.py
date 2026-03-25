@@ -205,14 +205,16 @@ class QualityVisionAgent:
         """
         Inspect a part image and return a quality assessment.
 
-        Retries up to MAX_RETRIES times if validation fails.
+        Retries up to MAX_RETRIES times if validation fails (ONNX mode only;
+        heuristic is deterministic so a single attempt is sufficient).
         Returns the best result with validation_failures populated on hard failure.
         """
         spec = {"image_url": image_url, "material": material}
         failures: List[str] = []
         best_result: Optional[InspectionResult] = None
 
-        for attempt in range(self.MAX_RETRIES):
+        max_attempts = self.MAX_RETRIES if self._session is not None else 1
+        for attempt in range(max_attempts):
             result = self._do_inspect(image_url, material)
             errors = self._validate(result, spec)
 

@@ -3,7 +3,9 @@
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -16,10 +18,16 @@ from models.schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
+limiter = Limiter(key_func=get_remote_address)
+
+import os as _os
+_REGISTER_LIMIT = _os.getenv("AUTH_REGISTER_RATE_LIMIT", "10/hour")
+_LOGIN_LIMIT    = _os.getenv("AUTH_LOGIN_RATE_LIMIT",    "20/hour")
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-async def register(req: RegisterRequest, db: Session = Depends(get_db)) -> RegisterResponse:
+@limiter.limit(_REGISTER_LIMIT)
+async def register(request: Request, req: RegisterRequest, db: Session = Depends(get_db)) -> RegisterResponse:
     """
     Register a new user account.
 
@@ -55,7 +63,8 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)) -> Regis
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
+@limiter.limit(_LOGIN_LIMIT)
+async def login(request: Request, req: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
     """
     Authenticate with email and password, receive a JWT access token.
     """

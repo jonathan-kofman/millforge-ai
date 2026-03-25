@@ -20,7 +20,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from statistics import mean, stdev
 from typing import Dict, List, Optional
 
@@ -132,7 +132,7 @@ class AnomalyDetector:
 
     def _rule_detect(self, orders: List[Dict]) -> List[Anomaly]:
         anomalies: List[Anomaly] = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # --- duplicate IDs ---
         seen_ids: Dict[str, int] = {}

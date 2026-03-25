@@ -4,7 +4,7 @@ Tests for the NLSchedulerAgent and /api/schedule/nl endpoint.
 
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -18,7 +18,7 @@ from agents.nl_scheduler import NLSchedulerAgent
 # ---------------------------------------------------------------------------
 
 def _future(hours: int) -> str:
-    return (datetime.utcnow() + timedelta(hours=hours)).isoformat() + "Z"
+    return (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=hours)).isoformat() + "Z"
 
 
 MIXED_ORDERS = [

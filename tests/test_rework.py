@@ -4,7 +4,7 @@ Tests for the POST /api/schedule/rework endpoint.
 
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -19,7 +19,7 @@ from models.schemas import ReworkItem
 # ---------------------------------------------------------------------------
 
 def _future(hours: int) -> str:
-    return (datetime.utcnow() + timedelta(hours=hours)).isoformat() + "Z"
+    return (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=hours)).isoformat() + "Z"
 
 
 def _make_item(**kwargs) -> dict:
@@ -71,26 +71,26 @@ class TestItemToOrder:
         item = ReworkItem(**_make_item(defect_severity="critical"))
         order, _ = _item_to_order(item)
         # Should be approximately 24h from now (allow 5s tolerance)
-        expected = datetime.utcnow() + timedelta(hours=24)
+        expected = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=24)
         diff = abs((order.due_date - expected).total_seconds())
         assert diff < 5
 
     def test_default_due_date_major_is_48h(self):
         item = ReworkItem(**_make_item(defect_severity="major"))
         order, _ = _item_to_order(item)
-        expected = datetime.utcnow() + timedelta(hours=48)
+        expected = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=48)
         diff = abs((order.due_date - expected).total_seconds())
         assert diff < 5
 
     def test_default_due_date_minor_is_72h(self):
         item = ReworkItem(**_make_item(defect_severity="minor"))
         order, _ = _item_to_order(item)
-        expected = datetime.utcnow() + timedelta(hours=72)
+        expected = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=72)
         diff = abs((order.due_date - expected).total_seconds())
         assert diff < 5
 
     def test_explicit_due_date_respected(self):
-        explicit = datetime.utcnow() + timedelta(hours=10)
+        explicit = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=10)
         item = ReworkItem(**_make_item(defect_severity="critical", due_date=explicit))
         order, _ = _item_to_order(item)
         diff = abs((order.due_date - explicit).total_seconds())

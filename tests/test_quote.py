@@ -3,7 +3,7 @@ HTTP-level tests for the /api/quote endpoint.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ def test_quote_total_equals_unit_times_quantity(client):
 def test_quote_valid_until_in_future(client):
     data = post_quote(client).json()
     valid_until = datetime.fromisoformat(data["valid_until"])
-    assert valid_until > datetime.utcnow()
+    assert valid_until > datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def test_quote_notes_mention_lead_time(client):
@@ -142,7 +142,7 @@ def test_discount_note_present_for_large_order(client):
 # ---------------------------------------------------------------------------
 
 def test_quote_with_explicit_due_date(client):
-    due = (datetime.utcnow() + timedelta(days=60)).isoformat()
+    due = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=60)).isoformat()
     resp = post_quote(client, {**VALID_PAYLOAD, "due_date": due})
     assert resp.status_code == 200
 

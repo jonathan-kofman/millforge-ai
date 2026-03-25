@@ -12,7 +12,7 @@ Severity → complexity multiplier:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict
 
 from fastapi import APIRouter, HTTPException
@@ -50,7 +50,7 @@ def _item_to_order(item: ReworkItem) -> tuple[Order, float]:
         else item.due_date
     )
     if due is None:
-        due = datetime.utcnow() + timedelta(hours=deadline_hours)
+        due = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=deadline_hours)
 
     order = Order(
         order_id=_rework_order_id(item.order_id),
@@ -102,7 +102,7 @@ async def schedule_rework(req: ReworkRequest) -> ReworkScheduleResponse:
         orders.append(order)
         complexity_boosts[order.order_id] = multiplier
 
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc).replace(tzinfo=None)
     try:
         schedule = _sa.optimize(orders, start_time=start_time)
     except Exception as e:

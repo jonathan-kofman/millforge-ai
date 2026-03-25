@@ -15,7 +15,7 @@ Run with: pytest tests/test_e2e.py -v
 
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 # Realistic order set
 # ---------------------------------------------------------------------------
 
-NOW = (datetime.utcnow() + timedelta(seconds=1)).isoformat() + "Z"
+NOW = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=1)).isoformat() + "Z"
 
 ORDERS = [
     {
@@ -34,7 +34,7 @@ ORDERS = [
         "material": "steel",
         "quantity": 500,
         "dimensions": "200x100x10mm",
-        "due_date": (datetime.utcnow() + timedelta(hours=48)).isoformat() + "Z",
+        "due_date": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=48)).isoformat() + "Z",
         "priority": 2,
         "complexity": 1.0,
     },
@@ -43,7 +43,7 @@ ORDERS = [
         "material": "aluminum",
         "quantity": 200,
         "dimensions": "150x75x5mm",
-        "due_date": (datetime.utcnow() + timedelta(hours=24)).isoformat() + "Z",
+        "due_date": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=24)).isoformat() + "Z",
         "priority": 1,
         "complexity": 1.0,
     },
@@ -52,7 +52,7 @@ ORDERS = [
         "material": "titanium",
         "quantity": 50,
         "dimensions": "300x200x15mm",
-        "due_date": (datetime.utcnow() + timedelta(hours=72)).isoformat() + "Z",
+        "due_date": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=72)).isoformat() + "Z",
         "priority": 3,
         "complexity": 1.5,
     },
@@ -61,7 +61,7 @@ ORDERS = [
         "material": "steel",
         "quantity": 300,
         "dimensions": "100x50x8mm",
-        "due_date": (datetime.utcnow() + timedelta(hours=36)).isoformat() + "Z",
+        "due_date": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=36)).isoformat() + "Z",
         "priority": 2,
         "complexity": 1.0,
     },
@@ -70,7 +70,7 @@ ORDERS = [
         "material": "copper",
         "quantity": 100,
         "dimensions": "80x40x3mm",
-        "due_date": (datetime.utcnow() + timedelta(hours=20)).isoformat() + "Z",
+        "due_date": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=20)).isoformat() + "Z",
         "priority": 1,
         "complexity": 1.0,
     },
@@ -195,7 +195,7 @@ class TestE2EFlow:
         r = client.post(
             "/api/energy/estimate",
             json={
-                "start_time": (datetime.utcnow() + timedelta(hours=2)).isoformat(),
+                "start_time": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)).isoformat(),
                 "duration_hours": 4.0,
                 "material": "titanium",
             },

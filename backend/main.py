@@ -7,8 +7,11 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 load_dotenv()
 
@@ -80,6 +83,11 @@ async def lifespan(app: FastAPI):
 
 
 # ---------------------------------------------------------------------------
+# Rate limiter (applied to auth endpoints to prevent brute-force)
+# ---------------------------------------------------------------------------
+limiter = Limiter(key_func=get_remote_address)
+
+# ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 app = FastAPI(
@@ -111,6 +119,9 @@ if _PROD_FRONTEND not in allowed_origins:
     allowed_origins.append(_PROD_FRONTEND)
 if _frontend_url and _frontend_url not in allowed_origins:
     allowed_origins.append(_frontend_url)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

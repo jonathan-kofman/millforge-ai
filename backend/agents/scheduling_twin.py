@@ -8,7 +8,7 @@ Narrow predict API: predict_setup_time(), predict_completion(), predict_on_time_
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from agents.scheduler import BASE_SETUP_MINUTES, SETUP_MATRIX, THROUGHPUT
@@ -77,7 +77,7 @@ class SchedulingTwin:
     ) -> dict:
         """Predict when a job will complete given its parameters."""
         if start_time is None:
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         throughput = THROUGHPUT.get(material.lower(), 3.0)
         processing_hours = (quantity / throughput) * complexity

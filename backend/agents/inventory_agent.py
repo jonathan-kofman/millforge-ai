@@ -6,6 +6,7 @@ schedules, and generates purchase orders when stock hits reorder points.
 """
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Callable
@@ -149,6 +150,7 @@ class InventoryAgent:
         self._stock: Dict[str, float] = dict(initial_stock or INITIAL_STOCK)
         self._po_counter = 0
         self._db_factory = db_factory
+        self._lock = threading.Lock()
         logger.info("InventoryAgent initialized: %s", self._stock)
 
     # ------------------------------------------------------------------
@@ -214,7 +216,8 @@ class InventoryAgent:
         best: Optional[MaterialConsumption] = None
 
         for attempt in range(self.MAX_RETRIES):
-            result = self._do_consume(schedule_orders, schedule_id)
+            with self._lock:
+                result = self._do_consume(schedule_orders, schedule_id)
             errors = self._validate_consumption(result, spec)
 
             if not errors:
@@ -264,7 +267,8 @@ class InventoryAgent:
         best: Optional[List[PurchaseOrder]] = None
 
         for attempt in range(self.MAX_RETRIES):
-            pos = self._do_reorder()
+            with self._lock:
+                pos = self._do_reorder()
             errors = self._validate_pos(pos, spec)
 
             if not errors:

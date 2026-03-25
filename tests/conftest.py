@@ -8,6 +8,12 @@ auth + request handlers within one test) share the same in-memory store.
 
 import sys
 import os
+
+# Disable rate limiting during tests — TestClient uses the same IP so
+# the 10/hour register limit would be exhausted after 10 tests.
+os.environ.setdefault("AUTH_REGISTER_RATE_LIMIT", "10000/hour")
+os.environ.setdefault("AUTH_LOGIN_RATE_LIMIT", "10000/hour")
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))

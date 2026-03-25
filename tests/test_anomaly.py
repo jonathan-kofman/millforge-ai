@@ -4,7 +4,7 @@ Tests for the AnomalyDetector agent and /api/anomaly/detect endpoint.
 
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -18,11 +18,11 @@ from agents.anomaly_detector import AnomalyDetector
 # ---------------------------------------------------------------------------
 
 def _future(hours: int) -> str:
-    return (datetime.utcnow() + timedelta(hours=hours)).isoformat() + "Z"
+    return (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=hours)).isoformat() + "Z"
 
 
 def _past(hours: int) -> str:
-    return (datetime.utcnow() - timedelta(hours=hours)).isoformat() + "Z"
+    return (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)).isoformat() + "Z"
 
 
 CLEAN_ORDERS = [
