@@ -95,6 +95,10 @@ _cors_base = os.getenv(
 ).split(",")
 _frontend_url = os.getenv("FRONTEND_URL", "").strip()
 allowed_origins = [o.strip() for o in _cors_base if o.strip()]
+# Always include the production Vercel URL explicitly — do not rely solely on env var
+_PROD_FRONTEND = "https://millforge-ai.vercel.app"
+if _PROD_FRONTEND not in allowed_origins:
+    allowed_origins.append(_PROD_FRONTEND)
 if _frontend_url and _frontend_url not in allowed_origins:
     allowed_origins.append(_frontend_url)
 
