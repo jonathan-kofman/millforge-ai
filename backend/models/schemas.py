@@ -731,6 +731,85 @@ class SupplierMaterialsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# /api/orders/import-csv
+# ---------------------------------------------------------------------------
+
+class CsvRowPreview(BaseModel):
+    row_number: int
+    order_id: Optional[str] = None
+    material: str
+    quantity: int
+    due_date: datetime
+    dimensions: str
+    priority: int
+    complexity: float
+
+
+class CsvRowError(BaseModel):
+    row_number: int
+    raw_data: Dict[str, str]
+    error: str
+
+
+class CsvImportPreviewResponse(BaseModel):
+    preview_token: str
+    total_rows: int
+    valid_count: int
+    error_count: int
+    column_mapping: Dict[str, str]
+    valid_rows: List[CsvRowPreview]
+    error_rows: List[CsvRowError]
+
+
+class CsvImportConfirmRequest(BaseModel):
+    preview_token: str
+
+
+class CsvImportConfirmResponse(BaseModel):
+    imported_count: int
+    order_ids: List[str]
+    skipped_count: int
+
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# /api/onboarding
+# ---------------------------------------------------------------------------
+
+class ShopConfigRequest(BaseModel):
+    shop_name: Optional[str] = None
+    machine_count: Optional[int] = Field(None, ge=1, le=500)
+    materials: Optional[List[str]] = None
+    setup_times: Optional[Dict[str, Any]] = None
+    baseline_otd: Optional[float] = Field(None, ge=0.0, le=100.0)
+    scheduling_method: Optional[str] = None
+    weekly_order_volume: Optional[int] = Field(None, ge=0)
+    wizard_step: int = Field(0, ge=0, le=3)
+
+
+class ShopConfigResponse(BaseModel):
+    id: int
+    user_id: int
+    shop_name: Optional[str] = None
+    machine_count: Optional[int] = None
+    materials: List[str] = []
+    setup_times: Dict[str, Any] = {}
+    baseline_otd: Optional[float] = None
+    scheduling_method: Optional[str] = None
+    weekly_order_volume: Optional[int] = None
+    wizard_step: int
+    is_complete: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class OnboardingStatusResponse(BaseModel):
+    configured: bool
+    is_complete: bool
+    wizard_step: int
+    config: Optional[ShopConfigResponse] = None
+
+
 # Generic error response
 # ---------------------------------------------------------------------------
 

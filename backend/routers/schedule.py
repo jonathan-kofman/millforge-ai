@@ -12,8 +12,13 @@ import time
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
+from sqlalchemy.orm import Session
 
+from database import get_db
+from db_models import User, ScheduleRun
+from auth.dependencies import get_current_user
 from models.schemas import (
     ScheduleRequest, ScheduleResponse, ScheduleSummary,
     ScheduledOrderOutput, OrderInput, BenchmarkResponse, BenchmarkEntry,
@@ -23,6 +28,7 @@ from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT, BASE
 from agents.sa_scheduler import SAScheduler
 from agents.benchmark_data import get_benchmark_orders, DATASET_DESCRIPTION, ORDER_COUNT
 from agents.energy_optimizer import EnergyOptimizer
+from agents.pdf_exporter import build_schedule_pdf
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Schedule"])
@@ -310,6 +316,43 @@ async def benchmark_schedule(
         machine_count=MACHINE_COUNT,
         dataset_description=DATASET_DESCRIPTION,
         pressure=pressure,
+    )
+
+
+@router.get("/schedule/export-pdf", summary="Export a saved schedule run as a PDF")
+async def export_schedule_pdf(
+    schedule_id: int = Query(..., description="ScheduleRun ID from a previous /api/orders/schedule call"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """
+    Render a saved ScheduleRun as a production-ready PDF.
+
+    Returns a PDF file with:
+    - Header (run ID, algorithm, timestamp)
+    - KPI summary table (on-time rate, makespan, utilization)
+    - Gantt chart with material-coded bars per machine
+    - Order details table
+    """
+    run = (
+        db.query(ScheduleRun)
+        .filter(ScheduleRun.id == schedule_id, ScheduleRun.created_by_id == user.id)
+        .first()
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail=f"ScheduleRun {schedule_id} not found")
+
+    pdf_bytes = build_schedule_pdf(
+        schedule_run_id=run.id,
+        algorithm=run.algorithm,
+        summary=run.summary,
+        orders=run.scheduled_orders,
+        generated_at=run.created_at,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=schedule_{run.id}.pdf"},
     )
 
 

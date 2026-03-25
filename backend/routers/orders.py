@@ -10,7 +10,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -18,10 +19,13 @@ from db_models import User, OrderRecord, ScheduleRun
 from auth.dependencies import get_current_user
 from agents.scheduler import Scheduler, Order
 from agents.sa_scheduler import SAScheduler
+from agents.csv_importer import parse_csv, create_preview, consume_preview, CSV_TEMPLATE
 from models.schemas import (
     OrderCreateRequest, OrderResponse, OrderUpdateRequest,
     OrderListResponse, OrderScheduleResponse, ScheduleSummary, ScheduledOrderOutput,
     ScheduleHistoryItem, ScheduleHistoryResponse,
+    CsvRowPreview, CsvRowError, CsvImportPreviewResponse,
+    CsvImportConfirmRequest, CsvImportConfirmResponse,
 )
 
 # Instantiated once at module level — stateless between calls
@@ -137,6 +141,107 @@ async def list_schedule_history(
     return ScheduleHistoryResponse(total=total, runs=items)
 
 
+@router.get("/import-csv/template", summary="Download CSV template for bulk order import")
+async def import_csv_template() -> Response:
+    """Return a ready-to-fill CSV template with all supported columns."""
+    return Response(
+        content=CSV_TEMPLATE,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=millforge_orders_template.csv"},
+    )
+
+
+@router.post(
+    "/import-csv",
+    response_model=CsvImportPreviewResponse,
+    summary="Preview a CSV bulk order upload",
+)
+async def import_csv_preview(
+    file: UploadFile = File(..., description="CSV file with order data"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> CsvImportPreviewResponse:
+    """
+    Parse and validate a CSV file.  Returns a preview with valid rows and any
+    error rows.  Use the returned ``preview_token`` with
+    ``POST /api/orders/import-csv/confirm`` to commit the valid rows.
+
+    Required CSV columns (or recognised aliases):
+    - **material** — steel | aluminum | titanium | copper
+    - **quantity** — positive integer
+    - **due_date** — YYYY-MM-DD or MM/DD/YYYY
+
+    Optional: order_id, dimensions, priority (1–10), complexity (0.1–5.0)
+    """
+    content = await file.read()
+    try:
+        column_mapping, valid_rows, error_rows = parse_csv(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    token = create_preview(column_mapping, valid_rows, error_rows)
+    logger.info(
+        f"CSV preview: user={user.email} valid={len(valid_rows)} errors={len(error_rows)} token={token}"
+    )
+    return CsvImportPreviewResponse(
+        preview_token=token,
+        total_rows=len(valid_rows) + len(error_rows),
+        valid_count=len(valid_rows),
+        error_count=len(error_rows),
+        column_mapping=column_mapping,
+        valid_rows=[CsvRowPreview(**r) for r in valid_rows],
+        error_rows=[CsvRowError(**r) for r in error_rows],
+    )
+
+
+@router.post(
+    "/import-csv/confirm",
+    response_model=CsvImportConfirmResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Commit a previewed CSV import",
+)
+async def import_csv_confirm(
+    req: CsvImportConfirmRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> CsvImportConfirmResponse:
+    """
+    Commit the valid rows from a previous ``POST /api/orders/import-csv`` call.
+    The ``preview_token`` is single-use — it is consumed on success.
+    Error rows from the preview are skipped automatically.
+    """
+    preview = consume_preview(req.preview_token)
+    if preview is None:
+        raise HTTPException(status_code=404, detail="Preview token not found or already used")
+
+    order_ids = []
+    for row in preview["valid_rows"]:
+        oid = row["order_id"] or f"ORD-{uuid.uuid4().hex[:8].upper()}"
+        rec = OrderRecord(
+            order_id=oid,
+            material=row["material"],
+            dimensions=row["dimensions"],
+            quantity=row["quantity"],
+            priority=row["priority"],
+            complexity=row["complexity"],
+            due_date=row["due_date"],
+            created_by_id=user.id,
+        )
+        db.add(rec)
+        order_ids.append(oid)
+
+    db.commit()
+    logger.info(
+        f"CSV import confirmed: user={user.email} imported={len(order_ids)} "
+        f"skipped={len(preview['error_rows'])}"
+    )
+    return CsvImportConfirmResponse(
+        imported_count=len(order_ids),
+        order_ids=order_ids,
+        skipped_count=len(preview["error_rows"]),
+    )
+
+
 @router.get("/{order_id}", response_model=OrderResponse)
 async def get_order(
     order_id: str,
@@ -238,12 +343,31 @@ async def schedule_pending_orders(
         "utilization_percent": round(schedule.utilization_percent, 1),
     }
 
+    schedule_rows = [
+        {
+            "order_id": s.order.order_id,
+            "machine_id": s.machine_id,
+            "material": s.order.material,
+            "quantity": s.order.quantity,
+            "setup_start": s.setup_start.isoformat(),
+            "processing_start": s.processing_start.isoformat(),
+            "completion_time": s.completion_time.isoformat(),
+            "setup_minutes": s.setup_minutes,
+            "processing_minutes": s.processing_minutes,
+            "on_time": s.on_time,
+            "lateness_hours": s.lateness_hours,
+            "due_date": s.order.due_date.isoformat(),
+        }
+        for s in schedule.scheduled_orders
+    ]
+
     run = ScheduleRun(
         algorithm=algorithm,
         order_ids_json=json.dumps([r.order_id for r in records]),
         summary_json=json.dumps(summary_data),
         on_time_rate=schedule.on_time_rate,
         makespan_hours=schedule.makespan_hours,
+        schedule_json=json.dumps(schedule_rows),
         created_by_id=user.id,
     )
     db.add(run)

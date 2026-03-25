@@ -210,12 +210,33 @@ export default function OrdersView({ token }) {
               </table>
             </div>
           </details>
-          <button
-            className="mt-3 text-xs text-gray-600 hover:text-gray-400"
-            onClick={() => setScheduleResult(null)}
-          >
-            Dismiss
-          </button>
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-forge-500/20 text-forge-400 hover:bg-forge-500/30 transition-colors font-medium"
+              onClick={async () => {
+                const res = await fetch(
+                  `${API_BASE}/api/schedule/export-pdf?schedule_id=${scheduleResult.schedule_run_id}`,
+                  { headers: { Authorization: `Bearer ${token}` } }
+                );
+                if (!res.ok) return;
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `schedule_${scheduleResult.schedule_run_id}.pdf`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              ⬇ Export PDF
+            </button>
+            <button
+              className="text-xs text-gray-600 hover:text-gray-400"
+              onClick={() => setScheduleResult(null)}
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 

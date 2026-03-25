@@ -9,6 +9,7 @@ import BenchmarkDemo from "./components/BenchmarkDemo";
 import LightsOutWidget from "./components/LightsOutWidget";
 import EnergyWidget from "./components/EnergyWidget";
 import SupplierMap from "./components/SupplierMap";
+import OnboardingWizard from "./components/OnboardingWizard";
 import { API_BASE } from "./config";
 
 const PUBLIC_TABS = [
@@ -26,12 +27,26 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("quote");
   const [showAuth, setShowAuth] = useState(false);
   const [supplierStats, setSupplierStats] = useState(null);
+  const [onboardingStatus, setOnboardingStatus] = useState(null);
+  const [showWizard, setShowWizard] = useState(false);
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem("millforge_user");
       return stored ? JSON.parse(stored) : null;
     } catch { return null; }
   });
+
+  const fetchOnboardingStatus = async (token) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/onboarding/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setOnboardingStatus(data);
+      if (!data.is_complete) setShowWizard(true);
+    } catch {}
+  };
 
   const handleAuthSuccess = (data) => {
     const userData = {
@@ -44,10 +59,13 @@ export default function App() {
     localStorage.setItem("millforge_user", JSON.stringify(userData));
     setShowAuth(false);
     setActiveTab("orders");
+    fetchOnboardingStatus(data.access_token);
   };
 
   const handleLogout = () => {
     setUser(null);
+    setOnboardingStatus(null);
+    setShowWizard(false);
     localStorage.removeItem("millforge_user");
     setActiveTab("quote");
   };
@@ -58,6 +76,13 @@ export default function App() {
       .then((d) => d && setSupplierStats(d))
       .catch(() => {});
   }, []);
+
+  // Re-fetch onboarding status for returning users (already logged in)
+  useEffect(() => {
+    if (user?.token && onboardingStatus === null) {
+      fetchOnboardingStatus(user.token);
+    }
+  }, [user]);
 
   const TABS = [...PUBLIC_TABS, ...(user ? AUTH_TABS : [])];
 
@@ -281,7 +306,22 @@ export default function App() {
         {activeTab === "schedule" && <ScheduleViewer />}
         {activeTab === "vision"   && <VisionDemo />}
         {activeTab === "contact"  && <ContactForm />}
-        {activeTab === "orders"   && user && <OrdersView token={user.token} />}
+        {activeTab === "orders"   && user && (
+          <>
+            {onboardingStatus?.configured && !onboardingStatus?.is_complete && !showWizard && (
+              <div className="mb-5 flex items-center justify-between bg-forge-500/10 border border-forge-500/30 rounded-lg px-4 py-3">
+                <p className="text-sm text-forge-400">Your shop setup is incomplete.</p>
+                <button
+                  className="text-xs font-medium text-forge-400 hover:text-forge-300 border border-forge-500/40 rounded px-3 py-1.5 transition-colors"
+                  onClick={() => setShowWizard(true)}
+                >
+                  Complete setup →
+                </button>
+              </div>
+            )}
+            <OrdersView token={user.token} />
+          </>
+        )}
       </main>
 
       {/* ── Footer ── */}
@@ -296,6 +336,21 @@ export default function App() {
         <AuthModal
           onSuccess={handleAuthSuccess}
           onClose={() => setShowAuth(false)}
+        />
+      )}
+
+      {/* ── Onboarding Wizard ── */}
+      {showWizard && user && (
+        <OnboardingWizard
+          token={user.token}
+          onComplete={() => {
+            setShowWizard(false);
+            setOnboardingStatus((s) => ({ ...s, is_complete: true, configured: true }));
+          }}
+          onSkip={() => {
+            setShowWizard(false);
+            setOnboardingStatus((s) => ({ ...s, configured: true }));
+          }}
         />
       )}
     </div>

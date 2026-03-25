@@ -79,6 +79,8 @@ class ScheduleRun(Base):
     summary_json: Mapped[str] = mapped_column(Text, nullable=False)
     on_time_rate: Mapped[float] = mapped_column(Float, nullable=False)
     makespan_hours: Mapped[float] = mapped_column(Float, nullable=False)
+    # JSON-serialised list of ScheduledOrderOutput dicts — used for PDF export
+    schedule_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )
@@ -91,6 +93,12 @@ class ScheduleRun(Base):
     @property
     def summary(self) -> dict:
         return json.loads(self.summary_json)
+
+    @property
+    def scheduled_orders(self) -> List[dict]:
+        if self.schedule_json:
+            return json.loads(self.schedule_json)
+        return []
 
 
 class InspectionRecord(Base):
@@ -116,6 +124,44 @@ class InspectionRecord(Base):
     @property
     def defects(self) -> List[str]:
         return json.loads(self.defects_json)
+
+
+class ShopConfig(Base):
+    """Per-user shop configuration collected during onboarding wizard."""
+
+    __tablename__ = "shop_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True
+    )
+    shop_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    machine_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # JSON list of material strings e.g. ["steel", "aluminum"]
+    materials_json: Mapped[str] = mapped_column(Text, default="[]")
+    setup_times_json: Mapped[str] = mapped_column(Text, default="{}")
+    baseline_otd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    scheduling_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    weekly_order_volume: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # wizard_step: 0 = not started, 1/2/3 = partial, 3 = complete
+    wizard_step: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    @property
+    def materials(self) -> List[str]:
+        return json.loads(self.materials_json)
+
+    @property
+    def setup_times(self) -> dict:
+        return json.loads(self.setup_times_json)
+
+    @property
+    def is_complete(self) -> bool:
+        return bool(self.shop_name and self.machine_count and self.wizard_step >= 3)
+
+    def __repr__(self) -> str:
+        return f"<ShopConfig user_id={self.user_id} step={self.wizard_step}>"
 
 
 class ContactSubmission(Base):
