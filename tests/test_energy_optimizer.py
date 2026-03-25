@@ -198,17 +198,17 @@ class TestEnergyValidation:
 def test_profile_has_data_source_field(optimizer, off_peak_time):
     """EnergyProfile must expose data_source (either real or fallback)."""
     profile = optimizer.estimate_energy_cost(off_peak_time, 1.0, "steel")
-    assert profile.data_source in ("PJM_realtime", "simulated_fallback")
+    assert profile.data_source in ("EIA_realtime", "simulated_fallback")
 
 
 def test_simulated_fallback_is_default_without_network(optimizer, off_peak_time, monkeypatch):
-    """When gridstatus network call fails, data_source should be simulated_fallback."""
+    """When EIA fetch fails, data_source should be simulated_fallback."""
     import agents.energy_optimizer as eo_module
 
     def mock_fetch():
         return None  # simulate network failure
 
-    monkeypatch.setattr(eo_module, "_fetch_pjm_lmp", mock_fetch)
+    monkeypatch.setattr(eo_module, "_fetch_real_time_price", mock_fetch)
     # Expire cache to force re-fetch
     eo_module._rates_cache["fetched_at"] = None
     optimizer._refresh_rates()
@@ -218,7 +218,7 @@ def test_simulated_fallback_is_default_without_network(optimizer, off_peak_time,
 
 
 def test_pjm_realtime_when_fetch_succeeds(optimizer, off_peak_time, monkeypatch):
-    """When fetch returns valid rates, data_source should be PJM_realtime."""
+    """When EIA fetch returns valid rates, data_source should be EIA_realtime."""
     import agents.energy_optimizer as eo_module
 
     fake_rates = [0.04 + i * 0.002 for i in range(24)]  # 24 valid $/kWh values
@@ -226,18 +226,17 @@ def test_pjm_realtime_when_fetch_succeeds(optimizer, off_peak_time, monkeypatch)
     def mock_fetch():
         return fake_rates
 
-    monkeypatch.setattr(eo_module, "_fetch_pjm_lmp", mock_fetch)
+    monkeypatch.setattr(eo_module, "_fetch_real_time_price", mock_fetch)
     eo_module._rates_cache["fetched_at"] = None  # expire cache
     optimizer._refresh_rates()
 
     profile = optimizer.estimate_energy_cost(off_peak_time, 1.0, "steel")
-    assert profile.data_source == "PJM_realtime"
+    assert profile.data_source == "EIA_realtime"
 
 
 def test_cache_reuses_rates_within_ttl(monkeypatch):
     """Rates should not be re-fetched within the TTL window."""
     import agents.energy_optimizer as eo_module
-    import time as time_module
 
     call_count = {"n": 0}
 
@@ -245,8 +244,11 @@ def test_cache_reuses_rates_within_ttl(monkeypatch):
         call_count["n"] += 1
         return [0.05] * 24
 
-    monkeypatch.setattr(eo_module, "_fetch_pjm_lmp", counting_fetch)
-    eo_module._rates_cache["fetched_at"] = None  # start cold
+    monkeypatch.setattr(eo_module, "_fetch_real_time_price", counting_fetch)
+    # Save and restore full cache state so downstream tests aren't affected
+    monkeypatch.setitem(eo_module._rates_cache, "rates", eo_module._rates_cache["rates"])
+    monkeypatch.setitem(eo_module._rates_cache, "fetched_at", None)
+    monkeypatch.setitem(eo_module._rates_cache, "data_source", eo_module._rates_cache["data_source"])
 
     eo_module._get_hourly_rates()
     eo_module._get_hourly_rates()
@@ -257,8 +259,13 @@ def test_cache_reuses_rates_within_ttl(monkeypatch):
 
 def test_recommendation_threshold_is_relative(optimizer, monkeypatch):
     """Recommendation logic must use mean rate as threshold, not a hardcoded value."""
+    import agents.energy_optimizer as eo_module
+
     # All hours set to same value — no hour is above mean, so always favorable
     flat_rates = [0.05] * 24
+    # Patch the cache so _refresh_rates() returns flat rates instead of MOCK_HOURLY_RATES
+    monkeypatch.setitem(eo_module._rates_cache, "rates", flat_rates)
+    monkeypatch.setitem(eo_module._rates_cache, "data_source", "simulated_fallback")
     monkeypatch.setattr(optimizer, "hourly_rates", flat_rates)
     monkeypatch.setattr(optimizer, "data_source", "simulated_fallback")
 

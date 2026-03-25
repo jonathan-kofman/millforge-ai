@@ -157,12 +157,13 @@ app.include_router(onboarding_router)
 # ---------------------------------------------------------------------------
 
 def _energy_status() -> str:
-    """Return health label based on whether gridstatus is installed."""
-    try:
-        import gridstatus  # noqa: F401
-        return "real_grid_data"
-    except ImportError:
-        return "simulated_fallback"
+    """Return health label based on whether the EIA API is returning live data."""
+    from agents.energy_optimizer import _rates_cache
+    return (
+        "real_grid_data"
+        if _rates_cache.get("data_source") == "EIA_realtime"
+        else "simulated_fallback"
+    )
 
 
 @app.get("/", tags=["Health"])

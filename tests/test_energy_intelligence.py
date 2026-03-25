@@ -112,22 +112,22 @@ class TestNegativePricingWindows:
             assert key in result
 
     def test_simulated_fallback_has_no_negatives(self, opt):
-        with patch("agents.energy_optimizer._fetch_pjm_lmp_raw", return_value=None):
+        with patch("agents.energy_optimizer._fetch_real_time_price", return_value=None):
             result = opt.get_negative_pricing_windows()
         assert result["total_windows"] == 0
         assert result["data_source"] == "simulated_fallback"
 
     def test_live_negatives_detected(self, opt):
         mock_rates = [0.05] * 22 + [-0.02, -0.01]  # 2 negative hours
-        with patch("agents.energy_optimizer._fetch_pjm_lmp_raw", return_value=mock_rates):
+        with patch("agents.energy_optimizer._fetch_real_time_price", return_value=mock_rates):
             result = opt.get_negative_pricing_windows()
         assert result["total_windows"] == 2
         assert result["max_credit_usd_per_mwh"] > 0
-        assert result["data_source"] == "PJM_realtime"
+        assert result["data_source"] == "EIA_realtime"
 
     def test_windows_have_correct_structure(self, opt):
         mock_rates = [0.05] * 23 + [-0.03]
-        with patch("agents.energy_optimizer._fetch_pjm_lmp_raw", return_value=mock_rates):
+        with patch("agents.energy_optimizer._fetch_real_time_price", return_value=mock_rates):
             result = opt.get_negative_pricing_windows()
         w = result["windows"][0]
         assert "hour" in w
