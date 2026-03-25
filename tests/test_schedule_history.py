@@ -15,6 +15,7 @@ def _register_and_token(client, email="hist@example.com"):
         "email": email, "password": "password123", "name": "Hist User"
     })
     assert res.status_code == 201
+    client.cookies.clear()
     return res.json()["access_token"]
 
 

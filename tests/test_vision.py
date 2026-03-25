@@ -32,8 +32,14 @@ from agents.quality_vision import (
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def agent():
-    """Heuristic-mode agent (no model file)."""
+def agent(monkeypatch, tmp_path):
+    """Heuristic-mode agent (no model file).
+
+    Patches NEU_DET_MODEL_PATH to a non-existent path so QualityVisionAgent()
+    falls through to heuristic mode even when the real ONNX file is present.
+    """
+    import agents.quality_vision as qv_module
+    monkeypatch.setattr(qv_module, "NEU_DET_MODEL_PATH", str(tmp_path / "nonexistent.onnx"))
     return QualityVisionAgent()
 
 

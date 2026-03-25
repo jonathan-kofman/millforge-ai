@@ -23,6 +23,7 @@ def _register_and_token(client, email="pdfuser@example.com"):
         "email": email, "password": "password123", "name": "PDF Tester",
     })
     assert res.status_code == 201
+    client.cookies.clear()
     return res.json()["access_token"]
 
 

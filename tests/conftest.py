@@ -27,6 +27,22 @@ import database as db_module
 from database import Base
 
 
+def _make_heuristic_vision_agent():
+    """Return a QualityVisionAgent in heuristic mode (no ONNX model loaded).
+
+    Used by the test client fixture to prevent the real ONNX agent from trying
+    to download test image URLs during unit/integration tests.
+    """
+    from agents.quality_vision import QualityVisionAgent
+    a = QualityVisionAgent.__new__(QualityVisionAgent)
+    a._session = None
+    a._input_name = None
+    a._model_name = "heuristic"
+    a._model_map50 = None
+    a.MAX_RETRIES = 3
+    return a
+
+
 @pytest.fixture(scope="function")
 def client():
     """
@@ -54,9 +70,16 @@ def client():
     Base.metadata.create_all(bind=test_engine)
 
     from main import app
+
+    # Force heuristic vision mode so tests never try to download real image URLs
+    import routers.vision as _vision_mod
+    original_vision_agent = _vision_mod._vision_agent
+    _vision_mod._vision_agent = _make_heuristic_vision_agent()
+
     with TestClient(app) as c:
         yield c
 
+    _vision_mod._vision_agent = original_vision_agent
     db_module.engine = original_engine
     db_module.SessionLocal = original_session_local
     Base.metadata.drop_all(bind=test_engine)

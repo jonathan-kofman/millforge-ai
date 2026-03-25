@@ -70,7 +70,9 @@ class TestScheduleEnergyAnalysis:
         assert abs(result["total_energy_kwh"] - expected_kwh) < 1.0
 
     def test_carbon_uses_us_average_fallback(self, opt):
+        import agents.energy_optimizer as eo_module
         with patch("agents.energy_optimizer._fetch_carbon_intensity", return_value=None):
+            eo_module._carbon_cache["fetched_at"] = None  # force cache refresh
             orders = [_FakeScheduledOrder("titanium", 1.0)]
             result = opt.compute_schedule_energy_analysis(orders)
             expected_kwh = MACHINE_POWER_KW["titanium"] * 1.0

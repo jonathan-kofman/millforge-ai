@@ -15,6 +15,9 @@ def _register_and_token(client, email="user@example.com"):
         "email": email, "password": "password123", "name": "Test User"
     })
     assert res.status_code == 201
+    # Clear the session cookie so Bearer tokens aren't shadowed by the cookie jar
+    # when multiple users are registered in the same test.
+    client.cookies.clear()
     return res.json()["access_token"]
 
 
