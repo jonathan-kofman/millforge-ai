@@ -356,6 +356,34 @@ class Scheduler:
 
 
 # ---------------------------------------------------------------------------
+# Order validation and warnings
+# ---------------------------------------------------------------------------
+def check_order_warnings(orders: List[Order]) -> List[str]:
+    """
+    Generate warnings for orders that may warrant splitting.
+
+    Returns a list of warning strings for large orders that exceed
+    a practical machine-hour threshold (10,000 machine-hours).
+    """
+    warnings = []
+    MACHINE_HOUR_THRESHOLD = 10000
+
+    for order in orders:
+        if order.quantity > 10000:
+            throughput = THROUGHPUT.get(order.material.lower(), 3.0)
+            machine_hours = (order.quantity / throughput) * order.complexity
+            if machine_hours > MACHINE_HOUR_THRESHOLD:
+                msg = (
+                    f"{order.order_id} has quantity {order.quantity} — "
+                    f"at {order.material} throughput this is ~{machine_hours:.0f} machine-hours. "
+                    "Consider splitting into multiple orders."
+                )
+                warnings.append(msg)
+
+    return warnings
+
+
+# ---------------------------------------------------------------------------
 # Mock order data for demos and testing
 # ---------------------------------------------------------------------------
 def get_mock_orders() -> List[Order]:

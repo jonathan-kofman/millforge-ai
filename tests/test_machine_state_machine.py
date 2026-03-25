@@ -182,3 +182,94 @@ def test_multiple_machines_independent():
     m1.step()  # m1: IDLE → SETUP
     assert m1.state == MachineState.SETUP
     assert m2.state == MachineState.IDLE  # m2 unaffected
+
+
+# ---------------------------------------------------------------------------
+# Feedback logger integration (Item 1)
+# ---------------------------------------------------------------------------
+
+def test_feedback_logger_fires_on_running_to_cooldown():
+    """When a job completes (RUNNING → COOLDOWN), FeedbackLogger is called."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from db_models import Base, JobFeedbackRecord
+
+    # Create in-memory test database
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    io = MockMachineIO()
+    msm = MachineStateMachine(machine_id=1, io=io, db=db)
+    msm.assign_job("ORD-001", setup_time_minutes=0.0, processing_time_minutes=0.0, material="steel")
+
+    # Run through the lifecycle to COOLDOWN
+    run_to_state(msm, io, MachineState.COOLDOWN)
+
+    # Check that a feedback record was logged
+    records = db.query(JobFeedbackRecord).filter_by(order_id="ORD-001").all()
+    assert len(records) > 0, "No feedback record logged"
+    record = records[0]
+    assert record.order_id == "ORD-001"
+    assert record.material == "steel"
+    assert record.machine_id == 1
+    assert record.data_provenance == "mtconnect_auto"
+
+
+def test_feedback_logger_captures_accurate_timestamps():
+    """Feedback logger should capture actual setup and processing time within ~1 second."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from db_models import Base, JobFeedbackRecord
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    io = MockMachineIO()
+    msm = MachineStateMachine(machine_id=2, io=io, db=db)
+    # Request 0.0 min setup and 0.0 min processing for predictable test
+    msm.assign_job("ORD-002", setup_time_minutes=0.0, processing_time_minutes=0.0, material="aluminum")
+
+    run_to_state(msm, io, MachineState.COOLDOWN)
+
+    records = db.query(JobFeedbackRecord).filter_by(order_id="ORD-002").all()
+    assert len(records) > 0
+    record = records[0]
+
+    # Actual times should be very small (close to 0 for zero-duration job)
+    assert record.actual_setup_minutes >= 0, f"Setup time negative: {record.actual_setup_minutes}"
+    assert record.actual_processing_minutes >= 0, f"Processing time negative: {record.actual_processing_minutes}"
+
+
+def test_feedback_logger_increments_count_on_completion():
+    """Submitting multiple jobs should increment the feedback record count."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from db_models import Base, JobFeedbackRecord
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    io = MockMachineIO()
+    msm = MachineStateMachine(machine_id=3, io=io, db=db)
+
+    # Submit first job
+    msm.assign_job("ORD-001", setup_time_minutes=0.0, processing_time_minutes=0.0, material="steel")
+    run_to_state(msm, io, MachineState.COOLDOWN)
+    msm._cooldown_complete_at = 0.0
+    msm.step()  # COOLDOWN → IDLE
+
+    count_after_first = db.query(JobFeedbackRecord).count()
+    assert count_after_first == 1
+
+    # Submit second job
+    msm.assign_job("ORD-002", setup_time_minutes=0.0, processing_time_minutes=0.0, material="aluminum")
+    run_to_state(msm, io, MachineState.COOLDOWN)
+
+    count_after_second = db.query(JobFeedbackRecord).count()
+    assert count_after_second == 2

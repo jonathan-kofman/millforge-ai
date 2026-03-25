@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import datetime, timezone
 from enum import Enum, auto
 from typing import Optional, Protocol, runtime_checkable
 
@@ -108,6 +109,9 @@ class MachineStateMachine:
         self._processing_duration: float = 0.0
         self._setup_complete_at: Optional[float] = None
         self._cooldown_complete_at: Optional[float] = None
+        self._setup_start_wall: Optional[datetime] = None
+        self._run_start_wall: Optional[datetime] = None
+        self._order_material: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -118,6 +122,7 @@ class MachineStateMachine:
         job_id: str,
         setup_time_minutes: float,
         processing_time_minutes: float,
+        material: Optional[str] = None,
     ) -> None:
         """Assign a new job. Only valid when in IDLE state."""
         if self.state != MachineState.IDLE:
@@ -127,6 +132,7 @@ class MachineStateMachine:
         self._current_job_id = job_id
         self._setup_duration = setup_time_minutes * 60
         self._processing_duration = processing_time_minutes * 60
+        self._order_material = material
         logger.info(
             "Machine %d assigned job %s (setup=%.0fs run=%.0fs)",
             self.machine_id, job_id, self._setup_duration, self._processing_duration,
@@ -161,11 +167,13 @@ class MachineStateMachine:
 
     def _dispatch(self) -> MachineState:
         now = time.monotonic()
+        now_wall = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if self.state == MachineState.IDLE:
             if self._current_job_id is not None:
                 self.io.start_setup(self.machine_id, self._current_job_id)
                 self._setup_complete_at = now + self._setup_duration
+                self._setup_start_wall = now_wall
                 self._transition(MachineState.SETUP)
 
         elif self.state == MachineState.SETUP:
@@ -176,16 +184,19 @@ class MachineStateMachine:
             self.io.start_run(self.machine_id, self._current_job_id)
             if isinstance(self.io, MockMachineIO):
                 self.io.schedule_completion(self.machine_id, self._processing_duration)
+            self._run_start_wall = now_wall
             self._transition(MachineState.RUNNING)
 
         elif self.state == MachineState.RUNNING:
             if self.io.is_job_complete(self.machine_id):
                 self.io.stop(self.machine_id)
                 completed_job = self._current_job_id
+                completed_material = self._order_material
                 self._current_job_id = None
                 self._cooldown_complete_at = now + self.COOLDOWN_SECONDS
                 self._transition(MachineState.COOLDOWN)
                 logger.info("Machine %d completed job %s", self.machine_id, completed_job)
+                self._log_feedback(completed_job, completed_material, now_wall)
 
         elif self.state == MachineState.COOLDOWN:
             if self._cooldown_complete_at is not None and now >= self._cooldown_complete_at:
@@ -216,3 +227,39 @@ class MachineStateMachine:
             self.db.commit()
         except Exception as exc:
             logger.warning("Failed to log state transition for machine %d: %s", self.machine_id, exc)
+
+    def _log_feedback(self, job_id: str, material: Optional[str], completion_time: datetime) -> None:
+        """Log actual job performance to FeedbackLogger for self-calibration."""
+        if self.db is None or job_id is None or material is None:
+            return
+        if self._setup_start_wall is None or self._run_start_wall is None:
+            return
+
+        try:
+            from agents.feedback_logger import FeedbackLogger
+            from agents.scheduler import BASE_SETUP_MINUTES
+
+            # Compute actual timings from wall timestamps
+            actual_setup_minutes = (self._run_start_wall - self._setup_start_wall).total_seconds() / 60
+            actual_processing_minutes = (completion_time - self._run_start_wall).total_seconds() / 60
+
+            # Get predicted values (same source the scheduler uses)
+            # For setup time, we'd need the previous material — default to BASE_SETUP_MINUTES
+            predicted_setup_minutes = float(BASE_SETUP_MINUTES)
+            predicted_processing_minutes = self._processing_duration / 60
+
+            # Log to FeedbackLogger with mtconnect_auto provenance
+            logger = FeedbackLogger()
+            logger.log(
+                db=self.db,
+                order_id=job_id,
+                material=material,
+                machine_id=self.machine_id,
+                predicted_setup_minutes=predicted_setup_minutes,
+                actual_setup_minutes=actual_setup_minutes,
+                predicted_processing_minutes=predicted_processing_minutes,
+                actual_processing_minutes=actual_processing_minutes,
+                provenance="mtconnect_auto",
+            )
+        except Exception as exc:
+            logger.warning("Failed to log feedback for job %s: %s", job_id, exc)

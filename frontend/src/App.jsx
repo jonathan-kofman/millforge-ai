@@ -151,6 +151,9 @@ export default function App() {
           >
             Book a 30-minute floor review →
           </a>
+          <p className="text-xs text-gray-600 mt-3">
+            Starts in shadow mode — MillForge proposes schedules, your planners approve.
+          </p>
         </div>
       </section>
 

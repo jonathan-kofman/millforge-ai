@@ -132,6 +132,7 @@ class ScheduleResponse(BaseModel):
     algorithm: str = "edd"
     schedule: List[ScheduledOrderOutput]
     validation_failures: List[str] = []
+    warnings: List[str] = []
     energy_analysis: Optional["EnergyAnalysis"] = None
 
 

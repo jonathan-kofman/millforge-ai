@@ -24,7 +24,7 @@ from models.schemas import (
     ScheduledOrderOutput, OrderInput, BenchmarkResponse, BenchmarkEntry,
     EnergyAnalysis,
 )
-from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT, BASE_SETUP_MINUTES, MACHINE_COUNT
+from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT, BASE_SETUP_MINUTES, MACHINE_COUNT, check_order_warnings
 from agents.sa_scheduler import SAScheduler
 from agents.benchmark_data import get_benchmark_orders, DATASET_DESCRIPTION, ORDER_COUNT
 from agents.energy_optimizer import EnergyOptimizer
@@ -39,7 +39,7 @@ _sa  = SAScheduler()
 _energy = EnergyOptimizer()
 
 
-def _build_response(schedule, algorithm: str, energy_analysis: Optional[EnergyAnalysis] = None) -> ScheduleResponse:
+def _build_response(schedule, algorithm: str, energy_analysis: Optional[EnergyAnalysis] = None, orders: list = None) -> ScheduleResponse:
     """Convert a Schedule domain object to a ScheduleResponse."""
     outputs = [
         ScheduledOrderOutput(
@@ -65,12 +65,14 @@ def _build_response(schedule, algorithm: str, energy_analysis: Optional[EnergyAn
         makespan_hours=round(schedule.makespan_hours, 2),
         utilization_percent=round(schedule.utilization_percent, 1),
     )
+    warnings = check_order_warnings(orders) if orders else []
     return ScheduleResponse(
         generated_at=schedule.generated_at,
         summary=summary,
         schedule=outputs,
         algorithm=algorithm,
         validation_failures=getattr(schedule, "validation_failures", []),
+        warnings=warnings,
         energy_analysis=energy_analysis,
     )
 
@@ -119,7 +121,7 @@ async def optimize_schedule(
     except Exception as e:
         logger.warning(f"Energy analysis failed (non-fatal): {e}")
 
-    return _build_response(schedule, algorithm, energy_analysis)
+    return _build_response(schedule, algorithm, energy_analysis, orders)
 
 
 @router.get("/schedule/demo", response_model=ScheduleResponse, summary="Demo schedule on built-in mock order set")
@@ -135,7 +137,7 @@ async def demo_schedule(
     except Exception as e:
         logger.error(f"Demo scheduler error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Scheduling engine error")
-    return _build_response(schedule, algorithm)
+    return _build_response(schedule, algorithm, orders=mock_orders)
 
 
 def _avg_lateness(sched) -> float:
