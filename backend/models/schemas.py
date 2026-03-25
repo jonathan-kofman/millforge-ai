@@ -136,6 +136,8 @@ class ScheduleResponse(BaseModel):
     validation_failures: List[str] = []
     warnings: List[str] = []
     energy_analysis: Optional["EnergyAnalysis"] = None
+    held_orders: List[str] = []          # order_ids blocked by critical anomalies
+    anomaly_report: Optional["AnomalyDetectResponse"] = None  # auto-scan results
 
 
 # ---------------------------------------------------------------------------

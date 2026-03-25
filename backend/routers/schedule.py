@@ -22,13 +22,14 @@ from auth.dependencies import get_current_user, get_current_user_optional
 from models.schemas import (
     ScheduleRequest, ScheduleResponse, ScheduleSummary,
     ScheduledOrderOutput, OrderInput, BenchmarkResponse, BenchmarkEntry,
-    EnergyAnalysis,
+    EnergyAnalysis, AnomalyItem, AnomalyDetectResponse,
 )
 from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT, BASE_SETUP_MINUTES, MACHINE_COUNT, check_order_warnings
 from agents.sa_scheduler import SAScheduler
 from agents.benchmark_data import get_benchmark_orders, DATASET_DESCRIPTION, ORDER_COUNT
 from agents.energy_optimizer import EnergyOptimizer
 from agents.pdf_exporter import build_schedule_pdf
+from agents.anomaly_detector import AnomalyDetector
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Schedule"])
@@ -37,9 +38,20 @@ router = APIRouter(prefix="/api", tags=["Schedule"])
 _edd = Scheduler()
 _sa  = SAScheduler()
 _energy = EnergyOptimizer()
+_anomaly = AnomalyDetector()
+
+# Anomaly severities that block an order from being scheduled
+_BLOCKING_SEVERITIES = {"critical"}
 
 
-def _build_response(schedule, algorithm: str, energy_analysis: Optional[EnergyAnalysis] = None, orders: list = None) -> ScheduleResponse:
+def _build_response(
+    schedule,
+    algorithm: str,
+    energy_analysis: Optional[EnergyAnalysis] = None,
+    orders: list = None,
+    held_orders: list = None,
+    anomaly_report: Optional[AnomalyDetectResponse] = None,
+) -> ScheduleResponse:
     """Convert a Schedule domain object to a ScheduleResponse."""
     outputs = [
         ScheduledOrderOutput(
@@ -74,6 +86,8 @@ def _build_response(schedule, algorithm: str, energy_analysis: Optional[EnergyAn
         validation_failures=getattr(schedule, "validation_failures", []),
         warnings=warnings,
         energy_analysis=energy_analysis,
+        held_orders=held_orders or [],
+        anomaly_report=anomaly_report,
     )
 
 
@@ -94,7 +108,39 @@ async def optimize_schedule(
     """
     logger.info(f"Schedule request: {len(req.orders)} orders | algorithm={algorithm}")
 
-    orders = [_order_input_to_domain(o) for o in req.orders]
+    # --- Automatic anomaly gate: detect critical issues before scheduling ---
+    anomaly_report: Optional[AnomalyDetectResponse] = None
+    held_order_ids: set[str] = set()
+    try:
+        raw_orders = [o.model_dump() for o in req.orders]
+        report = _anomaly.detect(raw_orders)
+        anomaly_report = AnomalyDetectResponse(
+            orders_analysed=report.orders_analysed,
+            anomalies=[
+                AnomalyItem(
+                    order_id=a.order_id,
+                    anomaly_type=a.anomaly_type,
+                    severity=a.severity,
+                    description=a.description,
+                )
+                for a in report.anomalies
+            ],
+            summary=report.summary,
+            analysed_at=report.analysed_at,
+            validation_failures=report.validation_failures,
+        )
+        # Hold orders flagged with blocking-severity anomalies (critical)
+        for a in report.anomalies:
+            if a.severity in _BLOCKING_SEVERITIES and a.order_id != "BATCH":
+                held_order_ids.add(a.order_id)
+        if held_order_ids:
+            logger.info("Auto-held %d orders with critical anomalies: %s", len(held_order_ids), held_order_ids)
+    except Exception as exc:
+        logger.warning("Anomaly detection failed (non-fatal): %s", exc)
+
+    # Filter out held orders before scheduling
+    schedulable_inputs = [o for o in req.orders if o.order_id not in held_order_ids]
+    orders = [_order_input_to_domain(o) for o in schedulable_inputs]
     start_time = req.start_time or datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Determine machine count: use ShopConfig if authenticated, else default
@@ -145,7 +191,11 @@ async def optimize_schedule(
     except Exception as e:
         logger.warning(f"Energy analysis failed (non-fatal): {e}")
 
-    return _build_response(schedule, algorithm, energy_analysis, orders)
+    return _build_response(
+        schedule, algorithm, energy_analysis, orders,
+        held_orders=list(held_order_ids),
+        anomaly_report=anomaly_report,
+    )
 
 
 @router.get("/schedule/demo", response_model=ScheduleResponse, summary="Demo schedule on built-in mock order set")

@@ -23,6 +23,11 @@ router = APIRouter(prefix="/api", tags=["Vision"])
 _vision_agent = QualityVisionAgent()
 
 
+def get_vision_model_name() -> str:
+    """Return the runtime model name for health reporting."""
+    return _vision_agent._model_name
+
+
 @router.post(
     "/vision/inspect",
     response_model=VisionInspectResponse,

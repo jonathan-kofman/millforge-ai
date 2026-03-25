@@ -12,12 +12,13 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 1. **Scheduling** — ✅ automated. No human decides what runs next.
 2. **Quoting** — ✅ automated. No human calculates lead time or price.
 3. **Quality triage** — 🔬 mock (heuristic hash, no model deployed). No human does first-pass visual inspection.
-4. **Rework dispatch** — ✅ automated. No human decides rework priority.
-5. **Energy procurement** — ✅ automated (PJM real-time LMP). No human decides when to run energy-intensive jobs.
-6. **Inventory reorder** — ✅ automated. No human monitors stock levels.
-7. **Material sourcing** — ✅ directory active (50+ verified US suppliers, geo-search). No human searches for suppliers.
-8. **Production planning** — real data (Census ASM throughput). No human translates demand signals into capacity targets.
-9. **Exception handling** — this is what humans are for. Everything else is software.
+4. **Anomaly detection** — ✅ automated. Critical order anomalies (duplicate IDs, impossible deadlines) auto-held before scheduling; no human scans batch.
+5. **Rework dispatch** — ✅ automated. No human decides rework priority.
+6. **Energy procurement** — ✅ automated (PJM real-time LMP). No human decides when to run energy-intensive jobs.
+7. **Inventory reorder** — ✅ automated. No human monitors stock levels.
+8. **Material sourcing** — ✅ directory active (50+ verified US suppliers, geo-search). No human searches for suppliers.
+9. **Production planning** — real data (Census ASM throughput). No human translates demand signals into capacity targets.
+10. **Exception handling** — this is what humans are for. Everything else is software.
 
 **Module audit against the lights-out lens:**
 
@@ -32,7 +33,7 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 | supplier_directory.py | ✅ Yes — no human searches for suppliers | directory_active (50+ US suppliers) | Medium |
 | production_planner.py | Partially — real Census ASM throughput data | real_data | Defer |
 | nl_scheduler.py | Assists human, not replaces | mock | Defer |
-| anomaly_detector.py | Assists human, not replaces | mock | Defer |
+| anomaly_detector.py | ✅ Yes — critical anomalies auto-held before scheduling | automated | Core |
 
 **Lights-out readiness target:** `GET /health` returns a `lights_out_readiness` object showing automated vs mock vs not-implemented for each touchpoint. This is the living scoreboard.
 
@@ -119,6 +120,21 @@ All request/response types are in `backend/models/schemas.py`. `MaterialType` is
 - Volume discount tiers: 0% / 5% (500+) / 10% (1000+) / 20% (10000+)
 - Unit prices by material in `UNIT_PRICE` dict
 - **Shift calendar**: `QuoteRequest.shifts_per_day` (1–3) and `hours_per_shift` (4–12) are optional. When both provided, raw scheduled hours are scaled by `24 / (shifts_per_day * hours_per_shift)` to convert continuous-machine hours to real calendar days. Omitting either field preserves original behavior (assumes 24h operation).
+
+## Anomaly Gate (`backend/agents/anomaly_detector.py`, `backend/routers/schedule.py`)
+
+Every `POST /api/schedule` call automatically runs the anomaly detector before scheduling. This removes the "human scans the batch" touchpoint.
+
+**Auto-hold logic:**
+- `AnomalyDetector.detect(orders)` runs on the raw order list before any scheduling occurs
+- Orders with `critical`-severity anomalies (`impossible_deadline`, `duplicate_id`) are **held** — excluded from the schedule
+- Held order IDs returned in `ScheduleResponse.held_orders: List[str]`
+- Full anomaly report returned in `ScheduleResponse.anomaly_report: AnomalyDetectResponse`
+- `warning`-severity anomalies (quantity spike, clustering) are surfaced but **do not block** scheduling
+- BATCH-level anomalies (material clustering) are never held (no single order to hold)
+- Anomaly detection failure is non-fatal — schedule runs without anomaly data if detection errors
+
+**Health endpoint:** `anomaly_detection: "automated"` — counts toward `readiness_percent`
 
 ## Rework Endpoint (`backend/routers/rework.py`)
 

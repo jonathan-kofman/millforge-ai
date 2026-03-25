@@ -30,7 +30,7 @@ from routers.suppliers import router as suppliers_router
 from routers.onboarding import router as onboarding_router
 from database import init_db, SessionLocal
 from db_models import Supplier
-from agents.quality_vision import MODEL_AVAILABLE as VISION_MODEL_AVAILABLE
+from routers.vision import get_vision_model_name as _get_vision_model_name
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -99,7 +99,7 @@ app = FastAPI(
         "Jonathan Kofman machines parts daily at Northeastern's Advanced Manufacturing lab "
         "and built MillForge because he lives the scheduling problem himself."
     ),
-    version="0.4.0",
+    version="0.5.0",
     contact={"name": "Jonathan Kofman — MillForge"},
     lifespan=lifespan,
 )
@@ -167,22 +167,26 @@ def _energy_status() -> str:
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"service": "MillForge API", "status": "ok", "version": "0.4.0"}
+    return {"service": "MillForge API", "status": "ok", "version": "0.5.0"}
 
 
 @app.get("/health", tags=["Health"])
 async def health():
+    vision_model = _get_vision_model_name()
+    quality_status = "mock" if vision_model == "heuristic" else "onnx_inference"
+
     touchpoints = {
         "scheduling":          "automated",
         "quoting":             "automated",
-        "quality_inspection":  "mock",         # heuristic hash — no model file deployed
+        "quality_inspection":  quality_status,   # "onnx_inference" when model downloaded, else "mock"
+        "anomaly_detection":   "automated",       # critical anomalies auto-held before scheduling
         "energy_optimization": _energy_status(),  # PJM LMP when gridstatus available, else simulated
         "inventory_management":"automated",
-        "production_planning": "real_data",  # US Census ASM throughput benchmarks
+        "production_planning": "real_data",       # US Census ASM throughput benchmarks
         "rework_dispatch":     "automated",
         "material_sourcing":   "directory_active",  # supplier directory with geo-search
     }
-    _AUTOMATED_STATUSES = {"automated", "real_grid_data", "real_data", "directory_active"}
+    _AUTOMATED_STATUSES = {"automated", "real_grid_data", "real_data", "directory_active", "onnx_inference"}
     automated = sum(1 for v in touchpoints.values() if v in _AUTOMATED_STATUSES)
     total = len(touchpoints)
 
@@ -203,18 +207,19 @@ async def health():
             else "DEMO_KEY (100 req/day)"
         ),
         "vision_model": (
-            "NEU-DET YOLOv8n ONNX"
-            if VISION_MODEL_AVAILABLE
+            f"YOLOv8n ONNX ({vision_model})"
+            if vision_model != "heuristic"
             else "heuristic mock — NEU-DET training pending"
         ),
         "supplier_directory": "verified US distributors",
+        "anomaly_detection": "rule-based + Claude refinement",
     }
 
     return {
         "status": "ok",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "lights_out_readiness": touchpoints,
-        "vision_model_trained": VISION_MODEL_AVAILABLE,
+        "vision_model": vision_model,
         "automated_touchpoints": automated,
         "total_touchpoints": total,
         "readiness_percent": round(automated / total * 100),
