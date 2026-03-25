@@ -17,11 +17,21 @@ import hashlib
 import logging
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Model availability check
+# ---------------------------------------------------------------------------
+MODEL_PATH = Path(__file__).parent.parent / "models" / "neu_det_yolov8n.onnx"
+MODEL_AVAILABLE = MODEL_PATH.exists()
+
+if not MODEL_AVAILABLE:
+    logger.warning("NEU-DET model not found at %s — using heuristic defect simulation", MODEL_PATH)
 
 # ---------------------------------------------------------------------------
 # Model download config

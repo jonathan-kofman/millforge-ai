@@ -27,6 +27,7 @@ from routers.suppliers import router as suppliers_router
 from routers.onboarding import router as onboarding_router
 from database import init_db, SessionLocal
 from db_models import Supplier
+from agents.quality_vision import MODEL_AVAILABLE as VISION_MODEL_AVAILABLE
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -167,6 +168,7 @@ async def health():
         "status": "ok",
         "version": "1.0.0",
         "lights_out_readiness": touchpoints,
+        "vision_model_trained": VISION_MODEL_AVAILABLE,
         "automated_touchpoints": automated,
         "total_touchpoints": total,
         "readiness_percent": round(automated / total * 100),

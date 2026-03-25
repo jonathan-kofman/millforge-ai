@@ -132,6 +132,48 @@ async def get_arbitrage_analysis(req: ArbitrageRequest) -> ArbitrageResponse:
     )
 
 
+@router.get(
+    "/carbon-intensity",
+    summary="Get current carbon intensity of the grid",
+)
+async def get_carbon_intensity():
+    """
+    Returns the current carbon intensity (grams of CO2 per kWh) for the grid zone.
+    Uses the Electricity Maps API when configured; falls back to US grid average estimate.
+    """
+    import os
+    api_key = os.getenv("ELECTRICITY_MAPS_API_KEY")
+    if not api_key:
+        return {
+            "zone": "US-PJM",
+            "carbon_intensity_gco2_per_kwh": 386,
+            "data_source": "estimated_us_grid_average",
+            "note": "Set ELECTRICITY_MAPS_API_KEY for live data"
+        }
+    try:
+        import httpx
+        response = httpx.get(
+            "https://api.electricitymap.org/v3/carbon-intensity/latest",
+            params={"zone": "US-PJM"},
+            headers={"auth-token": api_key},
+            timeout=5.0
+        )
+        data = response.json()
+        return {
+            "zone": "US-PJM",
+            "carbon_intensity_gco2_per_kwh": data.get("carbonIntensity", 386),
+            "data_source": "electricity_maps_live",
+            "datetime": data.get("datetime")
+        }
+    except Exception as exc:
+        logger.warning("Carbon intensity fetch failed: %s, using fallback", exc)
+        return {
+            "zone": "US-PJM",
+            "carbon_intensity_gco2_per_kwh": 386,
+            "data_source": "fallback_estimate"
+        }
+
+
 @router.post(
     "/scenario",
     response_model=ScenarioResponse,

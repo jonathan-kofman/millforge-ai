@@ -20,7 +20,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from agents.energy_optimizer import (
     EnergyOptimizer,
-    MOCK_HOURLY_RATES,
     MACHINE_POWER_KW,
     US_GRID_CARBON_INTENSITY,
     _get_carbon_intensity,
@@ -237,6 +236,25 @@ def client():
 
 
 class TestEnergyAPIEndpoints:
+    def test_carbon_intensity_no_key(self, client):
+        with patch.dict(os.environ, {"ELECTRICITY_MAPS_API_KEY": ""}):
+            r = client.get("/api/energy/carbon-intensity")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["carbon_intensity_gco2_per_kwh"] == 386
+        assert data["data_source"] == "estimated_us_grid_average"
+        assert data["zone"] == "US-PJM"
+
+    def test_carbon_intensity_response_shape(self, client):
+        r = client.get("/api/energy/carbon-intensity")
+        assert r.status_code == 200
+        data = r.json()
+        assert "zone" in data
+        assert "carbon_intensity_gco2_per_kwh" in data
+        assert "data_source" in data
+        assert isinstance(data["carbon_intensity_gco2_per_kwh"], (int, float))
+        assert data["carbon_intensity_gco2_per_kwh"] > 0
+
     def test_negative_pricing_windows_200(self, client):
         r = client.get("/api/energy/negative-pricing-windows")
         assert r.status_code == 200
