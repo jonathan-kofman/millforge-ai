@@ -16,6 +16,7 @@ Output:
     backend/models/neu_det_yolov8n.onnx  (replaces the current heuristic mock)
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -43,6 +44,35 @@ names: {NEU_CLASSES}
 """
 
 
+def download_dataset() -> bool:
+    """
+    Download the NEU Surface Defect Database from Kaggle using credentials from env vars.
+    Returns True on success, False on failure.
+    """
+    # Set Kaggle credentials from env vars if available
+    kaggle_user = os.getenv("KAGGLE_USERNAME", "").strip()
+    kaggle_key = os.getenv("KAGGLE_KEY", "").strip()
+    if kaggle_user:
+        os.environ["KAGGLE_USERNAME"] = kaggle_user
+    if kaggle_key:
+        os.environ["KAGGLE_KEY"] = kaggle_key
+
+    try:
+        import kaggle  # noqa: F401, PLC0415
+        kaggle.api.authenticate()
+        kaggle.api.dataset_download_files(
+            "kaustubhdikshit/neu-surface-defect-database",
+            path=str(NEU_DATA_DIR.parent),
+            unzip=True,
+        )
+        print(f"Dataset downloaded to {NEU_DATA_DIR}")
+        return True
+    except Exception as exc:
+        print(f"Download failed: {exc}")
+        print("Manual: https://www.kaggle.com/datasets/kaustubhdikshit/neu-surface-defect-database")
+        return False
+
+
 def check_prerequisites():
     try:
         import ultralytics  # noqa: F401
@@ -52,10 +82,13 @@ def check_prerequisites():
         sys.exit(1)
 
     if not NEU_DATA_DIR.exists():
-        print(f"ERROR: Dataset not found at {NEU_DATA_DIR}")
-        print("  kaggle datasets download -d kaustubhdikshit/neu-surface-defect-database")
-        print("  Unzip into data/neu_det/ with images/train and images/val subdirs")
-        sys.exit(1)
+        print(f"Dataset not found at {NEU_DATA_DIR}")
+        print("Attempting to download via Kaggle API…")
+        if not download_dataset():
+            print("ERROR: Dataset download failed and dataset not found.")
+            print("  Manual download: https://www.kaggle.com/datasets/kaustubhdikshit/neu-surface-defect-database")
+            print("  Unzip into data/neu_det/ with images/train and images/val subdirs")
+            sys.exit(1)
 
 
 def write_yaml():

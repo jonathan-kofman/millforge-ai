@@ -4,7 +4,11 @@
 
 import json
 import logging
+import subprocess
+import threading
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -81,3 +85,41 @@ async def inspect_part(
         model_map50=result.model_map50,
         order_id=req.order_id,
     )
+
+
+@router.post(
+    "/vision/train",
+    summary="Trigger NEU-DET model training in background (requires auth)",
+)
+async def trigger_training(
+    db: Session = Depends(get_db),
+):
+    """
+    Kick off YOLOv8n training on NEU Surface Defect Database in background.
+    Returns immediately; training runs async.
+    Check /health for vision_model_trained status once complete.
+    """
+    script_path = Path(__file__).parent.parent / "scripts" / "train_vision_model.py"
+    if not script_path.exists():
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Training script not found", "path": str(script_path)}
+        )
+
+    def run_training():
+        import sys
+        try:
+            subprocess.run([sys.executable, str(script_path)], check=True)
+            logger.info("Vision model training completed successfully")
+        except subprocess.CalledProcessError as exc:
+            logger.error("Vision model training failed: %s", exc)
+
+    thread = threading.Thread(target=run_training, daemon=True)
+    thread.start()
+
+    return {
+        "status": "training_started",
+        "estimated_time_minutes": 15,
+        "note": "Check GET /health for vision_model_trained status when complete",
+        "script": str(script_path),
+    }

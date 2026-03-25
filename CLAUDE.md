@@ -177,8 +177,9 @@ Every module falls back gracefully when real data is unavailable (CI-safe). The 
 | Module | Real Data | Source | Fallback | Cache TTL |
 |--------|-----------|--------|----------|-----------|
 | `energy_optimizer.py` | PJM real-time LMP | `gridstatus` library → `pjm.get_lmp(market="REAL_TIME_5_MIN")` | `MOCK_HOURLY_RATES` (24-hour simulated curve) | 1 hour |
-| `production_planner.py` | US Census ASM throughput | EIA API NAICS 332721 — Precision Turned Products; `EIA_API_KEY` env var (DEMO_KEY default) | `THROUGHPUT` constants (internal benchmarks) | 24 hours |
-| `quality_vision.py` | NEU-DET fine-tuned model | `backend/models/neu_det_yolov8n.onnx` (train script: `backend/scripts/train_vision_model.py`) | Generic YOLOv8n ONNX → heuristic hash | N/A (file-based) |
+| `energy_optimizer.py` | Carbon intensity | Electricity Maps API `zone=US-MIDA-PJM` via `_get_carbon_intensity()` when `ELECTRICITY_MAPS_API_KEY` set | `US_GRID_CARBON_INTENSITY = 0.386` kg CO2/kWh (EPA 2023 average) | 1 hour |
+| `production_planner.py` | US Census ASM throughput | EIA API NAICS 332721 — Precision Turned Products; `EIA_API_KEY` env var set to real key (defaults to DEMO_KEY with 100 req/day limit) | `THROUGHPUT` constants (internal benchmarks) | 24 hours |
+| `quality_vision.py` | NEU-DET fine-tuned model | `backend/models/neu_det_yolov8n.onnx` (train via `backend/scripts/train_vision_model.py` using Kaggle API with `KAGGLE_USERNAME`/`KAGGLE_KEY`) | Generic YOLOv8n ONNX → heuristic hash | N/A (file-based) |
 
 **Adding new real data sources:**
 1. Write a `_fetch_X()` function that returns `None` on any failure

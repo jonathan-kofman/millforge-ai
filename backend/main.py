@@ -82,7 +82,7 @@ app = FastAPI(
         "Jonathan Kofman machines parts daily at Northeastern's Advanced Manufacturing lab "
         "and built MillForge because he lives the scheduling problem himself."
     ),
-    version="0.3.0",
+    version="0.4.0",
     contact={"name": "Jonathan Kofman — MillForge"},
     lifespan=lifespan,
 )
@@ -147,7 +147,7 @@ def _energy_status() -> str:
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"service": "MillForge API", "status": "ok", "version": "0.3.0"}
+    return {"service": "MillForge API", "status": "ok", "version": "0.4.0"}
 
 
 @app.get("/health", tags=["Health"])
@@ -164,12 +164,38 @@ async def health():
     }
     automated = sum(1 for v in touchpoints.values() if v == "automated")
     total = len(touchpoints)
+
+    data_sources = {
+        "energy_pricing": (
+            "PJM real-time LMP via gridstatus"
+            if _energy_status() == "real_grid_data"
+            else "simulated_mock_curve"
+        ),
+        "carbon_intensity": (
+            "Electricity Maps US-PJM live"
+            if os.getenv("ELECTRICITY_MAPS_API_KEY")
+            else "estimated_us_grid_average"
+        ),
+        "eia_api": (
+            "real key"
+            if os.getenv("EIA_API_KEY")
+            else "DEMO_KEY (100 req/day)"
+        ),
+        "vision_model": (
+            "NEU-DET YOLOv8n ONNX"
+            if VISION_MODEL_AVAILABLE
+            else "heuristic mock — NEU-DET training pending"
+        ),
+        "supplier_directory": "verified US distributors",
+    }
+
     return {
         "status": "ok",
-        "version": "1.0.0",
+        "version": "0.4.0",
         "lights_out_readiness": touchpoints,
         "vision_model_trained": VISION_MODEL_AVAILABLE,
         "automated_touchpoints": automated,
         "total_touchpoints": total,
         "readiness_percent": round(automated / total * 100),
+        "data_sources": data_sources,
     }

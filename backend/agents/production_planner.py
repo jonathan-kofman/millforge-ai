@@ -50,6 +50,15 @@ _asm_cache: Dict = {
     "data_source": "internal_benchmarks",
 }
 
+# Log EIA API configuration on module load
+if _EIA_API_KEY == "DEMO_KEY":
+    logger.warning(
+        "EIA_API_KEY not set — using DEMO_KEY (100 req/day limit). "
+        "Set EIA_API_KEY env var for production."
+    )
+else:
+    logger.info("EIA API: real key configured")
+
 
 def _fetch_asm_throughput() -> Optional[Dict[str, float]]:
     """
