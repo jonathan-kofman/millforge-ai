@@ -2,15 +2,25 @@ import { useState, useEffect } from "react";
 import { API_BASE } from "../config";
 
 const STATUS_CONFIG = {
-  automated:  { label: "automated",  dot: "bg-green-500",  text: "text-green-400" },
-  pretrained: { label: "pretrained", dot: "bg-blue-500",   text: "text-blue-400"  },
-  mock:       { label: "mock",       dot: "bg-yellow-500", text: "text-yellow-400" },
+  // green — fully automated / real data
+  automated:        { label: "automated",  dot: "bg-green-500",  text: "text-green-400" },
+  onnx_inference:   { label: "automated",  dot: "bg-green-500",  text: "text-green-400" },
+  real_grid_data:   { label: "automated",  dot: "bg-green-500",  text: "text-green-400" },
+  directory_active: { label: "automated",  dot: "bg-green-500",  text: "text-green-400" },
+  real_data:        { label: "automated",  dot: "bg-green-500",  text: "text-green-400" },
+  // blue — pretrained / partial
+  pretrained:       { label: "pretrained", dot: "bg-blue-500",   text: "text-blue-400"  },
+  // yellow — mock / simulated
+  mock:             { label: "mock",       dot: "bg-yellow-500", text: "text-yellow-400" },
+  heuristic:        { label: "mock",       dot: "bg-yellow-500", text: "text-yellow-400" },
+  simulated_fallback: { label: "mock",     dot: "bg-yellow-500", text: "text-yellow-400" },
 };
 
 const TOUCHPOINT_LABELS = {
   scheduling:           "Scheduling",
   quoting:              "Quoting",
   quality_inspection:   "Quality Inspection",
+  anomaly_detection:    "Anomaly Detection",
   energy_optimization:  "Energy Optimization",
   inventory_management: "Inventory Management",
   production_planning:  "Production Planning",
