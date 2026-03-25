@@ -162,7 +162,8 @@ async def health():
         "rework_dispatch":     "automated",
         "material_sourcing":   "directory_active",  # supplier directory with geo-search
     }
-    automated = sum(1 for v in touchpoints.values() if v == "automated")
+    _AUTOMATED_STATUSES = {"automated", "real_grid_data", "real_data", "directory_active"}
+    automated = sum(1 for v in touchpoints.values() if v in _AUTOMATED_STATUSES)
     total = len(touchpoints)
 
     data_sources = {

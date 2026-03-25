@@ -143,6 +143,7 @@ async def get_carbon_intensity():
     """
     import os
     api_key = os.getenv("ELECTRICITY_MAPS_API_KEY")
+    logger.info("Carbon intensity: API key present=%s", bool(api_key))
     if not api_key:
         return {
             "zone": "US-PJM",
@@ -158,6 +159,7 @@ async def get_carbon_intensity():
             headers={"auth-token": api_key},
             timeout=5.0
         )
+        logger.info("Carbon intensity: Electricity Maps response status=%s", response.status_code)
         data = response.json()
         return {
             "zone": "US-PJM",
@@ -166,7 +168,7 @@ async def get_carbon_intensity():
             "datetime": data.get("datetime")
         }
     except Exception as exc:
-        logger.warning("Carbon intensity fetch failed: %s, using fallback", exc)
+        logger.warning("Carbon intensity fetch failed: %s", exc)
         return {
             "zone": "US-PJM",
             "carbon_intensity_gco2_per_kwh": 386,
