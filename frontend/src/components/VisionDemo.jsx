@@ -126,10 +126,12 @@ export default function VisionDemo() {
           {result && (
             <div className={`card border ${result.passed ? "border-green-700" : "border-red-700"}`}>
               <div className="flex items-center gap-3 mb-4">
-                <span className={`text-3xl`}>{result.passed ? "✅" : "❌"}</span>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full tracking-widest ${result.passed ? "bg-green-900/60 text-green-400" : "bg-red-900/60 text-red-400"}`}>
+                  {result.passed ? "PASS" : "FAIL"}
+                </span>
                 <div>
                   <p className={`text-lg font-bold ${result.passed ? "text-green-400" : "text-red-400"}`}>
-                    {result.passed ? "PASSED" : "FAILED"}
+                    {result.passed ? "Inspection passed" : "Defects detected"}
                   </p>
                   <p className="text-xs text-gray-500">
                     Confidence: {(result.confidence * 100).toFixed(1)}%

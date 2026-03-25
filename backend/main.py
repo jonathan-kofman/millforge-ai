@@ -181,7 +181,7 @@ async def health():
         "quoting":             "automated",
         "quality_inspection":  quality_status,   # "onnx_inference" when model downloaded, else "mock"
         "anomaly_detection":   "automated",       # critical anomalies auto-held before scheduling
-        "energy_optimization": _energy_status(),  # PJM LMP when gridstatus available, else simulated
+        "energy_optimization": _energy_status(),  # EIA API v2 when EIA_API_KEY set, else simulated
         "inventory_management":"automated",
         "production_planning": "real_data",       # US Census ASM throughput benchmarks
         "rework_dispatch":     "automated",
@@ -193,7 +193,7 @@ async def health():
 
     data_sources = {
         "energy_pricing": (
-            "PJM real-time LMP via gridstatus"
+            "EIA API v2 (PJM demand-based)"
             if _energy_status() == "real_grid_data"
             else "simulated_mock_curve"
         ),

@@ -11,10 +11,10 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 **Hierarchy of human touchpoints to eliminate (in order of priority):**
 1. **Scheduling** — ✅ automated. No human decides what runs next.
 2. **Quoting** — ✅ automated. No human calculates lead time or price.
-3. **Quality triage** — 🔬 mock (heuristic hash, no model deployed). No human does first-pass visual inspection.
+3. **Quality triage** — 🔬 onnx_inference (NEU-DET YOLOv8n mAP50=0.759, model deployed). No human does first-pass visual inspection.
 4. **Anomaly detection** — ✅ automated. Critical order anomalies (duplicate IDs, impossible deadlines) auto-held before scheduling; no human scans batch.
 5. **Rework dispatch** — ✅ automated. No human decides rework priority.
-6. **Energy procurement** — ✅ automated (PJM real-time LMP). No human decides when to run energy-intensive jobs.
+6. **Energy procurement** — ✅ automated (EIA API v2, PJM demand-based pricing). No human decides when to run energy-intensive jobs.
 7. **Inventory reorder** — ✅ automated. No human monitors stock levels.
 8. **Material sourcing** — ✅ directory active (50+ verified US suppliers, geo-search). No human searches for suppliers.
 9. **Production planning** — real data (Census ASM throughput). No human translates demand signals into capacity targets.
@@ -26,10 +26,10 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 |--------|---------------|--------|----------|
 | scheduler.py | ✅ Yes — no human schedules jobs | automated | Core |
 | quote.py | ✅ Yes — no human prices orders | automated | Core |
-| quality_vision.py | Partially — triage only | mock (heuristic, no model deployed) | High |
+| quality_vision.py | Partially — triage only | onnx_inference (NEU-DET YOLOv8n, mAP50=0.759, model present in repo) | High |
 | rework.py | ✅ Yes — auto-dispatches failures | automated | Core |
 | inventory_agent.py | ✅ Yes — auto-reorders stock | automated | Medium |
-| energy_optimizer.py | ✅ Yes — no human decides when to run energy-intensive jobs | automated (PJM real-time LMP) | Medium |
+| energy_optimizer.py | ✅ Yes — no human decides when to run energy-intensive jobs | automated (EIA API v2, PJM demand-based) | Medium |
 | supplier_directory.py | ✅ Yes — no human searches for suppliers | directory_active (50+ US suppliers) | Medium |
 | production_planner.py | Partially — real Census ASM throughput data | real_data | Defer |
 | nl_scheduler.py | Assists human, not replaces | mock | Defer |
@@ -162,10 +162,10 @@ Energy is the other half of the lights-out problem — no human decides when to 
 **Key implementation details:**
 - `_get_carbon_intensity()` is a **module-level function** (not an instance method of `EnergyOptimizer`) — import directly: `from agents.energy_optimizer import _get_carbon_intensity`
 - `THROUGHPUT` dict lives in `agents.scheduler`, NOT `agents.energy_optimizer`
-- `MACHINE_POWER_KW` dict maps material → kW draw (steel=75, aluminum=55, titanium=90, copper=65)
+- `MACHINE_POWER_KW` dict maps material → kW draw (steel=85, aluminum=55, titanium=110, copper=65, default=70)
 - `US_GRID_CARBON_INTENSITY = 0.386` kg CO2/kWh — EPA 2023 average, used as fallback
 - `ELECTRICITY_MAPS_API_KEY` env var enables live carbon intensity from Electricity Maps API
-- PJM LMP data fetched via `gridstatus` library (in `requirements-optional.txt`); `_fetch_pjm_lmp_raw()` preserves negative values for window detection; falls back to `MOCK_HOURLY_RATES` when `gridstatus` is not installed
+- PJM demand data fetched via **EIA API v2** (`EIA_API_KEY` env var); demand (MW) is scaled to a pricing curve ($/kWh); falls back to `MOCK_HOURLY_RATES` when key not set or network fails. Note: demand-based curve is always positive — true negative LMP windows require a direct LMP feed (future roadmap)
 - LCOE constants from Lazard v17 (2024): solar=0.045, battery=0.060, solar_battery=0.050, wind=0.035, SMR=0.065 $/kWh
 - NPV discount rate: SMR=6%, all others=8%
 - `ScenarioResponse.payback_years` is `Optional[float] = None` — `grid_only` scenario returns `None`
@@ -211,10 +211,10 @@ Every module falls back gracefully when real data is unavailable (CI-safe). The 
 
 | Module | Real Data | Source | Fallback | Cache TTL |
 |--------|-----------|--------|----------|-----------|
-| `energy_optimizer.py` | PJM real-time LMP | `gridstatus` library → `pjm.get_lmp(market="REAL_TIME_5_MIN")` | `MOCK_HOURLY_RATES` (24-hour simulated curve) | 1 hour |
+| `energy_optimizer.py` | PJM demand-based pricing | EIA API v2 → `_fetch_real_time_price()` scales PJM demand (MW) to $/kWh curve; `EIA_API_KEY` env var required | `MOCK_HOURLY_RATES` (24-hour simulated curve) | 1 hour |
 | `energy_optimizer.py` | Carbon intensity | Electricity Maps API `zone=US-MIDA-PJM` via `_get_carbon_intensity()` when `ELECTRICITY_MAPS_API_KEY` set | `US_GRID_CARBON_INTENSITY = 0.386` kg CO2/kWh (EPA 2023 average) | 1 hour |
 | `production_planner.py` | US Census ASM throughput | EIA API NAICS 332721 — Precision Turned Products; `EIA_API_KEY` env var set to real key (defaults to DEMO_KEY with 100 req/day limit) | `THROUGHPUT` constants (internal benchmarks) | 24 hours |
-| `quality_vision.py` | NEU-DET fine-tuned model | `backend/models/neu_det_yolov8n.onnx` (train via `backend/scripts/train_vision_model.py` using Kaggle API with `KAGGLE_USERNAME`/`KAGGLE_KEY`) | Generic YOLOv8n ONNX → heuristic hash | N/A (file-based) |
+| `quality_vision.py` | NEU-DET fine-tuned YOLOv8n (mAP50=0.759) | `backend/models/neu_det_yolov8n.onnx` (train via `backend/scripts/train_vision_model.py` using Kaggle API with `KAGGLE_USERNAME`/`KAGGLE_KEY`) | Generic YOLOv8n ONNX → heuristic hash | N/A (file-based) |
 
 **Adding new real data sources:**
 1. Write a `_fetch_X()` function that returns `None` on any failure

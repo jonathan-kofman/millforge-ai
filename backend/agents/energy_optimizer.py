@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Simulated fallback (used when gridstatus / network is unavailable)
+# Simulated fallback (used when EIA API is unavailable or key not set)
 # ---------------------------------------------------------------------------
 MOCK_HOURLY_RATES = [
     0.08, 0.07, 0.07, 0.06, 0.06, 0.07,  # 00:00 – 05:00 (off-peak)

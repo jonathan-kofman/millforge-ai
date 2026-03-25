@@ -82,7 +82,7 @@ export default function EnergyWidget() {
     0.17, 0.14, 0.12, 0.11, 0.10, 0.09,
   ];
 
-  const isLive = data?.data_source === "PJM_realtime";
+  const isLive = data?.data_source === "EIA_realtime";
 
   return (
     <section className="max-w-6xl mx-auto px-4 py-12">
@@ -105,7 +105,7 @@ export default function EnergyWidget() {
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-white">Live Grid Rate</p>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isLive ? "bg-green-900/50 text-green-400" : "bg-gray-800 text-gray-500"}`}>
-              {isLive ? "PJM live" : "simulated"}
+              {isLive ? "EIA live" : "simulated"}
             </span>
           </div>
           <div className="flex gap-6">
