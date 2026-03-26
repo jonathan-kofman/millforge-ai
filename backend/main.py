@@ -31,6 +31,8 @@ from routers.onboarding import router as onboarding_router
 from routers.cad import router as cad_router
 from routers.mtconnect import router as mtconnect_router
 from routers.exceptions import router as exceptions_router
+from routers.ws_machines import router as ws_machines_router, connection_manager as _ws_connection_manager
+from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
 from routers.vision import get_vision_model_name as _get_vision_model_name
@@ -38,6 +40,14 @@ from routers.vision import get_vision_model_name as _get_vision_model_name
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Machine fleet (module-level singleton — routers import this)
+# ---------------------------------------------------------------------------
+machine_fleet: MachineFleet = MachineFleet(
+    machine_count=int(os.getenv("MACHINE_COUNT", "3")),
+    broadcast_fn=_ws_connection_manager.broadcast,
+)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -53,6 +63,8 @@ async def lifespan(app: FastAPI):
     logger.info("MillForge backend starting up…")
     init_db()   # create tables if they don't exist
     logger.info("Database initialised.")
+    await machine_fleet.start()
+    logger.info("MachineFleet started (%d machines).", machine_fleet.machine_count)
     # Load inventory stock from DB (seed if empty)
     db = SessionLocal()
     try:
@@ -82,6 +94,7 @@ async def lifespan(app: FastAPI):
         energy_router.prefix,
     )
     yield
+    await machine_fleet.stop()
     logger.info("MillForge backend shutting down.")
 
 
@@ -156,6 +169,7 @@ app.include_router(onboarding_router)
 app.include_router(cad_router)
 app.include_router(mtconnect_router)
 app.include_router(exceptions_router)
+app.include_router(ws_machines_router)
 
 
 # ---------------------------------------------------------------------------

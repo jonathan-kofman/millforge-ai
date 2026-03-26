@@ -15,6 +15,7 @@ from .supplier_directory import SupplierDirectory, MATERIAL_CATEGORIES, haversin
 from .mtconnect_client import MTConnectClient, MTConnectDeviceData, MTConnectExecution
 from .mtconnect_sync import MTConnectSynchronizer
 from .exception_queue import ExceptionQueueAgent
+from .machine_fleet import MachineFleet
 
 __all__ = [
     "Scheduler", "SAScheduler", "Order", "Schedule",
@@ -26,4 +27,5 @@ __all__ = [
     "MTConnectClient", "MTConnectDeviceData", "MTConnectExecution",
     "MTConnectSynchronizer",
     "ExceptionQueueAgent",
+    "MachineFleet",
 ]

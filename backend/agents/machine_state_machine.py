@@ -99,11 +99,12 @@ class MachineStateMachine:
 
     COOLDOWN_SECONDS = 60  # 1-minute cooldown after each job
 
-    def __init__(self, machine_id: int, io: MachineIO, db=None) -> None:
+    def __init__(self, machine_id: int, io: MachineIO, db=None, on_transition=None) -> None:
         self.machine_id = machine_id
         self.io = io
         self.db = db
         self.state = MachineState.IDLE
+        self._on_transition = on_transition  # callable(machine_id, from_state, to_state, job_id)
         self._current_job_id: Optional[str] = None
         self._setup_duration: float = 0.0
         self._processing_duration: float = 0.0
@@ -213,6 +214,11 @@ class MachineStateMachine:
         )
         if self.db is not None:
             self._log_transition(old_state, new_state)
+        if self._on_transition is not None:
+            try:
+                self._on_transition(self.machine_id, old_state, new_state, self._current_job_id)
+            except Exception as exc:
+                logger.debug("on_transition callback error: %s", exc)
 
     def _log_transition(self, from_state: MachineState, to_state: MachineState) -> None:
         try:
