@@ -30,6 +30,7 @@ from routers.suppliers import router as suppliers_router
 from routers.onboarding import router as onboarding_router
 from routers.cad import router as cad_router
 from routers.mtconnect import router as mtconnect_router
+from routers.exceptions import router as exceptions_router
 from database import init_db, SessionLocal
 from db_models import Supplier
 from routers.vision import get_vision_model_name as _get_vision_model_name
@@ -154,6 +155,7 @@ app.include_router(suppliers_router)
 app.include_router(onboarding_router)
 app.include_router(cad_router)
 app.include_router(mtconnect_router)
+app.include_router(exceptions_router)
 
 
 # ---------------------------------------------------------------------------
