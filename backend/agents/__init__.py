@@ -12,6 +12,8 @@ from .setup_time_predictor import SetupTimePredictor
 from .feedback_logger import FeedbackLogger
 from .scheduling_twin import SchedulingTwin
 from .supplier_directory import SupplierDirectory, MATERIAL_CATEGORIES, haversine_miles
+from .mtconnect_client import MTConnectClient, MTConnectDeviceData, MTConnectExecution
+from .mtconnect_sync import MTConnectSynchronizer
 
 __all__ = [
     "Scheduler", "SAScheduler", "Order", "Schedule",
@@ -20,4 +22,6 @@ __all__ = [
     "MachineState", "MachineStateMachine", "MockMachineIO",
     "SetupTimePredictor", "FeedbackLogger", "SchedulingTwin",
     "SupplierDirectory", "MATERIAL_CATEGORIES", "haversine_miles",
+    "MTConnectClient", "MTConnectDeviceData", "MTConnectExecution",
+    "MTConnectSynchronizer",
 ]
