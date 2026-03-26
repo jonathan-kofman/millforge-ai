@@ -16,6 +16,7 @@ from .mtconnect_client import MTConnectClient, MTConnectDeviceData, MTConnectExe
 from .mtconnect_sync import MTConnectSynchronizer
 from .exception_queue import ExceptionQueueAgent
 from .machine_fleet import MachineFleet
+from .shift_report import ShiftReportAgent
 
 __all__ = [
     "Scheduler", "SAScheduler", "Order", "Schedule",
@@ -28,4 +29,5 @@ __all__ = [
     "MTConnectSynchronizer",
     "ExceptionQueueAgent",
     "MachineFleet",
+    "ShiftReportAgent",
 ]
