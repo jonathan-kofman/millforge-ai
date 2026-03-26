@@ -15,7 +15,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from database import get_db
-from db_models import User, OrderRecord, ScheduleRun
+from db_models import User, OrderRecord, ScheduleRun, InspectionRecord
 from auth.dependencies import get_current_user
 from agents.scheduler import Scheduler, Order
 from agents.sa_scheduler import SAScheduler
@@ -240,6 +240,78 @@ async def import_csv_confirm(
         order_ids=order_ids,
         skipped_count=len(preview["error_rows"]),
     )
+
+
+@router.get(
+    "/{order_id}/status",
+    summary="Public order status check (no auth required)",
+    tags=["Order Status"],
+)
+async def get_order_status(
+    order_id: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Public endpoint — no authentication required.
+
+    Returns a minimal status view of an order suitable for customer-facing
+    portals or tracking integrations. Exposes only: status, material,
+    quantity, due_date, scheduled completion time, and on-time flag.
+
+    Internal fields (machine_id, setup_minutes, priority, notes) are never
+    returned here.
+    """
+    rec = (
+        db.query(OrderRecord)
+        .filter(OrderRecord.order_id == order_id)
+        .first()
+    )
+    if not rec:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+
+    # Find the most recent ScheduleRun that includes this order
+    scheduled_completion: Optional[str] = None
+    on_time: Optional[bool] = None
+    schedule_run_id: Optional[int] = None
+
+    runs = (
+        db.query(ScheduleRun)
+        .order_by(ScheduleRun.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    for run in runs:
+        if order_id in run.order_ids:
+            for slot in run.scheduled_orders:
+                if slot.get("order_id") == order_id:
+                    scheduled_completion = slot.get("completion_time")
+                    on_time = slot.get("on_time")
+                    schedule_run_id = run.id
+                    break
+            if scheduled_completion is not None:
+                break
+
+    # Check most recent inspection
+    inspection = (
+        db.query(InspectionRecord)
+        .filter(InspectionRecord.order_id_str == order_id)
+        .order_by(InspectionRecord.created_at.desc())
+        .first()
+    )
+
+    return {
+        "order_id": rec.order_id,
+        "status": rec.status,
+        "material": rec.material,
+        "quantity": rec.quantity,
+        "due_date": rec.due_date.isoformat(),
+        "scheduled_completion": scheduled_completion,
+        "on_time": on_time,
+        "schedule_run_id": schedule_run_id,
+        "quality_passed": inspection.passed if inspection else None,
+        "quality_checked_at": inspection.created_at.isoformat() if inspection else None,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
