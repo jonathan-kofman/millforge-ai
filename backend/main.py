@@ -117,7 +117,7 @@ app = FastAPI(
         "Jonathan Kofman machines parts daily at Northeastern's Advanced Manufacturing lab "
         "and built MillForge because he lives the scheduling problem himself."
     ),
-    version="0.5.0",
+    version="0.6.0",
     contact={"name": "Jonathan Kofman — MillForge"},
     lifespan=lifespan,
 )
@@ -192,7 +192,7 @@ def _energy_status() -> str:
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"service": "MillForge API", "status": "ok", "version": "0.5.0"}
+    return {"service": "MillForge API", "status": "ok", "version": "0.6.0"}
 
 
 @app.get("/health", tags=["Health"])
@@ -201,15 +201,17 @@ async def health():
     quality_status = "mock" if vision_model == "heuristic" else "onnx_inference"
 
     touchpoints = {
-        "scheduling":          "automated",
-        "quoting":             "automated",
-        "quality_inspection":  quality_status,   # "onnx_inference" when model downloaded, else "mock"
-        "anomaly_detection":   "automated",       # critical anomalies auto-held before scheduling
-        "energy_optimization": _energy_status(),  # EIA API v2 when EIA_API_KEY set, else simulated
-        "inventory_management":"automated",
-        "production_planning": "real_data",       # US Census ASM throughput benchmarks
-        "rework_dispatch":     "automated",
-        "material_sourcing":   "directory_active",  # supplier directory with geo-search
+        "scheduling":             "automated",
+        "quoting":                "automated",
+        "quality_inspection":     quality_status,    # "onnx_inference" when model downloaded, else "mock"
+        "anomaly_detection":      "automated",        # critical anomalies auto-held before scheduling
+        "energy_optimization":    _energy_status(),   # EIA API v2 when EIA_API_KEY set, else simulated
+        "inventory_management":   "automated",
+        "production_planning":    "real_data",        # US Census ASM throughput benchmarks
+        "rework_dispatch":        "automated",
+        "material_sourcing":      "directory_active", # supplier directory with geo-search
+        "predictive_maintenance": "automated",        # MTBF/MTTR risk scoring, urgent → exception queue
+        "exception_handling":     "automated",        # 5-source aggregator; urgent maintenance auto-surfaced
     }
     _AUTOMATED_STATUSES = {"automated", "real_grid_data", "real_data", "directory_active", "onnx_inference"}
     automated = sum(1 for v in touchpoints.values() if v in _AUTOMATED_STATUSES)
@@ -242,7 +244,7 @@ async def health():
 
     return {
         "status": "ok",
-        "version": "0.5.0",
+        "version": "0.6.0",
         "lights_out_readiness": touchpoints,
         "vision_model": vision_model,
         "automated_touchpoints": automated,

@@ -467,3 +467,147 @@ def test_exceptions_include_resolved():
     all_ids = {e["id"] for e in resp_all.json()["exceptions"]}
 
     assert exc_id not in open_ids or exc_id in all_ids
+
+
+# ---------------------------------------------------------------------------
+# Maintenance risk collector
+# ---------------------------------------------------------------------------
+
+def _make_urgent_signal(machine_id: int = 5) -> dict:
+    return {
+        "machine_id": machine_id,
+        "fault_count_24h": 3,
+        "fault_count_7d": 7,
+        "mtbf_hours": 3.0,
+        "mttr_minutes": 45.0,
+        "last_fault_at": "2026-03-26T10:00:00",
+        "risk_score": 90,
+        "risk_level": "urgent",
+        "recommendation": "Take machine offline immediately.",
+    }
+
+
+def test_maintenance_risk_urgent_creates_exception(monkeypatch):
+    _resolutions.clear()
+    agent = ExceptionQueueAgent()
+    db = _make_db()
+
+    from agents import predictive_maintenance as pm_module
+    monkeypatch.setattr(
+        pm_module.PredictiveMaintenanceAgent,
+        "signals",
+        lambda self, db: [_make_urgent_signal(machine_id=5)],
+    )
+
+    items = agent._maintenance_risk(db)
+    assert len(items) == 1
+    assert items[0].source == "maintenance_risk"
+    assert items[0].severity == "critical"
+    assert items[0].machine_id == 5
+    assert "urgent" in items[0].title.lower() or "90" in items[0].title
+
+
+def test_maintenance_risk_non_urgent_excluded(monkeypatch):
+    _resolutions.clear()
+    agent = ExceptionQueueAgent()
+    db = _make_db()
+
+    watch_signal = _make_urgent_signal(machine_id=6)
+    watch_signal["risk_level"] = "watch"
+    watch_signal["risk_score"] = 35
+
+    from agents import predictive_maintenance as pm_module
+    monkeypatch.setattr(
+        pm_module.PredictiveMaintenanceAgent,
+        "signals",
+        lambda self, db: [watch_signal],
+    )
+
+    items = agent._maintenance_risk(db)
+    assert items == []
+
+
+def test_maintenance_risk_multiple_urgent_machines(monkeypatch):
+    _resolutions.clear()
+    agent = ExceptionQueueAgent()
+    db = _make_db()
+
+    signals = [_make_urgent_signal(machine_id=i) for i in (7, 8, 9)]
+
+    from agents import predictive_maintenance as pm_module
+    monkeypatch.setattr(
+        pm_module.PredictiveMaintenanceAgent,
+        "signals",
+        lambda self, db: signals,
+    )
+
+    items = agent._maintenance_risk(db)
+    assert len(items) == 3
+    machine_ids = {i.machine_id for i in items}
+    assert machine_ids == {7, 8, 9}
+
+
+def test_maintenance_risk_exc_id_format(monkeypatch):
+    _resolutions.clear()
+    agent = ExceptionQueueAgent()
+    db = _make_db()
+
+    from agents import predictive_maintenance as pm_module
+    monkeypatch.setattr(
+        pm_module.PredictiveMaintenanceAgent,
+        "signals",
+        lambda self, db: [_make_urgent_signal(machine_id=42)],
+    )
+
+    items = agent._maintenance_risk(db)
+    assert items[0].exc_id == "maintenance_risk-42"
+
+
+def test_maintenance_risk_resolvable(monkeypatch):
+    _resolutions.clear()
+    agent = ExceptionQueueAgent()
+    db = _make_db()
+
+    from agents import predictive_maintenance as pm_module
+    monkeypatch.setattr(
+        pm_module.PredictiveMaintenanceAgent,
+        "signals",
+        lambda self, db: [_make_urgent_signal(machine_id=10)],
+    )
+
+    items = agent._maintenance_risk(db)
+    assert items[0].resolved is False
+
+    mark_resolved("maintenance_risk-10")
+    items2 = agent._maintenance_risk(db)
+    assert items2[0].resolved is True
+
+
+def test_maintenance_risk_in_gather_source_filter(monkeypatch):
+    _resolutions.clear()
+
+    from agents import predictive_maintenance as pm_module
+    monkeypatch.setattr(
+        pm_module.PredictiveMaintenanceAgent,
+        "signals",
+        lambda self, db: [_make_urgent_signal(machine_id=11)],
+    )
+
+    agent = ExceptionQueueAgent()
+    db = _make_db()
+
+    all_items = agent.gather(db)
+    maintenance_items = [i for i in all_items if i.source == "maintenance_risk"]
+    assert len(maintenance_items) == 1
+    assert maintenance_items[0].machine_id == 11
+
+
+def test_health_has_predictive_maintenance_and_exception_handling():
+    resp = _tc.get("/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    lr = body["lights_out_readiness"]
+    assert "predictive_maintenance" in lr
+    assert "exception_handling" in lr
+    assert lr["predictive_maintenance"] == "automated"
+    assert lr["exception_handling"] == "automated"

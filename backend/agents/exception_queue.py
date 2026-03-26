@@ -5,10 +5,11 @@ This is the lights-out handoff interface: software handles routine production;
 when it can't, an exception lands here. Humans only touch the exception queue.
 
 Exception sources (aggregated in priority order):
-  1. machine_fault     — MachineStateLog rows where to_state = FAULT
-  2. held_order        — OrderRecord rows with status = "held" (blocked by anomaly gate)
-  3. quality_failure   — InspectionRecord rows where passed = False (no rework order yet)
-  4. low_inventory     — Materials below reorder threshold (from InventoryAgent)
+  1. machine_fault      — MachineStateLog rows where to_state = FAULT
+  2. held_order         — OrderRecord rows with status = "held" (blocked by anomaly gate)
+  3. quality_failure    — InspectionRecord rows where passed = False (no rework order yet)
+  4. low_inventory      — Materials below reorder threshold (from InventoryAgent)
+  5. maintenance_risk   — Machines whose predictive maintenance risk_level = "urgent"
 
 Each exception carries:
   - id           unique string key (<source>-<pk>)
@@ -149,7 +150,7 @@ class ExceptionQueueAgent:
         db:               SQLAlchemy session
         include_resolved: include already-resolved exceptions (default False)
         source_filter:    restrict to one source type (machine_fault | held_order |
-                          quality_failure | low_inventory)
+                          quality_failure | low_inventory | maintenance_risk)
         severity_filter:  restrict to one severity (critical | warning | info)
         limit:            max items to return
 
@@ -162,6 +163,7 @@ class ExceptionQueueAgent:
             self._held_orders,
             self._quality_failures,
             self._low_inventory,
+            self._maintenance_risk,
         ]
 
         items: List[ExceptionItem] = []
@@ -370,6 +372,50 @@ class ExceptionQueueAgent:
                     f"(reorder point: {reorder:.0f} kg). "
                     f"POST /api/inventory/reorder to generate a purchase order."
                 ),
+                occurred_at=datetime.now(timezone.utc),
+            ))
+
+        return items
+
+    def _maintenance_risk(self, db) -> List[ExceptionItem]:
+        """Machines whose predictive maintenance signal is 'urgent'."""
+        try:
+            from agents.predictive_maintenance import PredictiveMaintenanceAgent
+        except ImportError:
+            return []
+
+        try:
+            agent = PredictiveMaintenanceAgent()
+            signals = agent.signals(db)
+        except Exception as exc:
+            logger.warning("Maintenance risk collector failed: %s", exc)
+            return []
+
+        items = []
+        for sig in signals:
+            if sig.get("risk_level") != "urgent":
+                continue
+
+            machine_id = sig["machine_id"]
+            exc_id = f"maintenance_risk-{machine_id}"
+            score = sig.get("risk_score", 0)
+            fault_24h = sig.get("fault_count_24h", 0)
+            mtbf = sig.get("mtbf_hours")
+            mtbf_str = f"{mtbf:.1f}h MTBF" if mtbf is not None else "MTBF unknown"
+            recommendation = sig.get("recommendation", "Schedule immediate inspection.")
+            last_fault = sig.get("last_fault_at") or "unknown"
+
+            items.append(ExceptionItem(
+                exc_id=exc_id,
+                source="maintenance_risk",
+                severity="critical",
+                title=f"Machine {machine_id} — urgent maintenance risk (score {score})",
+                detail=(
+                    f"Machine {machine_id} has {fault_24h} fault(s) in the last 24h, "
+                    f"{mtbf_str}. Last fault: {last_fault}. "
+                    f"{recommendation}"
+                ),
+                machine_id=machine_id,
                 occurred_at=datetime.now(timezone.utc),
             ))
 
