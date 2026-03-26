@@ -3,10 +3,10 @@ import { API_BASE } from "../config";
 
 // Category → dot color
 const CATEGORY_COLOR = {
-  metals: "#f97316",      // orange
-  plastics: "#3b82f6",    // blue
-  composites: "#8b5cf6",  // purple
-  wood: "#22c55e",        // green
+  metals: "#f97316",       // orange
+  plastics: "#3b82f6",     // blue
+  composites: "#8b5cf6",   // purple
+  wood: "#22c55e",         // green
   raw_materials: "#eab308", // yellow
 };
 
@@ -15,16 +15,44 @@ function categoryColor(categories) {
   return CATEGORY_COLOR[categories[0]] || "#f97316";
 }
 
+// Build a cluster icon whose background reflects the dominant category in the cluster
+function makeClusterIcon(cluster) {
+  const children = cluster.getAllChildMarkers();
+  const counts = {};
+  children.forEach((m) => {
+    const cat = m.options._cat || "metals";
+    counts[cat] = (counts[cat] || 0) + 1;
+  });
+  const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "metals";
+  const color = CATEGORY_COLOR[dominant] || "#f97316";
+  const n = cluster.getChildCount();
+  const size = n < 10 ? 28 : n < 100 ? 34 : 42;
+  return window.L.divIcon({
+    html: `<div style="
+      width:${size}px;height:${size}px;border-radius:50%;
+      background:${color};opacity:0.88;
+      display:flex;align-items:center;justify-content:center;
+      color:#fff;font-weight:700;font-size:${size < 34 ? 11 : 13}px;
+      border:2px solid rgba(255,255,255,0.25);
+      box-shadow:0 1px 4px rgba(0,0,0,0.5);
+    ">${n}</div>`,
+    className: "",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
 export default function SupplierMap() {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
+  const clusterGroup = useRef(null);
   const [mapReady, setMapReady] = useState(false);
   const [stats, setStats] = useState(null);
   const [material, setMaterial] = useState("");
   const [loading, setLoading] = useState(false);
   const [empty, setEmpty] = useState(false);
 
-  // Initialize Leaflet map once — delayed so the container has height before L.map reads it
+  // Initialize Leaflet map once
   useEffect(() => {
     const init = () => {
       if (!window.L || mapInstance.current) return;
@@ -38,6 +66,18 @@ export default function SupplierMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19,
       }).addTo(mapInstance.current);
+
+      // Create one cluster group — markers live here, not directly on the map
+      clusterGroup.current = window.L.markerClusterGroup({
+        iconCreateFunction: makeClusterIcon,
+        maxClusterRadius: 60,       // px — how close before clustering
+        disableClusteringAtZoom: 10, // individual markers below this zoom
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        animate: true,
+      });
+      mapInstance.current.addLayer(clusterGroup.current);
+
       mapInstance.current.invalidateSize();
       setMapReady(true);
     };
@@ -53,42 +93,39 @@ export default function SupplierMap() {
       .catch(() => {});
   }, []);
 
-  // Load suppliers and drop markers
+  // Load all suppliers and rebuild the cluster group
   const loadSuppliers = async (mat) => {
-    if (!mapInstance.current) return;
+    if (!mapInstance.current || !clusterGroup.current) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: 200, verified_only: true });
+      const params = new URLSearchParams({ limit: 2000, verified_only: true });
       if (mat) params.set("material", mat);
       const res = await fetch(`${API_BASE}/api/suppliers?${params}`);
       if (!res.ok) return;
       const data = await res.json();
 
-      // Clear existing markers
-      mapInstance.current.eachLayer((layer) => {
-        if (layer instanceof window.L.CircleMarker) {
-          mapInstance.current.removeLayer(layer);
-        }
-      });
+      // Clear old markers from the cluster group
+      clusterGroup.current.clearLayers();
 
       setEmpty(data.suppliers.length === 0);
 
       data.suppliers.forEach((s) => {
         if (s.lat == null || s.lng == null) return;
         const color = categoryColor(s.categories);
-        window.L.circleMarker([s.lat, s.lng], {
-          radius: 7,
+        const marker = window.L.circleMarker([s.lat, s.lng], {
+          radius: 6,
           fillColor: color,
-          color: "#1f2937",
+          color: "#111827",
           weight: 1,
           opacity: 0.9,
           fillOpacity: 0.85,
-        })
-          .bindPopup(
-            `<b>${s.name}</b><br>${s.city}, ${s.state}<br>` +
-            `<span style="color:#9ca3af;font-size:11px">${s.materials.slice(0, 4).join(", ")}</span>`
-          )
-          .addTo(mapInstance.current);
+          // store category for cluster icon color calculation
+          _cat: s.categories?.[0] || "metals",
+        }).bindPopup(
+          `<b>${s.name}</b><br>${s.city}, ${s.state}<br>` +
+          `<span style="color:#9ca3af;font-size:11px">${s.materials.slice(0, 4).join(", ")}</span>`
+        );
+        clusterGroup.current.addLayer(marker);
       });
     } catch {
       // silently ignore
@@ -97,7 +134,7 @@ export default function SupplierMap() {
     }
   };
 
-  // Initial load and on material filter change — wait for map to be ready
+  // Reload on map ready or filter change
   useEffect(() => {
     if (!mapReady) return;
     loadSuppliers(material);
@@ -150,7 +187,7 @@ export default function SupplierMap() {
         )}
         {!loading && empty && (
           <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-            <p className="text-sm text-gray-500">Supplier data loading — check back shortly</p>
+            <p className="text-sm text-gray-500">No suppliers match — try a different filter</p>
           </div>
         )}
       </div>
