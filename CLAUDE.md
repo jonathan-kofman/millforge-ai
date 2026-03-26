@@ -16,7 +16,7 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 5. **Rework dispatch** — ✅ automated. No human decides rework priority.
 6. **Energy procurement** — ✅ automated (EIA API v2, PJM demand-based pricing). No human decides when to run energy-intensive jobs.
 7. **Inventory reorder** — ✅ automated. No human monitors stock levels.
-8. **Material sourcing** — ✅ directory active (50+ verified US suppliers, geo-search). No human searches for suppliers.
+8. **Material sourcing** — ✅ directory active (100+ verified US suppliers, geo-search). No human searches for suppliers.
 9. **Production planning** — real data (Census ASM throughput). No human translates demand signals into capacity targets.
 10. **Exception handling** — this is what humans are for. Everything else is software.
 
@@ -30,7 +30,7 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 | rework.py | ✅ Yes — auto-dispatches failures | automated | Core |
 | inventory_agent.py | ✅ Yes — auto-reorders stock | automated | Medium |
 | energy_optimizer.py | ✅ Yes — no human decides when to run energy-intensive jobs | automated (EIA API v2, PJM demand-based) | Medium |
-| supplier_directory.py | ✅ Yes — no human searches for suppliers | directory_active (50+ US suppliers) | Medium |
+| supplier_directory.py | ✅ Yes — no human searches for suppliers | directory_active (100+ US suppliers) | Medium |
 | production_planner.py | Partially — real Census ASM throughput data | real_data | Defer |
 | nl_scheduler.py | Assists human, not replaces | mock | Defer |
 | anomaly_detector.py | ✅ Yes — critical anomalies auto-held before scheduling | automated | Core |
@@ -360,7 +360,7 @@ Fields: `name, address, city, state, country, lat, lng, materials (JSON list), c
 
 ### Seed Data (`backend/scripts/seed_suppliers.py`)
 
-50+ real US metal distributors: Olympic Steel (5 branches), Metals USA (5), Chicago Tube and Iron (5), Ryerson (5), TW Metals (3), Chapel Steel (2), Metal Supermarkets (5), Earle M Jorgensen, Reliance Steel, Metals Depot, Alro Steel (3), Castle Metals, O'Neal Steel (2), Worthington Industries, Steel Technologies, Precision Castparts, Carpenter Technology, Haynes International, and more.
+100+ real US materials suppliers across metals, plastics, wood, and composites: Olympic Steel (5 branches), Metals USA (5), Chicago Tube and Iron (5), Ryerson (5), TW Metals (3), Chapel Steel (2), Metal Supermarkets (5), Curbell Plastics (3), Piedmont Plastics (3), Interstate Plastics (2), Professional Plastics (2), DragonPlate, Rock West Composites, Hexcel, Toray, 84 Lumber, Northwest Hardwoods, Bell Forest Products, Arconic, ThyssenKrupp Materials NA, Titanium Industries, and more.
 
 Run: `python scripts/seed_suppliers.py [--clear]`
 
