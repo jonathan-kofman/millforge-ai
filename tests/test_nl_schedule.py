@@ -206,3 +206,100 @@ class TestNLScheduleAPI:
         r = client.post("/api/schedule/nl", json=payload)
         assert r.status_code == 200
         assert r.json()["schedule"]["summary"]["total_orders"] == len(MIXED_ORDERS)
+
+
+# ---------------------------------------------------------------------------
+# /auto endpoint (DB-backed)
+# ---------------------------------------------------------------------------
+
+from datetime import datetime, timedelta, timezone
+
+
+def _future_iso(hours: int) -> str:
+    return (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=hours)).isoformat()
+
+
+def _register_and_login(client, email, password="testpass123", name="NL Auto User"):
+    client.post("/api/auth/register", json={"email": email, "password": password, "name": name})
+    client.post("/api/auth/login", json={"email": email, "password": password})
+
+
+def _create_pending_order(client, order_id, material="steel", priority=5):
+    r = client.post("/api/orders", json={
+        "order_id": order_id,
+        "material": material,
+        "quantity": 50,
+        "dimensions": "100x100x10mm",
+        "due_date": _future_iso(72),
+        "priority": priority,
+        "complexity": 1.0,
+    })
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+class TestNLAutoAPI:
+
+    def test_nl_auto_requires_auth(self, client):
+        r = client.post("/api/schedule/nl/auto", json={"instruction": "rush all"})
+        assert r.status_code == 401
+
+    def test_nl_auto_no_pending_orders_returns_400(self, client):
+        _register_and_login(client, "nl_auto_empty@example.com")
+        r = client.post("/api/schedule/nl/auto", json={"instruction": "rush all"})
+        assert r.status_code == 400
+        assert "No pending orders" in r.json()["detail"]
+
+    def test_nl_auto_schedules_pending_orders(self, client):
+        _register_and_login(client, "nl_auto_sched@example.com")
+        _create_pending_order(client, "AUTO-001", material="steel", priority=5)
+        _create_pending_order(client, "AUTO-002", material="titanium", priority=5)
+
+        r = client.post("/api/schedule/nl/auto", json={"instruction": "rush titanium orders"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["orders_scheduled"] == 2
+        assert body["algorithm"] == "sa+nl"
+        assert "schedule" in body
+        assert "summary" in body
+
+    def test_nl_auto_response_has_schedule_run_id(self, client):
+        _register_and_login(client, "nl_auto_runid@example.com")
+        _create_pending_order(client, "AUTO-RID-001", material="steel")
+
+        r = client.post("/api/schedule/nl/auto", json={"instruction": "no changes"})
+        assert r.status_code == 200
+        assert isinstance(r.json()["schedule_run_id"], int)
+
+    def test_nl_auto_marks_orders_scheduled(self, client):
+        """After /auto, GET /api/orders should show status=scheduled for all submitted orders."""
+        _register_and_login(client, "nl_auto_status@example.com")
+        o1 = _create_pending_order(client, "AUTO-ST-001", material="steel")
+        o2 = _create_pending_order(client, "AUTO-ST-002", material="aluminum")
+
+        client.post("/api/schedule/nl/auto", json={"instruction": "defer aluminum"})
+
+        orders_r = client.get("/api/orders")
+        assert orders_r.status_code == 200
+        statuses = {o["order_id"]: o["status"] for o in orders_r.json()["orders"]}
+        assert statuses.get(o1["order_id"]) == "scheduled"
+        assert statuses.get(o2["order_id"]) == "scheduled"
+
+    def test_nl_auto_summary_fields_present(self, client):
+        _register_and_login(client, "nl_auto_sum@example.com")
+        _create_pending_order(client, "AUTO-SUM-001", material="copper")
+
+        r = client.post("/api/schedule/nl/auto", json={"instruction": "rush copper"})
+        assert r.status_code == 200
+        summary = r.json()["summary"]
+        for key in ("total_orders", "on_time_count", "on_time_rate_percent", "makespan_hours", "utilization_percent"):
+            assert key in summary, f"Missing summary field: {key}"
+
+    def test_nl_auto_only_schedules_own_orders(self, client):
+        """Orders created by user A should not appear in user B's /auto schedule."""
+        _register_and_login(client, "nl_user_a@example.com")
+        _create_pending_order(client, "USR-A-001", material="steel")
+
+        _register_and_login(client, "nl_user_b@example.com")
+        r = client.post("/api/schedule/nl/auto", json={"instruction": "rush all"})
+        assert r.status_code == 400  # user B has no pending orders

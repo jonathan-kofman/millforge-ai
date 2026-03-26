@@ -553,6 +553,24 @@ class NLScheduleRequest(BaseModel):
         ..., description="Order list to apply overrides to, then schedule"
     )
 
+
+class NLAutoScheduleRequest(BaseModel):
+    instruction: str = Field(
+        ...,
+        description=(
+            "Plain-English scheduling override applied to your pending orders. "
+            "e.g. 'Rush all titanium orders' or 'Defer low-priority steel to end of queue'."
+        ),
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "instruction": "Rush all titanium orders — aerospace deadline moved up",
+            }
+        }
+    }
+
     model_config = {
         "json_schema_extra": {
             "example": {
