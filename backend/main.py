@@ -34,6 +34,7 @@ from routers.exceptions import router as exceptions_router
 from routers.ws_machines import router as ws_machines_router, connection_manager as _ws_connection_manager
 from routers.shift import router as shift_router
 from routers.maintenance import router as maintenance_router
+from routers.dashboard import router as dashboard_router
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
@@ -174,6 +175,7 @@ app.include_router(exceptions_router)
 app.include_router(ws_machines_router)
 app.include_router(shift_router)
 app.include_router(maintenance_router)
+app.include_router(dashboard_router)
 
 
 # ---------------------------------------------------------------------------
