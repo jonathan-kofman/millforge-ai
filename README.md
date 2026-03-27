@@ -18,14 +18,17 @@ Most metal mills have 8 to 30 week lead times not because the machines are slow 
 |------------|--------|
 | Scheduling | ✅ automated |
 | Quoting | ✅ automated |
-| Quality Inspection | 🔬 mock (heuristic — no model deployed) |
+| Quality Inspection | 🔬 onnx_inference (NEU-DET YOLOv8n, mAP50=0.759) |
+| Anomaly Detection | ✅ automated (critical orders auto-held before scheduling) |
 | Rework Dispatch | ✅ automated |
 | Inventory Management | ✅ automated |
-| Energy Optimization | ✅ automated (PJM real-time LMP when gridstatus available) |
-| Material Sourcing | ✅ directory active (50+ verified US suppliers, geo-search) |
+| Energy Optimization | ✅ automated (EIA API v2, PJM demand-based) |
+| Material Sourcing | ✅ directory active (1,137 verified US suppliers, geo-search) |
 | Production Planning | 📊 real data (US Census ASM) |
+| Predictive Maintenance | ✅ automated (MTBF/MTTR risk scoring → exception queue) |
+| Exception Handling | ✅ automated (5-source aggregator) |
 
-**Current readiness: 75%** (6 of 8 touchpoints fully automated)
+**Current readiness: 91%** (10 of 11 touchpoints fully automated)
 
 ## The Core Demo
 
@@ -88,24 +91,34 @@ make dev-frontend
 ```
 millforge-ai/
 ├── backend/
-│   ├── main.py              # FastAPI app entry point
+│   ├── main.py              # FastAPI app entry point; 18 routers, lifespan hooks
 │   ├── database.py          # SQLAlchemy engine + SessionLocal
-│   ├── db_models.py         # ORM models: User, OrderRecord, ScheduleRun, InspectionRecord
-│   ├── routers/             # quote, schedule, orders, vision, contact, auth, rework
-│   ├── models/schemas.py    # Pydantic request/response models
-│   ├── auth/                # JWT utils + dependency injection
-│   └── agents/
-│       ├── scheduler.py         # EDD scheduler (core)
-│       ├── sa_scheduler.py      # Simulated Annealing optimizer
-│       ├── quality_vision.py    # YOLOv8n ONNX visual quality triage
-│       ├── energy_optimizer.py  # Energy cost estimation
-│       ├── inventory_agent.py   # Stock tracking and auto-reorder
-│       └── rework.py            # Rework dispatch from failed inspections
+│   ├── db_models.py         # ORM models: User, OrderRecord, ScheduleRun, Supplier, JobFeedbackRecord…
+│   ├── routers/             # 23 thin HTTP handlers (schedule, quote, vision, energy, suppliers…)
+│   ├── models/schemas.py    # Pydantic v2 request/response models — single source of truth
+│   ├── auth/                # httpOnly cookie session + JWT utils
+│   ├── scripts/             # seed_suppliers.py, train_vision_model.py, export_model.py
+│   └── agents/              # 25 pure-Python business-logic modules
+│       ├── scheduler.py           # EDD core — machine assignment, setup-time matrix
+│       ├── sa_scheduler.py        # Simulated Annealing (seed=123, deterministic)
+│       ├── benchmark_data.py      # 28-order deterministic dataset (FIFO/EDD/SA)
+│       ├── quality_vision.py      # YOLOv8n ONNX inference (NEU-DET, mAP50=0.759)
+│       ├── energy_optimizer.py    # EIA API v2 pricing, carbon intensity, 10-yr NPV
+│       ├── inventory_agent.py     # Stock tracking, auto-reorder POs
+│       ├── anomaly_detector.py    # Critical anomaly gate — auto-holds before scheduling
+│       ├── exception_queue.py     # 5-source urgency aggregator
+│       ├── predictive_maintenance.py  # MTBF/MTTR risk scoring
+│       ├── supplier_directory.py  # 1,137 US suppliers, haversine geo-search
+│       ├── scheduling_twin.py     # ML self-calibration (RandomForest setup-time predictor)
+│       ├── dashboard.py           # Live lights-out KPI aggregation
+│       ├── cad_parser.py          # STL → order parameters (ARIA-OS bridge)
+│       └── …                     # machine_fleet, machine_state_machine, feedback_logger…
 ├── frontend/
 │   └── src/
 │       ├── App.jsx
-│       └── components/      # QuoteForm, ScheduleViewer, VisionDemo, BenchmarkDemo, LightsOutWidget
-├── tests/                   # pytest suite across all modules
+│       └── components/      # 14 components: BenchmarkDemo, LightsOutWidget, SupplierMap,
+│                            #   VisionDemo, EnergyWidget, GanttChart, QuoteForm…
+├── tests/                   # 36 pytest files — unit + e2e coverage
 ├── docs/                    # architecture, agents, api_spec, roadmap, CHANGELOG
 ├── docker-compose.yml
 ├── Makefile
@@ -118,20 +131,30 @@ millforge-ai/
 |--------|------|------|-------------|
 | GET | `/health` | No | Lights-out readiness scoreboard |
 | GET | `/api/schedule/benchmark` | No | **Core demo** — FIFO vs EDD vs SA on-time comparison |
-| POST | `/api/quote` | No | Instant quote within real shop capacity constraints |
 | POST | `/api/schedule` | No | Optimise production schedule within shop constraints |
 | GET | `/api/schedule/demo` | No | Demo schedule on built-in mock order set |
+| POST | `/api/quote` | No | Instant quote with volume discounts and carbon footprint |
 | POST | `/api/schedule/rework` | No | Auto-dispatch rework orders from failed inspections |
-| POST | `/api/vision/inspect` | No | Visual quality triage (YOLOv8n ONNX pretrained) |
+| POST | `/api/vision/inspect` | No | Visual quality triage (YOLOv8n ONNX, NEU-DET) |
+| GET | `/api/energy/negative-pricing-windows` | No | Detect free/negative-cost grid hours |
+| POST | `/api/energy/arbitrage-analysis` | No | Off-peak shift savings estimate |
+| POST | `/api/energy/scenario` | No | 10-year NPV for solar/wind/battery/SMR/grid-only |
+| GET | `/api/suppliers` | No | Search 1,137 verified US suppliers |
+| GET | `/api/suppliers/nearby` | No | Geo-sorted supplier search by lat/lng radius |
+| GET | `/api/inventory/reorder-with-suppliers` | No | Reorder POs with nearest supplier suggestions |
+| GET | `/api/dashboard/live` | JWT | Composite lights-out score + live KPIs |
+| GET | `/api/exceptions` | JWT | 5-source exception queue (maintenance, energy, anomaly, inventory, orders) |
+| POST | `/api/anomaly/detect` | No | Run anomaly detection on an order batch |
+| POST | `/api/orders/from-cad` | No | STL upload → extracted order parameters |
+| GET | `/api/learning/calibration-report` | JWT | Setup/processing time prediction accuracy |
+| GET | `/api/twin/accuracy` | JWT | Scheduling twin MAE vs actual job records |
 | POST | `/api/contact` | No | Pilot interest form |
 | POST | `/api/auth/register` | No | Register user account |
-| POST | `/api/auth/login` | No | Login → JWT token |
+| POST | `/api/auth/login` | No | Login → httpOnly session cookie |
 | GET | `/api/orders` | JWT | List user's orders |
 | POST | `/api/orders` | JWT | Create order |
-| GET | `/api/orders/{id}` | JWT | Get order by ID |
 | PATCH | `/api/orders/{id}` | JWT | Update order |
 | DELETE | `/api/orders/{id}` | JWT | Delete order |
-| POST | `/api/orders/schedule` | JWT | Schedule pending orders |
 
 ## Architecture
 
