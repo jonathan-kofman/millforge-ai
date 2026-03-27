@@ -7,7 +7,7 @@ Most metal mills have 8 to 30 week lead times not because the machines are slow 
 **MillForge AI** replaces the scheduling chaos with software that optimizes, quotes, inspects, and reschedules automatically.
 
 **Live demo**: https://millforge-ai.vercel.app
-**API**: https://millforge-ai.up.railway.app
+**API**: https://millforge-ai-production.up.railway.app
 **GitHub**: https://github.com/jonathan-kofman/millforge-ai
 
 ## Lights-Out Readiness
