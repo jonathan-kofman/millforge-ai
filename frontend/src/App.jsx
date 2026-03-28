@@ -10,6 +10,7 @@ import LightsOutWidget from "./components/LightsOutWidget";
 import EnergyWidget from "./components/EnergyWidget";
 import SupplierMap from "./components/SupplierMap";
 import OnboardingWizard from "./components/OnboardingWizard";
+import Discovery from "./pages/Discovery";
 import { API_BASE } from "./config";
 
 const PUBLIC_TABS = [
@@ -20,7 +21,8 @@ const PUBLIC_TABS = [
 ];
 
 const AUTH_TABS = [
-  { id: "orders", label: "My Orders" },
+  { id: "orders",    label: "My Orders" },
+  { id: "discovery", label: "Discovery" },
 ];
 
 export default function App() {
@@ -400,6 +402,7 @@ export default function App() {
         {activeTab === "schedule" && <ScheduleViewer />}
         {activeTab === "vision"   && <VisionDemo />}
         {activeTab === "contact"  && <ContactForm />}
+        {activeTab === "discovery" && user && <Discovery />}
         {activeTab === "orders"   && user && (
           <>
             {onboardingStatus?.configured && !onboardingStatus?.is_complete && !showWizard && (
