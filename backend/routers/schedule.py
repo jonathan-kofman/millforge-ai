@@ -23,6 +23,7 @@ from models.schemas import (
     ScheduleRequest, ScheduleResponse, ScheduleSummary,
     ScheduledOrderOutput, OrderInput, BenchmarkResponse, BenchmarkEntry,
     EnergyAnalysis, AnomalyItem, AnomalyDetectResponse,
+    BacktestRequest, BacktestResponse, BacktestActuals, BacktestOrderDetail,
 )
 from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT, BASE_SETUP_MINUTES, MACHINE_COUNT, check_order_warnings
 from agents.sa_scheduler import SAScheduler
@@ -429,6 +430,159 @@ async def export_schedule_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=schedule_{run.id}.pdf"},
+    )
+
+
+@router.post(
+    "/schedule/backtest",
+    response_model=BacktestResponse,
+    summary="Replay historical orders — what would MillForge have achieved?",
+)
+async def backtest_schedule(req: BacktestRequest) -> BacktestResponse:
+    """
+    Given a set of historical orders with recorded actual completion times,
+    compute what FIFO, EDD, and SA would have achieved on the same batch.
+
+    This answers the investor/customer question: *"Prove it works on real data."*
+
+    - Upload any past production batch with `actual_completion` timestamps
+    - The endpoint computes your real historical on-time rate from those timestamps
+    - Then projects FIFO, EDD, and SA on the same orders from the same start time
+    - `sa_vs_actual_pp` is the headline: how many more orders would have shipped on-time
+
+    The `start_time` defaults to the earliest due date minus twice the median
+    processing time — a reasonable approximation of when the batch entered the queue.
+    """
+    from datetime import timedelta
+
+    def _strip_tz(dt: datetime) -> datetime:
+        return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
+
+    n = len(req.orders)
+
+    # --- Infer start_time if not provided ---
+    if req.start_time is not None:
+        start_time = _strip_tz(req.start_time)
+    else:
+        due_dates = [_strip_tz(o.due_date) for o in req.orders]
+        proc_hours = [
+            (o.quantity / THROUGHPUT.get(o.material.value.lower(), 3.0)) * o.complexity
+            for o in req.orders
+        ]
+        median_proc_h = sorted(proc_hours)[n // 2]
+        start_time = min(due_dates) - timedelta(hours=median_proc_h * 2)
+
+    # --- Actuals from real completion data ---
+    actual_on_time = 0
+    actual_late_total = 0.0
+    for o in req.orders:
+        actual_comp = _strip_tz(o.actual_completion)
+        due = _strip_tz(o.due_date)
+        late_h = (actual_comp - due).total_seconds() / 3600
+        if late_h <= 0:
+            actual_on_time += 1
+        else:
+            actual_late_total += late_h
+
+    actual = BacktestActuals(
+        on_time_count=actual_on_time,
+        on_time_rate_percent=round(actual_on_time / n * 100, 1),
+        avg_lateness_hours=round(actual_late_total / n, 2),
+    )
+
+    # --- Convert to domain orders (drop actual_completion — algorithms don't see it) ---
+    domain_orders = [
+        Order(
+            order_id=o.order_id,
+            material=o.material.value,
+            quantity=o.quantity,
+            dimensions=o.dimensions,
+            due_date=_strip_tz(o.due_date),
+            priority=o.priority,
+            complexity=o.complexity,
+        )
+        for o in req.orders
+    ]
+
+    # --- FIFO ---
+    fifo_on_time, fifo_avg_late, fifo_makespan, fifo_util, fifo_ot_count, fifo_ms = (
+        _fifo_schedule(domain_orders)
+    )
+    fifo_entry = BenchmarkEntry(
+        algorithm="fifo",
+        on_time_rate_percent=fifo_on_time,
+        avg_lateness_hours=fifo_avg_late,
+        makespan_hours=fifo_makespan,
+        utilization_percent=fifo_util,
+        on_time_count=fifo_ot_count,
+        total_orders=n,
+        solve_ms=fifo_ms,
+    )
+
+    # --- EDD ---
+    t0 = time.perf_counter()
+    edd_sched = _edd.optimize(domain_orders, start_time=start_time)
+    edd_ms = round((time.perf_counter() - t0) * 1000, 1)
+    edd_entry = BenchmarkEntry(
+        algorithm="edd",
+        on_time_rate_percent=edd_sched.on_time_rate,
+        avg_lateness_hours=_avg_lateness(edd_sched),
+        makespan_hours=round(edd_sched.makespan_hours, 2),
+        utilization_percent=round(edd_sched.utilization_percent, 1),
+        on_time_count=edd_sched.on_time_count,
+        total_orders=n,
+        solve_ms=edd_ms,
+    )
+
+    # --- SA (fixed seed=123 for reproducibility) ---
+    _bt_sa = SAScheduler(seed=123)
+    t0 = time.perf_counter()
+    sa_sched = _bt_sa.optimize(domain_orders, start_time=start_time)
+    sa_ms = round((time.perf_counter() - t0) * 1000, 1)
+    sa_entry = BenchmarkEntry(
+        algorithm="sa",
+        on_time_rate_percent=sa_sched.on_time_rate,
+        avg_lateness_hours=_avg_lateness(sa_sched),
+        makespan_hours=round(sa_sched.makespan_hours, 2),
+        utilization_percent=round(sa_sched.utilization_percent, 1),
+        on_time_count=sa_sched.on_time_count,
+        total_orders=n,
+        solve_ms=sa_ms,
+    )
+
+    # --- Per-order detail (actual vs SA) ---
+    sa_by_id = {s.order.order_id: s for s in sa_sched.scheduled_orders}
+    order_details = []
+    for o in req.orders:
+        actual_comp = _strip_tz(o.actual_completion)
+        due = _strip_tz(o.due_date)
+        actual_late = round((actual_comp - due).total_seconds() / 3600, 2)
+        sa_result = sa_by_id.get(o.order_id)
+        order_details.append(BacktestOrderDetail(
+            order_id=o.order_id,
+            due_date=due,
+            actual_completion=actual_comp,
+            actual_on_time=actual_late <= 0,
+            actual_lateness_hours=max(actual_late, 0.0),
+            sa_on_time=sa_result.on_time if sa_result else None,
+            sa_lateness_hours=round(sa_result.lateness_hours, 2) if sa_result else None,
+        ))
+
+    sa_vs_actual = round(sa_entry.on_time_rate_percent - actual.on_time_rate_percent, 1)
+    fifo_vs_actual = round(fifo_entry.on_time_rate_percent - actual.on_time_rate_percent, 1)
+
+    return BacktestResponse(
+        label=req.label or "Historical backtest",
+        order_count=n,
+        machine_count=MACHINE_COUNT,
+        start_time=start_time,
+        actual=actual,
+        fifo=fifo_entry,
+        edd=edd_entry,
+        sa=sa_entry,
+        sa_vs_actual_pp=sa_vs_actual,
+        fifo_vs_actual_pp=fifo_vs_actual,
+        orders=order_details,
     )
 
 

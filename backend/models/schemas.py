@@ -168,6 +168,66 @@ class BenchmarkResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# /api/schedule/backtest
+# ---------------------------------------------------------------------------
+
+class HistoricalOrderInput(BaseModel):
+    """One historical order with the shop's actual recorded completion time."""
+    order_id: str
+    material: MaterialType
+    quantity: int = Field(..., gt=0)
+    dimensions: str
+    due_date: datetime
+    priority: int = Field(5, ge=1, le=10)
+    complexity: float = Field(1.0, ge=0.1, le=5.0)
+    actual_completion: datetime  # what the shop actually recorded
+
+
+class BacktestActuals(BaseModel):
+    """Metrics derived purely from the shop's real historical completion data."""
+    on_time_count: int
+    on_time_rate_percent: float
+    avg_lateness_hours: float
+
+
+class BacktestOrderDetail(BaseModel):
+    """Per-order comparison of actual outcome vs SA projection."""
+    order_id: str
+    due_date: datetime
+    actual_completion: datetime
+    actual_on_time: bool
+    actual_lateness_hours: float
+    sa_on_time: Optional[bool]      # None if order was not scheduled by SA
+    sa_lateness_hours: Optional[float]
+
+
+class BacktestRequest(BaseModel):
+    orders: List[HistoricalOrderInput] = Field(..., min_length=1)
+    start_time: Optional[datetime] = Field(
+        None,
+        description=(
+            "Production start time for algorithm projections. "
+            "Defaults to the earliest due_date minus median processing time."
+        ),
+    )
+    label: Optional[str] = Field("Historical backtest", description="Human-readable name for this dataset")
+
+
+class BacktestResponse(BaseModel):
+    label: str
+    order_count: int
+    machine_count: int
+    start_time: datetime
+    actual: BacktestActuals             # real historical performance
+    fifo: BenchmarkEntry                # what naive FIFO would have done
+    edd: BenchmarkEntry                 # what MillForge EDD would have done
+    sa: BenchmarkEntry                  # what MillForge SA would have done
+    sa_vs_actual_pp: float              # SA improvement over actual baseline
+    fifo_vs_actual_pp: float            # FIFO vs actual (model validation)
+    orders: List[BacktestOrderDetail]   # per-order actual vs SA comparison
+
+
+# ---------------------------------------------------------------------------
 # /api/vision/inspect
 # ---------------------------------------------------------------------------
 
