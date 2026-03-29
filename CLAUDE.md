@@ -37,6 +37,26 @@ MillForge is **the software stack for lights-out American metal mills**. China i
 
 **Lights-out readiness target:** `GET /health` returns a `lights_out_readiness` object showing automated vs mock vs not-implemented for each touchpoint. This is the living scoreboard.
 
+## Claude Agents (`.claude/agents/`)
+
+Specialized subagents for common MillForge tasks. Invoke via the Agent tool or `/agent-name` in Claude Code.
+
+| Agent | When to use |
+|-------|-------------|
+| `millforge-pm` | Start of any session; deciding what to build next; YC readiness check |
+| `lights-out-auditor` | Before building any feature — does it remove a human touchpoint? |
+| `feature-prioritizer` | Rank backlog items against lights-out lens + discovery signal |
+| `pricing-analyst` | Analyze WTP signals from discovery; recommend pricing tiers |
+| `yc-prep` | Draft/stress-test YC application answers; adversarial Q&A prep |
+| `customer-discovery-coach` | Prep for interviews; debrief after conversations |
+| `demo-validator` | Before any partner meeting — verify benchmark numbers are locked |
+| `scheduler-debugger` | Debug late orders, underutilized machines, bad EDD sequences |
+| `energy-optimizer-analyzer` | Validate energy cost estimates and grid pricing logic |
+| `quality-vision-tester` | Test vision inspection results and defect classification |
+| `backend-reviewer` | Review before merging changes to backend/agents/, backend/routers/ |
+| `frontend-reviewer` | Review before merging changes to frontend/src/ |
+| `deployment-checker` | Diagnose Railway/Vercel deploy failures, CORS issues, env var gaps |
+
 ## Product Vision
 
 MillForge is the intelligence layer for lights-out American metal mills — starting with AI production scheduling that replaces manual coordination, and expanding to automated quoting, real-time execution monitoring, computer vision quality inspection, and energy optimization.
@@ -70,6 +90,11 @@ make dev-backend    # backend only
 make dev-frontend   # frontend only
 make test           # run pytest
 docker compose up --build   # full stack via Docker
+
+# Ollama (local LLM for discovery agent)
+ollama serve                # start Ollama if not running as a service
+ollama list                 # show available models
+ollama pull llama3.2        # pull the model used by the discovery agent
 ```
 
 ## Architecture
@@ -400,3 +425,58 @@ Run: `python scripts/seed_suppliers.py [--clear]`
 **Tests:** `tests/test_cad_parser.py` — dimensions/volume accuracy, complexity scaling (including clamp at 10), HTTP validation (wrong extension, empty file, valid STL)
 
 **ARIA-OS integration note:** When ARIA generates a toolpath, it exports the stock STL to this endpoint. The response pre-fills a draft order; the operator confirms or schedules immediately. This removes the "engineer reads CAD and fills in a form" touchpoint.
+
+## Customer Discovery Module (`backend/discovery/`, `frontend/src/pages/Discovery.jsx`)
+
+Internal tool for logging, extracting, and synthesizing customer interview data. Not a lights-out touchpoint — built for YC prep and product validation.
+
+### Architecture
+
+```
+backend/discovery/
+  __init__.py       — package init
+  models.py         — SQLAlchemy models: Interview, Insight, DiscoveryPattern
+  agent.py          — Ollama LLM agent (llama3.2 default) for extraction + synthesis
+  prompts.py        — all system prompts isolated here for easy iteration
+  routes.py         — FastAPI router, prefix /api/discovery, 7 endpoints
+```
+
+### DB Models
+
+- `Interview` — contact_name, shop_name, shop_size (1-5|6-20|21-100|100+), role, date, raw_transcript; has_many Insights (cascade delete)
+- `Insight` — interview_id (FK), category (pain_point|current_tool|wtp_signal|workflow|quote), content, severity (1-3), quote
+- `DiscoveryPattern` — label, insight_ids (JSON), frequency (0.0-1.0), evidence_quotes (JSON), feature_tag (scheduling|quoting|supplier|defect_detection|energy|onboarding|other)
+
+### Endpoints
+
+- `POST /api/discovery/interviews` — persist interview + run Ollama insight extraction
+- `GET /api/discovery/interviews` — list with insight counts
+- `GET /api/discovery/interviews/{id}` — full detail with insights
+- `DELETE /api/discovery/interviews/{id}` — cascade delete
+- `POST /api/discovery/synthesize` — clear old patterns, run cross-interview synthesis via Ollama
+- `GET /api/discovery/patterns` — ordered by frequency desc
+- `GET /api/discovery/next-questions` — generate 5 targeted questions via Ollama
+
+All endpoints require JWT auth (httpOnly cookie). Frontend tab visible only when logged in.
+
+### Ollama LLM Agent (`backend/discovery/agent.py`)
+
+- Uses Ollama HTTP API directly (no SDK dependency)
+- Model: `llama3.2:latest` (configured via `OLLAMA_MODEL` env var, default `llava-llama3:latest`)
+- Ollama URL: `http://localhost:11434` (configured via `OLLAMA_URL` env var)
+- All three functions (`extract_insights`, `synthesize_patterns`, `generate_next_questions`) fail silently — return `[]` or fallback on any error
+- JSON code-fence stripping + leading-prose skip in `_parse_json()`
+- **Important**: `llava` and `llava-llama3` are vision models — unreliable for JSON extraction. Always use `llama3.2` or better for this agent.
+
+### Local dev setup
+
+```bash
+ollama pull llama3.2          # one-time
+# backend/.env:
+OLLAMA_MODEL=llama3.2
+OLLAMA_URL=http://localhost:11434
+```
+
+### Frontend
+
+`Discovery.jsx` — 3-tab page (Log Interview / Patterns / Next Questions). Available in `AUTH_TABS` after login. Calls all `/api/discovery/*` endpoints with `credentials: "include"`.
