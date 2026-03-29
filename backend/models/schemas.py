@@ -197,8 +197,23 @@ class BacktestOrderDetail(BaseModel):
     actual_completion: datetime
     actual_on_time: bool
     actual_lateness_hours: float
-    sa_on_time: Optional[bool]      # None if order was not scheduled by SA
+    sa_on_time: Optional[bool]          # None if order was not scheduled by SA
     sa_lateness_hours: Optional[float]
+    rescued: bool                       # True when actual=late AND sa=on_time
+
+
+class BacktestImpact(BaseModel):
+    """Concrete impact metrics — more actionable than percentage-point deltas."""
+    # Volume
+    orders_rescued: int                     # late in reality → SA delivers on time
+    orders_lost: int                        # on-time in reality → SA misses (should be 0)
+    # Time saved
+    total_lateness_hours_saved: float       # sum of (actual_lateness - sa_lateness) across all orders
+    avg_lateness_reduction_hours: float     # per-order average
+    # Throughput
+    makespan_delta_hours: float             # actual wall-clock batch time − SA makespan (>0 = SA faster)
+    # Cost (only present when penalty_per_late_order_usd is supplied)
+    estimated_penalty_usd: Optional[float]
 
 
 class BacktestRequest(BaseModel):
@@ -211,6 +226,11 @@ class BacktestRequest(BaseModel):
         ),
     )
     label: Optional[str] = Field("Historical backtest", description="Human-readable name for this dataset")
+    penalty_per_late_order_usd: Optional[float] = Field(
+        None,
+        ge=0.0,
+        description="Optional per-order late penalty in USD. When provided, impact.estimated_penalty_usd shows annual savings.",
+    )
 
 
 class BacktestResponse(BaseModel):
@@ -222,8 +242,9 @@ class BacktestResponse(BaseModel):
     fifo: BenchmarkEntry                # what naive FIFO would have done
     edd: BenchmarkEntry                 # what MillForge EDD would have done
     sa: BenchmarkEntry                  # what MillForge SA would have done
-    sa_vs_actual_pp: float              # SA improvement over actual baseline
+    sa_vs_actual_pp: float              # SA improvement over actual baseline (pp)
     fifo_vs_actual_pp: float            # FIFO vs actual (model validation)
+    impact: BacktestImpact              # concrete impact metrics beyond pp
     orders: List[BacktestOrderDetail]   # per-order actual vs SA comparison
 
 

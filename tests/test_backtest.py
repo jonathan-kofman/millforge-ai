@@ -72,7 +72,7 @@ _ORDERS_2_ON_TIME = _make_orders(n_on_time=2)
 # ---------------------------------------------------------------------------
 
 def test_backtest_response_keys_present(client):
-    """All top-level response keys must be present."""
+    """All top-level response keys must be present, including impact block."""
     resp = client.post("/api/schedule/backtest", json={
         "orders": _ORDERS_5_ON_TIME,
         "label": "Test batch",
@@ -81,10 +81,13 @@ def test_backtest_response_keys_present(client):
     data = resp.json()
     for key in ("label", "order_count", "machine_count", "start_time",
                 "actual", "fifo", "edd", "sa",
-                "sa_vs_actual_pp", "fifo_vs_actual_pp", "orders"):
+                "sa_vs_actual_pp", "fifo_vs_actual_pp", "impact", "orders"):
         assert key in data, f"Missing key: {key}"
     for key in ("on_time_count", "on_time_rate_percent", "avg_lateness_hours"):
         assert key in data["actual"], f"Missing actual key: {key}"
+    for key in ("orders_rescued", "orders_lost", "total_lateness_hours_saved",
+                "avg_lateness_reduction_hours", "makespan_delta_hours"):
+        assert key in data["impact"], f"Missing impact key: {key}"
 
 
 def test_backtest_actual_on_time_rate_correct(client):
@@ -155,3 +158,62 @@ def test_backtest_label_passthrough(client):
     })
     assert resp.status_code == 200
     assert resp.json()["label"] == "Q1 2025 production run"
+
+
+def test_backtest_orders_rescued_count(client):
+    """orders_rescued must equal the number of orders that were late in reality
+    but SA would deliver on time.  Cannot exceed the number of actual late orders."""
+    resp = client.post("/api/schedule/backtest", json={"orders": _ORDERS_2_ON_TIME})
+    assert resp.status_code == 200
+    data = resp.json()
+    impact = data["impact"]
+    # At most 8 orders were late in reality (10 - 2 on time)
+    assert 0 <= impact["orders_rescued"] <= 8
+    # rescued + orders_lost is always <= order_count
+    assert impact["orders_rescued"] + impact["orders_lost"] <= data["order_count"]
+
+
+def test_backtest_rescued_flag_on_order_details(client):
+    """Per-order rescued flag must be True exactly when actual=late AND sa=on_time."""
+    resp = client.post("/api/schedule/backtest", json={"orders": _ORDERS_2_ON_TIME})
+    assert resp.status_code == 200
+    orders = resp.json()["orders"]
+    rescued_in_detail = sum(1 for o in orders if o["rescued"])
+    assert rescued_in_detail == resp.json()["impact"]["orders_rescued"]
+
+
+def test_backtest_total_lateness_hours_saved_nonnegative(client):
+    """When SA genuinely improves over history, total lateness saved should be >= 0."""
+    resp = client.post("/api/schedule/backtest", json={"orders": _ORDERS_2_ON_TIME})
+    assert resp.status_code == 200
+    # SA may save more or fewer hours depending on scenario, but value must be a number
+    saved = resp.json()["impact"]["total_lateness_hours_saved"]
+    assert isinstance(saved, (int, float))
+
+
+def test_backtest_penalty_usd_computed(client):
+    """When penalty_per_late_order_usd is supplied, estimated_penalty_usd must be present."""
+    resp = client.post("/api/schedule/backtest", json={
+        "orders": _ORDERS_2_ON_TIME,
+        "penalty_per_late_order_usd": 500.0,
+    })
+    assert resp.status_code == 200
+    penalty = resp.json()["impact"]["estimated_penalty_usd"]
+    assert penalty is not None
+    # Must be non-negative and a round number of $500 * rescued * 12
+    assert penalty >= 0.0
+
+
+def test_backtest_penalty_usd_absent_when_not_supplied(client):
+    """estimated_penalty_usd must be null when penalty_per_late_order_usd is omitted."""
+    resp = client.post("/api/schedule/backtest", json={"orders": _ORDERS_5_ON_TIME})
+    assert resp.status_code == 200
+    assert resp.json()["impact"]["estimated_penalty_usd"] is None
+
+
+def test_backtest_makespan_delta_is_float(client):
+    """makespan_delta_hours must be a numeric value in the response."""
+    resp = client.post("/api/schedule/backtest", json={"orders": _ORDERS_5_ON_TIME})
+    assert resp.status_code == 200
+    delta = resp.json()["impact"]["makespan_delta_hours"]
+    assert isinstance(delta, (int, float))

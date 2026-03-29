@@ -23,7 +23,7 @@ from models.schemas import (
     ScheduleRequest, ScheduleResponse, ScheduleSummary,
     ScheduledOrderOutput, OrderInput, BenchmarkResponse, BenchmarkEntry,
     EnergyAnalysis, AnomalyItem, AnomalyDetectResponse,
-    BacktestRequest, BacktestResponse, BacktestActuals, BacktestOrderDetail,
+    BacktestRequest, BacktestResponse, BacktestActuals, BacktestOrderDetail, BacktestImpact,
 )
 from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT, BASE_SETUP_MINUTES, MACHINE_COUNT, check_order_warnings
 from agents.sa_scheduler import SAScheduler
@@ -550,23 +550,63 @@ async def backtest_schedule(req: BacktestRequest) -> BacktestResponse:
         solve_ms=sa_ms,
     )
 
-    # --- Per-order detail (actual vs SA) ---
+    # --- Per-order detail (actual vs SA) + impact metrics ---
     sa_by_id = {s.order.order_id: s for s in sa_sched.scheduled_orders}
     order_details = []
+    orders_rescued = 0
+    orders_lost = 0
+    total_lateness_hours_saved = 0.0
+
     for o in req.orders:
         actual_comp = _strip_tz(o.actual_completion)
         due = _strip_tz(o.due_date)
-        actual_late = round((actual_comp - due).total_seconds() / 3600, 2)
+        actual_late_h = round((actual_comp - due).total_seconds() / 3600, 2)
+        actual_late_clamped = max(actual_late_h, 0.0)
+
         sa_result = sa_by_id.get(o.order_id)
+        sa_late_clamped = max(sa_result.lateness_hours, 0.0) if sa_result else actual_late_clamped
+
+        rescued = (actual_late_h > 0) and (sa_result is not None) and sa_result.on_time
+        lost    = (actual_late_h <= 0) and (sa_result is not None) and not sa_result.on_time
+
+        if rescued:
+            orders_rescued += 1
+        if lost:
+            orders_lost += 1
+
+        # hours of lateness eliminated for this order (can be negative if SA is worse)
+        total_lateness_hours_saved += actual_late_clamped - sa_late_clamped
+
         order_details.append(BacktestOrderDetail(
             order_id=o.order_id,
             due_date=due,
             actual_completion=actual_comp,
-            actual_on_time=actual_late <= 0,
-            actual_lateness_hours=max(actual_late, 0.0),
+            actual_on_time=actual_late_h <= 0,
+            actual_lateness_hours=actual_late_clamped,
             sa_on_time=sa_result.on_time if sa_result else None,
             sa_lateness_hours=round(sa_result.lateness_hours, 2) if sa_result else None,
+            rescued=rescued,
         ))
+
+    # Actual wall-clock makespan (from start_time to last actual completion)
+    last_actual_comp = max(_strip_tz(o.actual_completion) for o in req.orders)
+    actual_makespan_h = (last_actual_comp - start_time).total_seconds() / 3600
+    makespan_delta = round(actual_makespan_h - sa_entry.makespan_hours, 2)
+
+    # Optional penalty savings: orders_rescued × penalty × 12 months = annual estimate
+    estimated_penalty: Optional[float] = None
+    if req.penalty_per_late_order_usd is not None and req.penalty_per_late_order_usd > 0:
+        # Annualise: assume this batch represents ~one month of production
+        estimated_penalty = round(orders_rescued * req.penalty_per_late_order_usd * 12, 2)
+
+    impact = BacktestImpact(
+        orders_rescued=orders_rescued,
+        orders_lost=orders_lost,
+        total_lateness_hours_saved=round(total_lateness_hours_saved, 2),
+        avg_lateness_reduction_hours=round(total_lateness_hours_saved / n, 2),
+        makespan_delta_hours=makespan_delta,
+        estimated_penalty_usd=estimated_penalty,
+    )
 
     sa_vs_actual = round(sa_entry.on_time_rate_percent - actual.on_time_rate_percent, 1)
     fifo_vs_actual = round(fifo_entry.on_time_rate_percent - actual.on_time_rate_percent, 1)
@@ -582,6 +622,7 @@ async def backtest_schedule(req: BacktestRequest) -> BacktestResponse:
         sa=sa_entry,
         sa_vs_actual_pp=sa_vs_actual,
         fifo_vs_actual_pp=fifo_vs_actual,
+        impact=impact,
         orders=order_details,
     )
 
