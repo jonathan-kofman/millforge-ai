@@ -18,7 +18,7 @@ Most metal mills have 8 to 30 week lead times not because the machines are slow 
 |------------|--------|
 | Scheduling | ✅ automated |
 | Quoting | ✅ automated |
-| Quality Inspection | 🔬 onnx_inference (NEU-DET YOLOv8n, mAP50=0.759) |
+| Quality Inspection | 🔬 onnx_inference (NEU-DET YOLOv8n, mAP50=0.759 — first-pass triage; CMM validation on roadmap) |
 | Anomaly Detection | ✅ automated (critical orders auto-held before scheduling) |
 | Rework Dispatch | ✅ automated |
 | Inventory Management | ✅ automated |
@@ -135,8 +135,8 @@ millforge-ai/
 | GET | `/api/schedule/demo` | No | Demo schedule on built-in mock order set |
 | POST | `/api/quote` | No | Instant quote with volume discounts and carbon footprint |
 | POST | `/api/schedule/rework` | No | Auto-dispatch rework orders from failed inspections |
-| POST | `/api/vision/inspect` | No | Visual quality triage (YOLOv8n ONNX, NEU-DET) |
-| GET | `/api/energy/negative-pricing-windows` | No | Detect free/negative-cost grid hours |
+| POST | `/api/vision/inspect` | No | Visual quality triage (YOLOv8n ONNX, NEU-DET, mAP50=0.759 — first-pass triage only) |
+| GET | `/api/energy/negative-pricing-windows` | No | Detect off-peak/low-cost grid hours (PJM demand-based; true negative LMP on roadmap) |
 | POST | `/api/energy/arbitrage-analysis` | No | Off-peak shift savings estimate |
 | POST | `/api/energy/scenario` | No | 10-year NPV for solar/wind/battery/SMR/grid-only |
 | GET | `/api/suppliers` | No | Search 1,137 verified US suppliers |
