@@ -462,7 +462,7 @@ All endpoints require JWT auth (httpOnly cookie). Frontend tab visible only when
 ### Ollama LLM Agent (`backend/discovery/agent.py`)
 
 - Uses Ollama HTTP API directly (no SDK dependency)
-- Model: `llama3.2:latest` (configured via `OLLAMA_MODEL` env var, default `llava-llama3:latest`)
+- Model: `llama3.2:latest` (configured via `OLLAMA_MODEL` env var, default `llama3.2:latest`)
 - Ollama URL: `http://localhost:11434` (configured via `OLLAMA_URL` env var)
 - All three functions (`extract_insights`, `synthesize_patterns`, `generate_next_questions`) fail silently — return `[]` or fallback on any error
 - JSON code-fence stripping + leading-prose skip in `_parse_json()`

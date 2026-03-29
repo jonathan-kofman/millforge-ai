@@ -13,7 +13,7 @@ from discovery.prompts import (
 
 logger = logging.getLogger("millforge.discovery")
 
-_MODEL = os.getenv("OLLAMA_MODEL", "llava-llama3:latest")
+_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
 _OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 _MAX_TOKENS = 4096
 
