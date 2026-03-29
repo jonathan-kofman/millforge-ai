@@ -34,7 +34,7 @@ def get_db():
 def init_db() -> None:
     """Create all tables. Called at app startup."""
     # Import here so all models are registered on Base.metadata
-    from db_models import User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission, MachineStateLog, JobFeedbackRecord, InventoryStock, Supplier  # noqa: F401
+    from db_models import User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission, MachineStateLog, JobFeedbackRecord, InventoryStock, Supplier, Job, Machine, QCResult  # noqa: F401
     from discovery.models import Interview, Insight, DiscoveryPattern  # noqa: F401
     Base.metadata.create_all(bind=engine)
     _apply_column_migrations()

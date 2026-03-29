@@ -36,6 +36,9 @@ from routers.shift import router as shift_router
 from routers.maintenance import router as maintenance_router
 from routers.dashboard import router as dashboard_router
 from discovery.routes import router as discovery_router
+from routers.jobs import router as jobs_router
+from routers.machines import router as machines_router, conflict_router as machines_conflict_router
+from routers.analytics import router as analytics_router
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
@@ -97,6 +100,10 @@ async def lifespan(app: FastAPI):
         suppliers_router.prefix,
         energy_router.prefix,
     )
+    # Check ARIA schema compatibility — warns if ARIA is emitting a version
+    # MillForge has no normalizer for (non-fatal, never blocks startup).
+    from services.aria_schema import check_aria_compatibility
+    await check_aria_compatibility()
     yield
     await machine_fleet.stop()
     logger.info("MillForge backend shutting down.")
@@ -173,11 +180,15 @@ app.include_router(onboarding_router)
 app.include_router(cad_router)
 app.include_router(mtconnect_router)
 app.include_router(exceptions_router)
+app.include_router(machines_conflict_router)
 app.include_router(ws_machines_router)
 app.include_router(shift_router)
 app.include_router(maintenance_router)
 app.include_router(dashboard_router)
 app.include_router(discovery_router)
+app.include_router(jobs_router)
+app.include_router(machines_router)
+app.include_router(analytics_router)
 
 
 # ---------------------------------------------------------------------------

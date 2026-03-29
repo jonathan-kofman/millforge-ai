@@ -11,6 +11,9 @@ import EnergyWidget from "./components/EnergyWidget";
 import SupplierMap from "./components/SupplierMap";
 import OnboardingWizard from "./components/OnboardingWizard";
 import Discovery from "./pages/Discovery";
+import JobsPage from "./components/JobsPage";
+import MachinesPage from "./components/MachinesPage";
+import QCAnalyticsPage from "./components/QCAnalyticsPage";
 import { API_BASE } from "./config";
 
 const PUBLIC_TABS = [
@@ -22,6 +25,9 @@ const PUBLIC_TABS = [
 
 const AUTH_TABS = [
   { id: "orders",    label: "My Orders" },
+  { id: "jobs",      label: "Jobs" },
+  { id: "machines",  label: "Machines" },
+  { id: "analytics", label: "Analytics" },
   { id: "discovery", label: "Discovery" },
 ];
 
@@ -403,6 +409,9 @@ export default function App() {
         {activeTab === "vision"   && <VisionDemo />}
         {activeTab === "contact"  && <ContactForm />}
         {activeTab === "discovery" && user && <Discovery />}
+        {activeTab === "jobs"     && user && <JobsPage />}
+        {activeTab === "machines" && user && <MachinesPage />}
+        {activeTab === "analytics" && user && <QCAnalyticsPage />}
         {activeTab === "orders"   && user && (
           <>
             {onboardingStatus?.configured && !onboardingStatus?.is_complete && !showWizard && (

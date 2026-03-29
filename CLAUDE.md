@@ -426,6 +426,44 @@ Run: `python scripts/seed_suppliers.py [--clear]`
 
 **ARIA-OS integration note:** When ARIA generates a toolpath, it exports the stock STL to this endpoint. The response pre-fills a draft order; the operator confirms or schedules immediately. This removes the "engineer reads CAD and fills in a form" touchpoint.
 
+## ARIA Schema Version Registry (`backend/services/aria_schema.py`)
+
+MillForge auto-adapts to ARIA schema changes through a normalizer registry — no hardcoded version whitelist in the router.
+
+**How it works:**
+- `POST /api/jobs/import-from-cam` accepts raw JSON, calls `normalize(raw)` before Pydantic validation
+- `normalize()` dispatches to the registered normalizer for `raw["schema_version"]`
+- If no normalizer exists for that version → 400 with actionable message
+- Each normalizer maps ARIA's fields to MillForge's internal `CAMImport` canonical shape
+
+**Adding support for a new ARIA schema version (the only required step):**
+```python
+# backend/services/aria_schema.py
+
+def _normalize_v2(raw: dict) -> dict:
+    out = dict(raw)
+    _rename(out, "target_machine", "machine_name")       # example rename
+    _rename(out, "cycle_time_minutes", "cycle_time_min_estimate")
+    out["schema_version"] = "1.0"  # normalise to internal canonical version
+    return out
+
+NORMALIZERS: dict[str, Callable[[dict], dict]] = {
+    "1.0": _normalize_v1,
+    "2.0": _normalize_v2,   # add this line
+}
+```
+Deploy MillForge with the new normalizer **before** deploying the ARIA version that emits it.
+
+**Startup compatibility probe:**
+- `check_aria_compatibility()` runs in the FastAPI lifespan
+- If `ARIA_API_BASE` env var is set, it calls `GET {ARIA_API_BASE}/schema-version`
+- If ARIA reports a version MillForge has no normalizer for → `WARNING` log, never crashes
+- If `ARIA_API_BASE` is unset → skipped silently
+
+**Key rule:** `services/aria_schema.py` is the only place version knowledge lives. The router (`routers/jobs.py`) and the Pydantic model (`CAMImport`) are version-agnostic.
+
+**Contract file:** `contracts/cam_setup_schema_v1.json` — JSON Schema draft-07 for the v1.0 canonical shape. Update alongside `CAMImport` when the internal canonical shape changes. The test `test_cam_import_validates_against_json_schema` validates against it.
+
 ## Customer Discovery Module (`backend/discovery/`, `frontend/src/pages/Discovery.jsx`)
 
 Internal tool for logging, extracting, and synthesizing customer interview data. Not a lights-out touchpoint — built for YC prep and product validation.

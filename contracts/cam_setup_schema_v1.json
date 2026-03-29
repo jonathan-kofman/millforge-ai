@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cam_setup_schema_v1",
+  "title": "ARIA-OS CAM Setup Sheet",
+  "description": "Schema v1.0 — output of ARIA cam_setup.py, consumed by MillForge POST /api/jobs/import-from-cam",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "part_id",
+    "machine_name",
+    "stock_dims",
+    "cycle_time_min_estimate",
+    "generated_at"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Must be exactly '1.0' for this schema version"
+    },
+    "part_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ARIA part identifier, e.g. ARIA-P-20240101-001"
+    },
+    "machine_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target CNC machine name from ARIA, e.g. 'Haas VF-2'"
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tool_number", "description"],
+        "properties": {
+          "tool_number": { "type": "integer", "minimum": 1 },
+          "description": { "type": "string" },
+          "diameter_mm": { "type": ["number", "null"], "minimum": 0 },
+          "material": { "type": ["string", "null"] }
+        }
+      },
+      "default": []
+    },
+    "stock_dims": {
+      "type": "object",
+      "required": ["length_mm", "width_mm", "height_mm"],
+      "properties": {
+        "length_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "width_mm":  { "type": "number", "exclusiveMinimum": 0 },
+        "height_mm": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "cycle_time_min_estimate": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Estimated cycle time in MINUTES (not seconds)"
+    },
+    "second_op_required": {
+      "type": "boolean",
+      "default": false
+    },
+    "work_offset_recommendation": {
+      "type": "string",
+      "default": "",
+      "description": "e.g. 'G54'"
+    },
+    "fixturing_suggestion": {
+      "type": "string",
+      "default": "",
+      "description": "e.g. 'Kurt vise, jaw width 60mm'"
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when ARIA generated this setup sheet"
+    },
+    "material": {
+      "type": ["string", "null"],
+      "description": "Stock material, e.g. 'aluminum', 'steel'"
+    },
+    "notes": {
+      "type": ["string", "null"]
+    }
+  }
+}

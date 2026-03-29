@@ -231,6 +231,79 @@ class InventoryStock(Base):
         return f"<InventoryStock material={self.material} qty={self.quantity_kg} kg>"
 
 
+class Job(Base):
+    """ARIA-imported manufacturing job — the unit of work in the lights-out pipeline."""
+
+    __tablename__ = "jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    # queued | in_progress | qc_pending | complete | qc_failed
+    stage: Mapped[str] = mapped_column(String(20), default="queued")
+    # aria_cam | manual
+    source: Mapped[str] = mapped_column(String(30), default="manual")
+    material: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    required_machine_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    estimated_duration_minutes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Full ARIA setup sheet JSON stored here
+    cam_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    qc_results: Mapped[List["QCResult"]] = relationship("QCResult", back_populates="job")
+
+    def __repr__(self) -> str:
+        return f"<Job id={self.id} title={self.title!r} stage={self.stage}>"
+
+
+class Machine(Base):
+    """Physical CNC machine registered in the shop floor."""
+
+    __tablename__ = "machines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    machine_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_available: Mapped[bool] = mapped_column(Boolean, default=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    def __repr__(self) -> str:
+        return f"<Machine id={self.id} name={self.name!r} type={self.machine_type}>"
+
+
+class QCResult(Base):
+    """YOLOv8n defect-detection result attached to a Job."""
+
+    __tablename__ = "qc_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    job_id: Mapped[int] = mapped_column(Integer, ForeignKey("jobs.id"), nullable=False, index=True)
+    # JSON-serialised lists
+    defects_found_json: Mapped[str] = mapped_column(Text, default="[]")
+    confidence_scores_json: Mapped[str] = mapped_column(Text, default="[]")
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    image_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    job: Mapped["Job"] = relationship("Job", back_populates="qc_results")
+
+    @property
+    def defects_found(self) -> List[str]:
+        return json.loads(self.defects_found_json)
+
+    @property
+    def confidence_scores(self) -> List[float]:
+        return json.loads(self.confidence_scores_json)
+
+    def __repr__(self) -> str:
+        return f"<QCResult job_id={self.job_id} passed={self.passed}>"
+
+
 class Supplier(Base):
     """US metal/materials supplier record."""
 

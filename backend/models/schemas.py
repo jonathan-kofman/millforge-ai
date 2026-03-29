@@ -944,3 +944,142 @@ class OnboardingStatusResponse(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     error_code: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# /api/jobs — ARIA CAM import, machine-aware scheduling, QC inspection
+# ---------------------------------------------------------------------------
+
+class CAMTool(BaseModel):
+    tool_number: int
+    description: str
+    diameter_mm: Optional[float] = None
+    material: Optional[str] = None
+
+
+class StockDimensions(BaseModel):
+    length_mm: float
+    width_mm: float
+    height_mm: float
+
+
+class CAMImport(BaseModel):
+    """ARIA-OS setup sheet v1.0 — consumed by POST /api/jobs/import-from-cam."""
+    schema_version: str = Field("1.0", description="ARIA CAM setup sheet schema version")
+    part_id: str = Field(..., description="ARIA part identifier")
+    machine_name: str = Field(..., description="Target CNC machine name from ARIA")
+    tools: List[CAMTool] = Field(default_factory=list)
+    stock_dims: StockDimensions
+    cycle_time_min_estimate: float = Field(..., gt=0)
+    second_op_required: bool = False
+    work_offset_recommendation: str = ""
+    fixturing_suggestion: str = ""
+    generated_at: str = Field(..., description="ISO timestamp when ARIA generated the setup sheet")
+    material: Optional[str] = None
+    notes: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "schema_version": "1.0",
+                "part_id": "ARIA-P-20240101-001",
+                "machine_name": "Haas VF-2",
+                "tools": [{"tool_number": 1, "description": "3/8 End Mill", "diameter_mm": 9.5}],
+                "stock_dims": {"length_mm": 120.0, "width_mm": 60.0, "height_mm": 25.0},
+                "cycle_time_min_estimate": 42.5,
+                "second_op_required": False,
+                "work_offset_recommendation": "G54",
+                "fixturing_suggestion": "Kurt vise, jaw width 60mm",
+                "generated_at": "2024-01-01T08:00:00",
+                "material": "aluminum"
+            }
+        }
+    }
+
+
+class JobResponse(BaseModel):
+    id: int
+    title: str
+    stage: str
+    source: str
+    material: Optional[str] = None
+    required_machine_type: Optional[str] = None
+    estimated_duration_minutes: Optional[float] = None
+    notes: Optional[str] = None
+    cam_metadata: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class JobPatch(BaseModel):
+    stage: Optional[str] = None
+    notes: Optional[str] = None
+    required_machine_type: Optional[str] = None
+
+
+class JobListResponse(BaseModel):
+    total: int
+    jobs: List[JobResponse]
+
+
+class MachineCreate(BaseModel):
+    name: str = Field(..., min_length=1)
+    machine_type: str = Field(..., min_length=1, description="e.g. 'VMC', 'Lathe', 'EDM'")
+    is_available: bool = True
+    notes: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {"name": "Haas VF-2", "machine_type": "VMC", "is_available": True}
+        }
+    }
+
+
+class MachineResponse(BaseModel):
+    id: int
+    name: str
+    machine_type: str
+    is_available: bool
+    notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MachineConflictResponse(BaseModel):
+    conflict: bool
+    message: str
+    required_machine_type: str
+    available_machines: List[MachineResponse]
+
+
+class QCResultResponse(BaseModel):
+    id: int
+    job_id: int
+    defects_found: List[str]
+    confidence_scores: List[float]
+    passed: bool
+    image_path: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class QCAnalyticsItem(BaseModel):
+    dimension: str
+    value: str
+    total_inspections: int
+    passed: int
+    failed: int
+    pass_rate_percent: float
+    top_defects: List[str]
+
+
+class QCAnalyticsResponse(BaseModel):
+    total_inspections: int
+    overall_pass_rate_percent: float
+    by_machine_type: List[QCAnalyticsItem]
+    by_material: List[QCAnalyticsItem]
+    generated_at: datetime
