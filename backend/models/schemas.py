@@ -1083,3 +1083,147 @@ class QCAnalyticsResponse(BaseModel):
     by_machine_type: List[QCAnalyticsItem]
     by_material: List[QCAnalyticsItem]
     generated_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# /api/business
+# ---------------------------------------------------------------------------
+
+class ROICalculatorRequest(BaseModel):
+    machine_count: int = Field(..., ge=1, le=500)
+    orders_per_month: int = Field(..., ge=1)
+    avg_order_value_usd: float = Field(..., gt=0)
+    current_otd_percent: float = Field(..., ge=0.0, le=100.0)
+    shifts_per_day: int = Field(2, ge=1, le=3)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "machine_count": 10,
+                "orders_per_month": 200,
+                "avg_order_value_usd": 1500,
+                "current_otd_percent": 74.0,
+                "shifts_per_day": 2,
+            }
+        }
+    }
+
+
+class RevenueProjectionRequest(BaseModel):
+    months: int = Field(24, ge=1, le=120)
+    starting_customers: int = Field(0, ge=0)
+    monthly_new_customers: float = Field(..., ge=0)
+    avg_monthly_revenue_per_customer_usd: float = Field(..., gt=0)
+    churn_rate_monthly_percent: float = Field(2.0, ge=0.0, le=100.0)
+
+
+class RevenueTimelineItem(BaseModel):
+    month: int
+    customers: float
+    mrr_usd: float
+    arr_usd: float
+    cumulative_revenue_usd: float
+
+
+class RevenueProjectionResponse(BaseModel):
+    projection_months: int
+    assumptions: Dict[str, Any]
+    summary: Dict[str, Any]
+    timeline: List[RevenueTimelineItem]
+    generated_at: str
+
+
+class TierRecommendRequest(BaseModel):
+    machine_count: int = Field(..., ge=1, le=500)
+    orders_per_month: int = Field(..., ge=1)
+
+
+# ---------------------------------------------------------------------------
+# /api/market-quotes
+# ---------------------------------------------------------------------------
+
+class SpotPricesRequest(BaseModel):
+    materials: Optional[List[str]] = None
+
+
+class MaterialsQuoteRequest(BaseModel):
+    material: str = Field(..., description="Material name e.g. 'steel', 'aluminum'")
+    quantity_lbs: float = Field(..., gt=0)
+    delivery_state: Optional[str] = Field(None, description="Two-letter US state code for sourcing region")
+    lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    mill_form: str = Field("bar_stock", description="bar_stock|sheet|plate|tube|pipe|extrusion")
+    top_n: int = Field(5, ge=1, le=20)
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "material": "steel",
+                "quantity_lbs": 500,
+                "delivery_state": "OH",
+                "mill_form": "bar_stock",
+            }
+        }
+    }
+
+
+class EnergyQuoteRequest(BaseModel):
+    kwh_needed: float = Field(..., gt=0)
+    state: Optional[str] = None
+    flexible_hours: int = Field(4, ge=1, le=12)
+
+
+class FullJobCostRequest(BaseModel):
+    material: str
+    quantity_lbs: float = Field(..., gt=0)
+    estimated_machine_hours: float = Field(..., gt=0)
+    machine_power_kw: float = Field(75.0, gt=0)
+    lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    lng: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    mill_form: str = Field("bar_stock")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "material": "aluminum",
+                "quantity_lbs": 200,
+                "estimated_machine_hours": 4.0,
+                "machine_power_kw": 55.0,
+            }
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
+# /api/contracts
+# ---------------------------------------------------------------------------
+
+class MSARequest(BaseModel):
+    customer_name: str = Field(..., min_length=2)
+    customer_address: str = Field(..., min_length=5)
+    governing_state: str = Field("Massachusetts")
+    effective_date: Optional[str] = Field(None, description="ISO date string YYYY-MM-DD. Defaults to today.")
+
+
+class OrderFormRequest(BaseModel):
+    customer_name: str = Field(..., min_length=2)
+    tier: str = Field(..., description="starter|growth|enterprise|custom")
+    machine_count: int = Field(..., ge=1)
+    billing_cycle: str = Field("annual", description="annual|monthly")
+    start_date: Optional[str] = Field(None, description="ISO date YYYY-MM-DD. Defaults to today.")
+    add_ons: Optional[List[str]] = Field(None, description="contract_management|market_quotes_unlimited|sso_saml")
+
+
+class PilotRequest(BaseModel):
+    customer_name: str = Field(..., min_length=2)
+    pilot_days: int = Field(30, ge=14, le=90)
+    tier: str = Field("growth")
+    start_date: Optional[str] = Field(None, description="ISO date YYYY-MM-DD. Defaults to today.")
+
+
+class ContractResponse(BaseModel):
+    document_type: str
+    content_markdown: str
+    generated_at: str
+    customer_name: Optional[str] = None
+    tier: Optional[str] = None

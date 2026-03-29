@@ -56,6 +56,9 @@ Specialized subagents for common MillForge tasks. Invoke via the Agent tool or `
 | `backend-reviewer` | Review before merging changes to backend/agents/, backend/routers/ |
 | `frontend-reviewer` | Review before merging changes to frontend/src/ |
 | `deployment-checker` | Diagnose Railway/Vercel deploy failures, CORS issues, env var gaps |
+| `business-advisor` | Pricing conversations, ROI analysis, competitive positioning, feature business cases |
+| `market-quoter` | Spot price debugging, supplier cost modeling, energy window analysis |
+| `contract-generator` | Generate/review MSA, SLA, order forms, pilot agreements for new customers |
 
 ## Product Vision
 

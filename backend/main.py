@@ -39,6 +39,9 @@ from discovery.routes import router as discovery_router
 from routers.jobs import router as jobs_router
 from routers.machines import router as machines_router, conflict_router as machines_conflict_router
 from routers.analytics import router as analytics_router
+from routers.business import router as business_router
+from routers.market_quotes import router as market_quotes_router
+from routers.contracts import router as contracts_router
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
@@ -189,6 +192,9 @@ app.include_router(discovery_router)
 app.include_router(jobs_router)
 app.include_router(machines_router)
 app.include_router(analytics_router)
+app.include_router(business_router)
+app.include_router(market_quotes_router)
+app.include_router(contracts_router)
 
 
 # ---------------------------------------------------------------------------
