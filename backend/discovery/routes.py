@@ -288,6 +288,49 @@ def get_patterns(
     return [_pattern_to_out(p) for p in patterns]
 
 
+@router.get("/export")
+def export_interviews(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Export all interviews + insights as CSV for investor evidence decks."""
+    from fastapi.responses import StreamingResponse
+    import csv
+    import io
+
+    interviews = db.query(Interview).order_by(Interview.created_at.asc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "interview_id", "date", "contact_name", "shop_name",
+        "shop_size", "role", "insight_id", "category",
+        "severity", "content", "quote",
+    ])
+
+    for iv in interviews:
+        if iv.insights:
+            for ins in iv.insights:
+                writer.writerow([
+                    iv.id, iv.date, iv.contact_name, iv.shop_name,
+                    iv.shop_size, iv.role,
+                    ins.id, ins.category, ins.severity, ins.content, ins.quote or "",
+                ])
+        else:
+            writer.writerow([
+                iv.id, iv.date, iv.contact_name, iv.shop_name,
+                iv.shop_size, iv.role,
+                "", "", "", "(no insights extracted)", "",
+            ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=discovery_interviews.csv"},
+    )
+
+
 @router.get("/next-questions")
 def next_questions(
     db: Session = Depends(get_db),
