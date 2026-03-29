@@ -91,14 +91,14 @@ make dev-frontend
 ```
 millforge-ai/
 ├── backend/
-│   ├── main.py              # FastAPI app entry point; 18 routers, lifespan hooks
+│   ├── main.py              # FastAPI app entry point; 30 routers, lifespan hooks
 │   ├── database.py          # SQLAlchemy engine + SessionLocal
 │   ├── db_models.py         # ORM models: User, OrderRecord, ScheduleRun, Supplier, JobFeedbackRecord…
-│   ├── routers/             # 23 thin HTTP handlers (schedule, quote, vision, energy, suppliers…)
+│   ├── routers/             # 28 thin HTTP handlers (schedule, quote, vision, energy, suppliers, business, contracts…)
 │   ├── models/schemas.py    # Pydantic v2 request/response models — single source of truth
 │   ├── auth/                # httpOnly cookie session + JWT utils
 │   ├── scripts/             # seed_suppliers.py, train_vision_model.py, export_model.py
-│   └── agents/              # 25 pure-Python business-logic modules
+│   └── agents/              # 28 pure-Python business-logic modules
 │       ├── scheduler.py           # EDD core — machine assignment, setup-time matrix
 │       ├── sa_scheduler.py        # Simulated Annealing (seed=123, deterministic)
 │       ├── benchmark_data.py      # 28-order deterministic dataset (FIFO/EDD/SA)
@@ -116,9 +116,9 @@ millforge-ai/
 ├── frontend/
 │   └── src/
 │       ├── App.jsx
-│       └── components/      # 14 components: BenchmarkDemo, LightsOutWidget, SupplierMap,
-│                            #   VisionDemo, EnergyWidget, GanttChart, QuoteForm…
-├── tests/                   # 36 pytest files — unit + e2e coverage
+│       └── components/      # 18 components: BenchmarkDemo, LightsOutWidget, SupplierMap,
+│                            #   VisionDemo, EnergyWidget, GanttChart, QuoteForm, PricingPage, DashboardPage…
+├── tests/                   # 39 pytest files — unit + e2e coverage
 ├── docs/                    # architecture, agents, api_spec, roadmap, CHANGELOG
 ├── docker-compose.yml
 ├── Makefile
@@ -155,6 +155,19 @@ millforge-ai/
 | POST | `/api/orders` | JWT | Create order |
 | PATCH | `/api/orders/{id}` | JWT | Update order |
 | DELETE | `/api/orders/{id}` | JWT | Delete order |
+| GET | `/api/business/pricing-tiers` | No | Subscription tiers and features |
+| GET | `/api/business/recommend-tier` | No | Tier recommendation based on shop size |
+| POST | `/api/business/roi-calculator` | No | Annual ROI projection for a specific shop |
+| POST | `/api/business/revenue-projection` | No | MRR/ARR cohort model over N months |
+| GET | `/api/business/metrics` | JWT | Live business KPIs (users, jobs, QC pass rate) |
+| GET | `/api/market-quotes/spot-prices` | No | Live metals spot prices (Yahoo Finance + fallback) |
+| POST | `/api/market-quotes/materials` | No | Cheapest supplier by landed cost for a material |
+| POST | `/api/market-quotes/energy` | No | Cheapest grid window for energy procurement |
+| POST | `/api/market-quotes/full-job-cost` | No | All-in job cost: materials + energy + overhead |
+| GET | `/api/contracts/sla/{tier}` | No | SLA schedule by pricing tier |
+| POST | `/api/contracts/msa` | No | Generate Master Service Agreement (Markdown) |
+| POST | `/api/contracts/order-form` | No | Generate Order Form with pricing |
+| POST | `/api/contracts/pilot` | No | Generate 30-day pilot agreement |
 
 ## Architecture
 

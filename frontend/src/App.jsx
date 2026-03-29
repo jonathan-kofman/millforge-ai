@@ -14,16 +14,20 @@ import Discovery from "./pages/Discovery";
 import JobsPage from "./components/JobsPage";
 import MachinesPage from "./components/MachinesPage";
 import QCAnalyticsPage from "./components/QCAnalyticsPage";
+import PricingPage from "./components/PricingPage";
+import DashboardPage from "./components/DashboardPage";
 import { API_BASE } from "./config";
 
 const PUBLIC_TABS = [
   { id: "quote",    label: "Instant Quote" },
   { id: "schedule", label: "Production Schedule" },
+  { id: "pricing",  label: "Pricing" },
   { id: "vision",   label: "Quality Inspection" },
   { id: "contact",  label: "Get in Touch" },
 ];
 
 const AUTH_TABS = [
+  { id: "dashboard", label: "Dashboard" },
   { id: "orders",    label: "My Orders" },
   { id: "jobs",      label: "Jobs" },
   { id: "machines",  label: "Machines" },
@@ -286,17 +290,25 @@ export default function App() {
         <div className="max-w-3xl mx-auto px-4 py-14 text-center">
           <p className="text-sm font-bold tracking-widest text-orange-500 uppercase mb-4">Pricing</p>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-6">Simple, transparent pricing.</h2>
-          <p className="text-gray-300 text-base mb-2">Starts at <span className="text-white font-semibold">$299/month</span> for shops with up to 10 machines.</p>
+          <p className="text-gray-300 text-base mb-2">Starts at <span className="text-white font-semibold">$499/month</span> for shops with up to 5 machines.</p>
           <p className="text-gray-400 text-sm mb-2">Scales with shop size. Most customers see ROI within 30 days.</p>
           <p className="text-gray-500 text-sm mb-8">No implementation fees. No ERP replacement. Cancel anytime.</p>
-          <a
-            href="https://calendly.com/jonkofm/30min"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-forge-400 hover:text-forge-300 text-sm font-medium transition-colors"
-          >
-            → Book a call to discuss your shop&apos;s specific needs
-          </a>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => { setActiveTab("pricing"); scrollTo("tab-nav"); }}
+              className="bg-forge-500 hover:bg-forge-600 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors"
+            >
+              See all plans →
+            </button>
+            <a
+              href="https://calendly.com/jonkofm/30min"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-forge-400 hover:text-forge-300 text-sm font-medium transition-colors"
+            >
+              or book a call →
+            </a>
+          </div>
         </div>
       </div>
 
@@ -404,13 +416,15 @@ export default function App() {
 
       {/* ── Tab content ── */}
       <main className="flex-1 max-w-6xl mx-auto px-4 py-10 w-full">
-        {activeTab === "quote"    && <QuoteForm />}
-        {activeTab === "schedule" && <ScheduleViewer />}
-        {activeTab === "vision"   && <VisionDemo />}
-        {activeTab === "contact"  && <ContactForm />}
+        {activeTab === "quote"     && <QuoteForm />}
+        {activeTab === "schedule"  && <ScheduleViewer />}
+        {activeTab === "pricing"   && <PricingPage />}
+        {activeTab === "vision"    && <VisionDemo />}
+        {activeTab === "contact"   && <ContactForm />}
+        {activeTab === "dashboard" && user && <DashboardPage />}
         {activeTab === "discovery" && user && <Discovery />}
-        {activeTab === "jobs"     && user && <JobsPage />}
-        {activeTab === "machines" && user && <MachinesPage />}
+        {activeTab === "jobs"      && user && <JobsPage />}
+        {activeTab === "machines"  && user && <MachinesPage />}
         {activeTab === "analytics" && user && <QCAnalyticsPage />}
         {activeTab === "orders"   && user && (
           <>

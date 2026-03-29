@@ -197,7 +197,7 @@ class MarketQuoter:
 
         # Pull suppliers that carry this material
         if lat is not None and lng is not None:
-            suppliers_with_dist, _ = directory.nearby(
+            suppliers_with_dist = directory.nearby(
                 db, lat=lat, lng=lng, radius_miles=2000, material=material, limit=100
             )
             options_raw = [
@@ -312,10 +312,9 @@ class MarketQuoter:
         Find the cheapest window to buy grid electricity for a production run.
         Uses the EnergyOptimizer's rate data.
         """
-        from agents.energy_optimizer import EnergyOptimizer
+        from agents.energy_optimizer import _get_hourly_rates
 
-        optimizer = EnergyOptimizer()
-        rates = optimizer._get_hourly_rates()
+        rates, _ = _get_hourly_rates()
         sorted_hours = sorted(range(24), key=lambda h: rates[h])
         cheapest_hours = sorted_hours[:flexible_hours]
         most_expensive_hours = sorted_hours[-flexible_hours:]

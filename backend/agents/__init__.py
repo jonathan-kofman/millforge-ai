@@ -18,6 +18,9 @@ from .exception_queue import ExceptionQueueAgent
 from .machine_fleet import MachineFleet
 from .shift_report import ShiftReportAgent
 from .predictive_maintenance import PredictiveMaintenanceAgent
+from .business_agent import BusinessAgent
+from .market_quoter import MarketQuoter
+from .contract_generator import ContractGenerator
 
 __all__ = [
     "Scheduler", "SAScheduler", "Order", "Schedule",
@@ -32,4 +35,7 @@ __all__ = [
     "MachineFleet",
     "ShiftReportAgent",
     "PredictiveMaintenanceAgent",
+    "BusinessAgent",
+    "MarketQuoter",
+    "ContractGenerator",
 ]
