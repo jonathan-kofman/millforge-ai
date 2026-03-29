@@ -1,11 +1,9 @@
-"""Claude-powered customer discovery synthesis agent."""
+"""Ollama-powered customer discovery synthesis agent."""
 
 import json
 import logging
 import os
-from typing import Optional
-
-import anthropic
+import urllib.request
 
 from discovery.prompts import (
     EXTRACT_INSIGHTS_SYSTEM,
@@ -15,19 +13,53 @@ from discovery.prompts import (
 
 logger = logging.getLogger("millforge.discovery")
 
-_MODEL = "claude-sonnet-4-6"
+_MODEL = os.getenv("OLLAMA_MODEL", "llava-llama3:latest")
+_OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 _MAX_TOKENS = 4096
 
 
-def _client() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+def _chat(system: str, user: str) -> str:
+    """Send a chat request to Ollama and return the response text."""
+    payload = json.dumps({
+        "model": _MODEL,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "stream": False,
+        "options": {"num_predict": _MAX_TOKENS},
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{_OLLAMA_URL}/api/chat",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read())
+    return data["message"]["content"].strip()
+
+
+def _parse_json(raw: str) -> list | dict:
+    """Strip markdown code fences and parse JSON."""
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    # Find the first [ or { to handle leading prose
+    for i, ch in enumerate(raw):
+        if ch in ("[", "{"):
+            raw = raw[i:]
+            break
+    return json.loads(raw)
 
 
 def extract_insights(transcript: str, metadata: dict) -> list[dict]:
-    """Run transcript through Claude and return a list of structured insights.
+    """Run transcript through Ollama and return structured insights.
 
-    Each insight has: category, content, severity (1–3), quote (str | null).
-    Returns an empty list (not an exception) if the API call fails.
+    Each insight: category, content, severity (1-3), quote (str | null).
+    Returns [] on any failure.
     """
     user_content = (
         f"Shop: {metadata.get('shop_name', 'Unknown')} | "
@@ -36,19 +68,8 @@ def extract_insights(transcript: str, metadata: dict) -> list[dict]:
         f"Transcript:\n{transcript}"
     )
     try:
-        response = _client().messages.create(
-            model=_MODEL,
-            max_tokens=_MAX_TOKENS,
-            system=EXTRACT_INSIGHTS_SYSTEM,
-            messages=[{"role": "user", "content": user_content}],
-        )
-        raw = response.content[0].text.strip()
-        # Claude sometimes wraps JSON in a code block
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        return json.loads(raw)
+        raw = _chat(EXTRACT_INSIGHTS_SYSTEM, user_content)
+        return _parse_json(raw)
     except Exception as exc:
         logger.error("extract_insights failed: %s", exc)
         return []
@@ -57,8 +78,8 @@ def extract_insights(transcript: str, metadata: dict) -> list[dict]:
 def synthesize_patterns(insights: list[dict], interview_count: int) -> list[dict]:
     """Identify recurring patterns across all insights.
 
-    Each pattern has: label, insight_ids, frequency, evidence_quotes, feature_tag.
-    Returns an empty list if the API call fails.
+    Each pattern: label, insight_ids, frequency, evidence_quotes, feature_tag.
+    Returns [] on failure.
     """
     if not insights:
         return []
@@ -67,30 +88,18 @@ def synthesize_patterns(insights: list[dict], interview_count: int) -> list[dict
         f"Aggregated insights (JSON):\n{json.dumps(insights, indent=2)}"
     )
     try:
-        response = _client().messages.create(
-            model=_MODEL,
-            max_tokens=_MAX_TOKENS,
-            system=SYNTHESIZE_PATTERNS_SYSTEM,
-            messages=[{"role": "user", "content": user_content}],
-        )
-        raw = response.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        return json.loads(raw)
+        raw = _chat(SYNTHESIZE_PATTERNS_SYSTEM, user_content)
+        return _parse_json(raw)
     except Exception as exc:
         logger.error("synthesize_patterns failed: %s", exc)
         return []
 
 
-def generate_next_questions(
-    patterns: list[dict], interview_count: int
-) -> list[dict]:
+def generate_next_questions(patterns: list[dict], interview_count: int) -> list[dict]:
     """Generate 5 targeted interview questions based on current pattern gaps.
 
-    Each question has: question, rationale, follow_up.
-    Returns a fallback list if the API call fails.
+    Each question: question, rationale, follow_up.
+    Returns a single fallback question on failure.
     """
     user_content = (
         f"Interviews completed so far: {interview_count}\n\n"
@@ -99,18 +108,8 @@ def generate_next_questions(
         else f"Interviews completed so far: {interview_count}\n\nNo patterns identified yet — this is early-stage discovery."
     )
     try:
-        response = _client().messages.create(
-            model=_MODEL,
-            max_tokens=_MAX_TOKENS,
-            system=NEXT_QUESTIONS_SYSTEM,
-            messages=[{"role": "user", "content": user_content}],
-        )
-        raw = response.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        return json.loads(raw)
+        raw = _chat(NEXT_QUESTIONS_SYSTEM, user_content)
+        return _parse_json(raw)
     except Exception as exc:
         logger.error("generate_next_questions failed: %s", exc)
         return [
