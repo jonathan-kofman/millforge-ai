@@ -120,3 +120,40 @@ def test_pdf_export_user_isolation(client):
     # User B tries to export User A's schedule run
     res = client.get(f"/api/schedule/export-pdf?schedule_id={run_id}", headers=_auth(token_b))
     assert res.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# 6. Path-param endpoint returns PDF
+# ---------------------------------------------------------------------------
+
+def test_pdf_export_path_param_returns_pdf(client):
+    """GET /api/schedule/{run_id}/export-pdf returns a valid PDF."""
+    token = _register_and_token(client, "pdfpath@example.com")
+    run_id = _create_and_schedule(client, token)
+
+    res = client.get(f"/api/schedule/{run_id}/export-pdf", headers=_auth(token))
+    assert res.status_code == 200
+    assert "application/pdf" in res.headers.get("content-type", "")
+    assert res.content[:4] == b"%PDF"
+    assert f"schedule_{run_id}.pdf" in res.headers.get("content-disposition", "")
+
+
+# ---------------------------------------------------------------------------
+# 7. Path-param 404 for non-existent run
+# ---------------------------------------------------------------------------
+
+def test_pdf_export_path_param_not_found(client):
+    """Path-param variant returns 404 for non-existent run_id."""
+    token = _register_and_token(client, "pdfpath404@example.com")
+    res = client.get("/api/schedule/99999/export-pdf", headers=_auth(token))
+    assert res.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# 8. Path-param requires auth
+# ---------------------------------------------------------------------------
+
+def test_pdf_export_path_param_requires_auth(client):
+    """Path-param variant returns 401 without auth."""
+    res = client.get("/api/schedule/1/export-pdf")
+    assert res.status_code == 401

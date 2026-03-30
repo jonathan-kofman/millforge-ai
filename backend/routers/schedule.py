@@ -433,6 +433,35 @@ async def export_schedule_pdf(
     )
 
 
+@router.get("/schedule/{run_id}/export-pdf", summary="Export a schedule run as PDF (path param)")
+async def export_schedule_pdf_path(
+    run_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Alias for GET /api/schedule/export-pdf — accepts run_id as a path param."""
+    run = (
+        db.query(ScheduleRun)
+        .filter(ScheduleRun.id == run_id, ScheduleRun.created_by_id == user.id)
+        .first()
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail=f"ScheduleRun {run_id} not found")
+
+    pdf_bytes = build_schedule_pdf(
+        schedule_run_id=run.id,
+        algorithm=run.algorithm,
+        summary=run.summary,
+        orders=run.scheduled_orders,
+        generated_at=run.created_at,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=schedule_{run.id}.pdf"},
+    )
+
+
 @router.post(
     "/schedule/backtest",
     response_model=BacktestResponse,

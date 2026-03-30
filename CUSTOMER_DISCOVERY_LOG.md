@@ -1,76 +1,192 @@
 # MillForge Customer Discovery Log
 
-## Summary
+**Purpose:** Record every customer discovery conversation. This log is referenced in the YC S26 application and must contain real evidence that the scheduling problem exists and that shop owners will pay to solve it.
 
-| Date | Shop | Contact | Method | Outcome |
-|------|------|---------|--------|---------|
-| | | | | |
-
-**Goal for week of 2026-03-24:** 3 discovery calls completed by 2026-03-28.
+**Instructions:** After each call, fill in one entry below. Be specific — exact quotes, numbers, and names matter. "They seemed interested" is useless. "He said: 'If you can show me 10pp improvement on my real data, I'll pay $500/month tomorrow'" is gold.
 
 ---
 
-## Call Notes Template
+## Entry 1
 
-### Call: [Shop Name] — [Date]
-
-**Contact:** [Name, Title]
-**Duration:**
-**Source:** [Thomasnet / LinkedIn / referral / cold email]
-
-#### Key Questions & Answers
-
-**Q: How do you currently schedule production?**
-A:
-
-**Q: How many active orders at once?**
-A:
-
-**Q: What's your on-time delivery rate?**
-A:
-
-**Q: How do you handle rush orders?**
-A:
-
-**Q: What does a missed deadline cost you?**
-A:
-
-**Q: What software are you using today?**
-A:
-
-#### Pain Score (1–5)
-- Scheduling pain: /5
-- Willingness to try new software: /5
-- Data availability (would share order history): /5
-
-#### Key Quotes
-> "[direct quote from the operator]"
-
-#### Next Steps
-- [ ]
-
-#### Fit Assessment
-- [ ] Strong lead (scheduling in spreadsheet/whiteboard, 10–200 employees, feels the pain)
-- [ ] Weak lead (already has ERP, happy with status quo)
-- [ ] Wrong fit (too small / too large / wrong industry)
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:** *(whiteboard / spreadsheet / ERP name / other)*
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:** *(%)*
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
 
 ---
 
-## Learnings
+## Entry 2
 
-_Update after each call with patterns you're seeing._
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
 
-### Scheduling Pain
--
+---
 
-### Current Tools
--
+## Entry 3
 
-### Objections
--
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
 
-### What Would Make Them Buy
--
+---
+
+## Entry 4
+
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
+
+---
+
+## Entry 5
+
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
+
+---
+
+## Entry 6
+
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
+
+---
+
+## Entry 7
+
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
+
+---
+
+## Entry 8
+
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
+
+---
+
+## Entry 9
+
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
+
+---
+
+## Entry 10
+
+- **Date:**
+- **Shop Name:**
+- **Contact Name:**
+- **Title:**
+- **Location (City, State):**
+- **Machine Count:**
+- **Current Scheduling Method:**
+- **Biggest Pain Point:**
+- **On-Time Rate Estimate:**
+- **Would They Pilot? (Y/N/Maybe):**
+- **Willingness to Pay ($/month):**
+- **Raw Notes / Direct Quotes:**
+
+---
+
+## Summary (fill after 5+ entries)
+
+- **Total conversations:**
+- **Shops willing to pilot:**
+- **Average on-time rate reported:**
+- **Most common scheduling method:**
+- **Top 3 pain points:**
+  1.
+  2.
+  3.
+- **Strongest quote for YC application:**
 
 ---
 
@@ -82,4 +198,4 @@ Shops that agreed to share order history for benchmark validation:
 |------|---------|-------------|----------------|---------------|
 | | | | | |
 
-**What to ask for:** 30–90 days of production orders with: material type, quantity, order date, due date, machine used (if tracked). CSV or Excel is fine.
+**What to ask for:** 30–90 days of production orders with: material type, quantity, order date, due date, machine used (if tracked). CSV or Excel is fine — MillForge has a bulk CSV import endpoint (`POST /api/orders/import-csv`).

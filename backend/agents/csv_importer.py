@@ -23,6 +23,9 @@ _ALIASES: Dict[str, List[str]] = {
     "order_id":   ["order_id", "order", "part_number", "part_no", "id",
                    "job_id", "po_number", "partno"],
     "dimensions": ["dimensions", "dims", "size", "spec", "specifications", "dimension"],
+    "length_mm":  ["length_mm", "length", "len", "l_mm"],
+    "width_mm":   ["width_mm", "width", "w_mm", "wid"],
+    "height_mm":  ["height_mm", "height", "h_mm", "ht", "thickness", "thick"],
     "priority":   ["priority", "pri", "urgency", "importance"],
     "complexity": ["complexity", "cx", "multiplier", "difficulty", "complex"],
 }
@@ -44,10 +47,10 @@ _DATE_FORMATS = (
 _PREVIEW_CACHE: Dict[str, dict] = {}
 
 CSV_TEMPLATE = (
-    "order_id,material,quantity,dimensions,due_date,priority,complexity\n"
-    "ORD-001,steel,500,200x100x10mm,2025-12-01,3,1.0\n"
-    "ORD-002,aluminum,200,150x75x8mm,2025-12-07,5,1.2\n"
-    "ORD-003,titanium,50,300x150x20mm,2025-12-15,2,1.5\n"
+    "order_id,material,quantity,length_mm,width_mm,height_mm,due_date,priority\n"
+    "ORD-001,steel,500,200,100,10,2025-12-01,3\n"
+    "ORD-002,aluminum,200,150,75,8,2025-12-07,5\n"
+    "ORD-003,titanium,50,300,150,20,2025-12-15,2\n"
 )
 
 
@@ -158,6 +161,15 @@ def parse_csv(
                 val = raw.get(rev["dimensions"], "").strip()
                 if val:
                     dimensions = val
+            elif "length_mm" in rev or "width_mm" in rev or "height_mm" in rev:
+                # Combine separate L/W/H columns into "LxWxHmm"
+                l_val = raw.get(rev.get("length_mm", ""), "").strip() if "length_mm" in rev else ""
+                w_val = raw.get(rev.get("width_mm", ""), "").strip() if "width_mm" in rev else ""
+                h_val = raw.get(rev.get("height_mm", ""), "").strip() if "height_mm" in rev else ""
+                l = float(l_val) if l_val else 100.0
+                w = float(w_val) if w_val else 100.0
+                h = float(h_val) if h_val else 10.0
+                dimensions = f"{l:.0f}x{w:.0f}x{h:.0f}mm"
 
             priority = 5
             if "priority" in rev:

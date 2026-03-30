@@ -231,3 +231,106 @@ def test_csv_import_template(client):
     # Should contain at least one example data row
     lines = [line for line in content.splitlines() if line.strip()]
     assert len(lines) >= 2
+
+
+# ---------------------------------------------------------------------------
+# 9. Separate dimension columns (length_mm, width_mm, height_mm)
+# ---------------------------------------------------------------------------
+
+def test_csv_import_separate_dimension_columns(client):
+    """length_mm / width_mm / height_mm columns are combined into dimensions."""
+    token = _register_and_token(client, "dims@example.com")
+    csv_content = (
+        f"order_id,material,quantity,length_mm,width_mm,height_mm,due_date,priority\n"
+        f"D-001,steel,500,200,100,10,{_future_date(30)},3\n"
+        f"D-002,aluminum,200,150,75,8,{_future_date(60)},5\n"
+    )
+    res = client.post(
+        "/api/orders/import-csv",
+        files=_csv_upload(csv_content),
+        headers=_auth(token),
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["valid_count"] == 2
+    assert data["error_count"] == 0
+    # Dimensions should be combined as "LxWxHmm"
+    row = data["valid_rows"][0]
+    assert row["dimensions"] == "200x100x10mm"
+    row2 = data["valid_rows"][1]
+    assert row2["dimensions"] == "150x75x8mm"
+
+
+def test_csv_import_separate_dims_partial(client):
+    """Missing dimension columns get default values (100x100x10)."""
+    token = _register_and_token(client, "partial_dims@example.com")
+    csv_content = (
+        f"order_id,material,quantity,length_mm,due_date\n"
+        f"P-001,steel,500,250,{_future_date(30)}\n"
+    )
+    res = client.post(
+        "/api/orders/import-csv",
+        files=_csv_upload(csv_content),
+        headers=_auth(token),
+    )
+    assert res.status_code == 200
+    row = res.json()["valid_rows"][0]
+    # Only length provided; width/height should default
+    assert row["dimensions"] == "250x100x10mm"
+
+
+def test_csv_import_separate_dims_confirm_creates_orders(client):
+    """Orders created from separate-dimension CSV have correct dimensions in DB."""
+    token = _register_and_token(client, "dims_confirm@example.com")
+    csv_content = (
+        f"order_id,material,quantity,length_mm,width_mm,height_mm,due_date,priority\n"
+        f"DC-001,steel,100,300,200,15,{_future_date(14)},2\n"
+    )
+    preview_res = client.post(
+        "/api/orders/import-csv",
+        files=_csv_upload(csv_content),
+        headers=_auth(token),
+    )
+    assert preview_res.status_code == 200
+    preview_token = preview_res.json()["preview_token"]
+
+    confirm_res = client.post(
+        "/api/orders/import-csv/confirm",
+        json={"preview_token": preview_token},
+        headers=_auth(token),
+    )
+    assert confirm_res.status_code == 200
+    assert confirm_res.json()["imported_count"] == 1
+
+    # Verify order in DB has combined dimensions
+    orders_res = client.get("/api/orders", headers=_auth(token))
+    order = orders_res.json()["orders"][0]
+    assert order["dimensions"] == "300x200x15mm"
+
+
+def test_csv_import_template_has_dimension_columns(client):
+    """Template CSV now includes length_mm, width_mm, height_mm columns."""
+    res = client.get("/api/orders/import-csv/template")
+    assert res.status_code == 200
+    content = res.text
+    assert "length_mm" in content
+    assert "width_mm" in content
+    assert "height_mm" in content
+
+
+def test_csv_import_dimensions_column_overrides_separate(client):
+    """If a CSV has both 'dimensions' and 'length_mm', dimensions column wins."""
+    token = _register_and_token(client, "dims_override@example.com")
+    csv_content = (
+        f"order_id,material,quantity,dimensions,length_mm,width_mm,height_mm,due_date\n"
+        f"O-001,steel,500,400x300x25mm,200,100,10,{_future_date(30)}\n"
+    )
+    res = client.post(
+        "/api/orders/import-csv",
+        files=_csv_upload(csv_content),
+        headers=_auth(token),
+    )
+    assert res.status_code == 200
+    row = res.json()["valid_rows"][0]
+    # dimensions column takes priority over separate L/W/H
+    assert row["dimensions"] == "400x300x25mm"
