@@ -223,9 +223,35 @@ def web_research(query: str) -> Optional[str]:
 
 def research_material(material_name: str) -> Optional[dict]:
     """
-    Research material properties via web + LLM interpretation.
+    Research material properties — catalog-first, web + LLM as enrichment.
     Returns structured material data or None.
     """
+    # 1. Local catalog — instant, no network call needed
+    try:
+        from manufacturing.materials_catalog import get_material, search_materials
+        entry = get_material(material_name)
+        if not entry:
+            hits = search_materials(material_name)
+            entry = hits[0] if hits else None
+        if entry:
+            # Return catalog data directly (already structured)
+            return {
+                "material": entry["name"],
+                "family": entry["family"],
+                "machinability_rating": entry["machinability_rating"],
+                "hardness_range": entry.get("hardness_typical", ""),
+                "thermal_conductivity": str(entry.get("thermal_conductivity_w_mk", "")),
+                "weldability": entry["weldability"],
+                "common_processes": entry.get("suitable_processes", []),
+                "notes": entry.get("notes", ""),
+                "density_g_cm3": entry.get("density_g_cm3"),
+                "tensile_strength_mpa": entry.get("tensile_strength_mpa"),
+                "cost_relative": entry.get("cost_relative", "medium"),
+            }
+    except Exception as exc:
+        logger.debug("Catalog lookup failed for '%s': %s", material_name, exc)
+
+    # 2. Web + LLM for materials not in catalog
     web_data = web_research(f"{material_name} material properties machinability manufacturing")
     if not web_data:
         return None
