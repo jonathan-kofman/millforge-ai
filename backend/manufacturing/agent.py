@@ -39,6 +39,11 @@ _MFG_MODEL = os.getenv("MFG_OLLAMA_MODEL", "llama3.2:latest")
 _MAX_TOKENS = 512   # keep responses short to save memory
 _TIMEOUT = 30       # seconds — fail fast, fall back to physics
 
+# Web search API keys — all optional; falls back to Wikipedia + DuckDuckGo
+_BING_KEY = os.getenv("BING_SEARCH_KEY", "")          # Azure Cognitive Services
+_SERP_KEY = os.getenv("SERPAPI_KEY", "")               # SerpAPI (Google results)
+_WEB_TIMEOUT = 8   # seconds per HTTP call
+
 
 def _chat(system: str, user: str, temperature: float = 0.3) -> str:
     """Send a chat request to Ollama and return the raw response text."""
@@ -88,37 +93,132 @@ def _parse_json(raw: str) -> dict | list:
 
 
 # ---------------------------------------------------------------------------
-# Web research capability — fetch material data, process specs, etc.
+# Web access — fetch material data, process specs, live prices, standards
 # ---------------------------------------------------------------------------
+
+_HEADERS = {
+    "User-Agent": "MillForge/1.0 (manufacturing-intelligence; +https://millforge.ai)",
+    "Accept": "application/json, text/plain, */*",
+}
+
+
+def fetch_url(url: str, *, max_chars: int = 3000) -> Optional[str]:
+    """
+    Fetch a URL and return plain text (HTML tags stripped, truncated).
+    Returns None on any failure.
+    """
+    try:
+        req = urllib.request.Request(url, headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=_WEB_TIMEOUT) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+        # Strip HTML tags crudely — good enough for manufacturing specs
+        import re
+        text = re.sub(r"<[^>]+>", " ", raw)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:max_chars] if text else None
+    except Exception as exc:
+        logger.debug("fetch_url failed for %s: %s", url, exc)
+        return None
+
 
 def web_research(query: str) -> Optional[str]:
     """
-    Fetch information from the web for manufacturing context.
-    Uses a simple search + fetch pattern for material properties,
-    process specifications, and technical references.
+    Multi-source web research for manufacturing context.
 
-    Returns the fetched text content, or None on failure.
+    Source priority:
+      1. Bing Search API (BING_SEARCH_KEY env var) — richest results
+      2. SerpAPI (SERPAPI_KEY env var) — Google results
+      3. Wikipedia API — excellent for materials, alloys, processes
+      4. DuckDuckGo Instant Answer — last-resort fallback
+
+    Returns concatenated text snippets, or None if all sources fail.
     """
-    try:
-        # URL-encode the query for a search
-        encoded = urllib.parse.quote_plus(query)
-        url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1"
-        req = urllib.request.Request(url, headers={"User-Agent": "MillForge/1.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
+    encoded = urllib.parse.quote_plus(query)
+    results: list[str] = []
 
-        # Extract the abstract / related topics
-        results = []
-        if data.get("Abstract"):
-            results.append(data["Abstract"])
-        for topic in data.get("RelatedTopics", [])[:5]:
-            if isinstance(topic, dict) and topic.get("Text"):
-                results.append(topic["Text"])
+    # 1. Bing Search API
+    if _BING_KEY and not results:
+        try:
+            url = f"https://api.bing.microsoft.com/v7.0/search?q={encoded}&count=5&mkt=en-US"
+            req = urllib.request.Request(url, headers={**_HEADERS, "Ocp-Apim-Subscription-Key": _BING_KEY})
+            with urllib.request.urlopen(req, timeout=_WEB_TIMEOUT) as resp:
+                data = json.loads(resp.read())
+            for item in data.get("webPages", {}).get("value", [])[:4]:
+                snippet = item.get("snippet", "")
+                if snippet:
+                    results.append(snippet)
+            logger.debug("Bing returned %d snippets for '%s'", len(results), query)
+        except Exception as exc:
+            logger.debug("Bing search failed: %s", exc)
 
-        return "\n".join(results) if results else None
-    except Exception as exc:
-        logger.debug("Web research failed for '%s': %s", query, exc)
+    # 2. SerpAPI (Google)
+    if _SERP_KEY and not results:
+        try:
+            url = f"https://serpapi.com/search.json?q={encoded}&api_key={_SERP_KEY}&num=5"
+            req = urllib.request.Request(url, headers=_HEADERS)
+            with urllib.request.urlopen(req, timeout=_WEB_TIMEOUT) as resp:
+                data = json.loads(resp.read())
+            for item in data.get("organic_results", [])[:4]:
+                snippet = item.get("snippet", "")
+                if snippet:
+                    results.append(snippet)
+            logger.debug("SerpAPI returned %d snippets for '%s'", len(results), query)
+        except Exception as exc:
+            logger.debug("SerpAPI search failed: %s", exc)
+
+    # 3. Wikipedia — best for alloys, materials, manufacturing processes
+    if not results:
+        try:
+            # Try direct page summary first
+            page_title = urllib.parse.quote(query.replace(" ", "_"))
+            url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{page_title}"
+            req = urllib.request.Request(url, headers=_HEADERS)
+            with urllib.request.urlopen(req, timeout=_WEB_TIMEOUT) as resp:
+                data = json.loads(resp.read())
+            if data.get("extract"):
+                results.append(data["extract"])
+        except Exception:
+            pass
+
+        if not results:
+            try:
+                # Wikipedia full-text search
+                url = (
+                    f"https://en.wikipedia.org/w/api.php"
+                    f"?action=query&list=search&srsearch={encoded}"
+                    f"&format=json&srlimit=3&srprop=snippet"
+                )
+                req = urllib.request.Request(url, headers=_HEADERS)
+                with urllib.request.urlopen(req, timeout=_WEB_TIMEOUT) as resp:
+                    data = json.loads(resp.read())
+                import re
+                for hit in data.get("query", {}).get("search", [])[:2]:
+                    snippet = re.sub(r"<[^>]+>", "", hit.get("snippet", ""))
+                    if snippet:
+                        results.append(snippet)
+            except Exception as exc:
+                logger.debug("Wikipedia search failed: %s", exc)
+
+    # 4. DuckDuckGo Instant Answer — last resort
+    if not results:
+        try:
+            url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1"
+            req = urllib.request.Request(url, headers=_HEADERS)
+            with urllib.request.urlopen(req, timeout=_WEB_TIMEOUT) as resp:
+                data = json.loads(resp.read())
+            if data.get("Abstract"):
+                results.append(data["Abstract"])
+            for topic in data.get("RelatedTopics", [])[:3]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    results.append(topic["Text"])
+        except Exception as exc:
+            logger.debug("DuckDuckGo failed: %s", exc)
+
+    if not results:
+        logger.debug("All web sources returned nothing for '%s'", query)
         return None
+
+    return "\n\n".join(results)
 
 
 def research_material(material_name: str) -> Optional[dict]:
