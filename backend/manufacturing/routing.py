@@ -19,6 +19,7 @@ Scoring model:
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -361,6 +362,66 @@ class RoutingEngine:
             )
 
         options.sort(key=lambda o: o.score, reverse=True)
+
+        # --- LLM agent advisory pass ---
+        # Ask the manufacturing agent to review scores and adjust ranking
+        try:
+            from manufacturing.agent import advise_routing
+            intent_data = {
+                "part_id": intent.part_id,
+                "material": {
+                    "material_name": intent.material.material_name,
+                    "material_family": intent.material.material_family,
+                },
+                "quantity": intent.quantity,
+                "tolerance_class": intent.tolerance_class,
+                "priority": intent.priority,
+                "cost_target_usd": intent.cost_target_usd,
+            }
+            candidates_data = [
+                {
+                    "index": i,
+                    "process": o.process_family.value,
+                    "machine": o.machine.machine_id,
+                    "score": o.score,
+                    "cycle_time_min": o.estimated_cycle_time_minutes,
+                    "cost_usd": o.estimated_cost_usd,
+                    "reasoning": o.reasoning,
+                }
+                for i, o in enumerate(options[:5])  # top 5 only
+            ]
+            advice = advise_routing(
+                json.dumps(intent_data),
+                json.dumps(candidates_data),
+            )
+            if advice and "recommended_option_index" in advice:
+                rec_idx = advice["recommended_option_index"]
+                if 0 <= rec_idx < len(options):
+                    # Boost recommended option's score
+                    rec = options[rec_idx]
+                    rec_reasoning = advice.get("rationale", "")
+                    boosted = RouteOption(
+                        process_family=rec.process_family,
+                        machine=rec.machine,
+                        estimated_cycle_time_minutes=rec.estimated_cycle_time_minutes,
+                        estimated_cost_usd=rec.estimated_cost_usd,
+                        setup_time_minutes=rec.setup_time_minutes,
+                        score=min(1.0, rec.score + 0.05),
+                        reasoning=f"[AI] {rec_reasoning} | {rec.reasoning}",
+                    )
+                    options[rec_idx] = boosted
+                    options.sort(key=lambda o: o.score, reverse=True)
+                    logger.info(
+                        "LLM routing advisor recommended option %d: %s",
+                        rec_idx, rec_reasoning[:80],
+                    )
+                # Attach warnings from agent
+                if advice.get("warnings"):
+                    for w in advice["warnings"]:
+                        logger.info("LLM routing warning: %s", w)
+        except Exception as exc:
+            logger.debug("LLM routing advisory skipped: %s", exc)
+
         return options
 
     def _score_option(

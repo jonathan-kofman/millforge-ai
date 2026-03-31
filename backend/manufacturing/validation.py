@@ -157,6 +157,39 @@ def validate_intent(
                     f"on material '{intent.material.normalized_name}'."
                 )
 
+    # 10. LLM advisory validation — augments rule-based checks with
+    #     web-researched material knowledge and process reasoning
+    try:
+        from manufacturing.agent import advise_validation
+        import json as _json
+        intent_data = {
+            "part_id": intent.part_id,
+            "material": {
+                "material_name": intent.material.material_name,
+                "material_family": intent.material.material_family,
+            },
+            "quantity": intent.target_quantity,
+            "tolerance_class": intent.tolerance_class,
+            "priority": intent.priority,
+        }
+        process_str = (
+            intent.required_processes[0].value
+            if intent.required_processes
+            else "unspecified"
+        )
+        advice = advise_validation(_json.dumps(intent_data), process_str)
+        if advice and advice.get("issues"):
+            for issue in advice["issues"]:
+                severity = issue.get("severity", "info")
+                msg = issue.get("message", "")
+                fix = issue.get("fix", "")
+                if severity == "critical" and msg:
+                    errors.append(f"[AI] {msg}" + (f" — Fix: {fix}" if fix else ""))
+                elif severity == "warning" and msg:
+                    logger.info("LLM validation warning: %s", msg)
+    except Exception as exc:
+        logger.debug("LLM validation advisory skipped: %s", exc)
+
     return errors
 
 

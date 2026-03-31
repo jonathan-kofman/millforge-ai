@@ -138,7 +138,41 @@ class CycleTimeEstimator:
         # 3. Category-based fallback
         category = ProcessCategory.for_process(process_family)
         per_unit = _FALLBACK_CYCLE_TIME_PER_UNIT.get(category, 15.0)
-        return per_unit * intent.target_quantity
+        baseline = per_unit * intent.target_quantity
+
+        # 4. LLM advisory — ask agent to review and adjust the estimate
+        try:
+            from manufacturing.agent import advise_estimation
+            import json as _json
+            intent_data = {
+                "part_id": intent.part_id,
+                "material": {
+                    "material_name": intent.material.material_name,
+                    "material_family": intent.material.material_family,
+                },
+                "quantity": intent.target_quantity,
+                "tolerance_class": intent.tolerance_class,
+            }
+            advice = advise_estimation(
+                _json.dumps(intent_data),
+                process_family.value,
+                baseline / max(intent.target_quantity, 1),  # per-unit
+                0.0,  # cost not yet calculated at this stage
+            )
+            if advice and "adjustment_factor" in advice:
+                factor = float(advice["adjustment_factor"])
+                factor = max(0.5, min(factor, 3.0))  # clamp to reasonable range
+                adjusted = baseline * factor
+                logger.info(
+                    "LLM adjusted cycle time for %s: %.1f → %.1f min (factor %.2f, confidence: %s)",
+                    intent.part_id, baseline, adjusted, factor,
+                    advice.get("confidence", "unknown"),
+                )
+                return adjusted
+        except Exception as exc:
+            logger.debug("LLM estimation advisory skipped: %s", exc)
+
+        return baseline
 
     def estimate_with_complexity(
         self,
