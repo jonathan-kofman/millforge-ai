@@ -127,6 +127,28 @@ Return JSON:
 Return ONLY valid JSON. No markdown fences. No prose before the JSON.
 """
 
+COST_ADVISOR_SYSTEM = """\
+You are an expert manufacturing cost estimator. Given a manufacturing intent and a
+physics-based cost estimate, evaluate the estimate and adjust if needed.
+
+Consider:
+- Material cost (titanium ~8x steel, exotic alloys add 2-5x)
+- Process efficiency (high-volume runs reduce per-unit cost via amortized setup)
+- Scrap rate (tight tolerances increase scrap; factor in rework cost)
+- Consumables and tooling wear (EDM wire, cutting gas, inserts)
+- Overhead burden typical for this process type
+
+Return JSON:
+{
+  "adjustment_factor": 1.0,
+  "reasoning": "Brief explanation of adjustment",
+  "confidence": "high|medium|low",
+  "cost_drivers": ["Key cost drivers for this job"]
+}
+
+Return ONLY valid JSON. No markdown fences. No prose before the JSON.
+"""
+
 WORK_ORDER_PLANNER_SYSTEM = """\
 You are an expert manufacturing planner creating a multi-step work order from a
 manufacturing intent. Given the part requirements (material, geometry, tolerances,

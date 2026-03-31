@@ -270,7 +270,33 @@ class CostEstimator:
             except Exception:
                 pass
 
-        return energy_cost + labor_cost + tooling_cost + consumable_cost
+        total = energy_cost + labor_cost + tooling_cost + consumable_cost
+
+        # 3. LLM advisory — adjust cost estimate based on material/process knowledge
+        try:
+            from manufacturing.agent import advise_cost
+            import json as _json
+            intent_data = {
+                "part_id": intent.part_id,
+                "material": {"material_name": intent.material.material_name,
+                             "material_family": intent.material.material_family},
+                "quantity": intent.target_quantity,
+                "tolerance_class": intent.tolerance_class,
+            }
+            advice = advise_cost(_json.dumps(intent_data), process_family.value, total)
+            if advice and "adjustment_factor" in advice:
+                factor = float(advice["adjustment_factor"])
+                factor = max(0.5, min(factor, 5.0))
+                adjusted = total * factor
+                logger.info(
+                    "LLM adjusted cost for %s: $%.2f → $%.2f (factor %.2f)",
+                    intent.part_id, total, adjusted, factor,
+                )
+                return adjusted
+        except Exception as exc:
+            logger.debug("LLM cost advisory skipped: %s", exc)
+
+        return total
 
     def estimate_breakdown(
         self,
@@ -486,6 +512,30 @@ class FeasibilityChecker:
                 )
 
         is_feasible = len(errors) == 0
+
+        # 5. LLM advisory — get workarounds for infeasible intents or additional recommendations
+        try:
+            from manufacturing.agent import advise_feasibility
+            import json as _json
+            intent_data = {
+                "part_id": intent.part_id,
+                "material": {"material_name": intent.material.material_name},
+                "quantity": intent.target_quantity,
+                "required_processes": [p.value for p in (intent.required_processes or [])],
+            }
+            all_issues = errors + warnings
+            advice = advise_feasibility(_json.dumps(intent_data), _json.dumps(all_issues))
+            if advice:
+                if advice.get("recommendation"):
+                    recommendations.append(f"[AI] {advice['recommendation']}")
+                for w in advice.get("workarounds", []):
+                    if isinstance(w, dict) and w.get("approach"):
+                        recommendations.append(
+                            f"[AI] {w['approach']} (cost: {w.get('estimated_cost_impact','?')}, "
+                            f"time: {w.get('estimated_time_impact','?')})"
+                        )
+        except Exception as exc:
+            logger.debug("LLM feasibility advisory skipped: %s", exc)
 
         return FeasibilityResult(
             is_feasible=is_feasible,

@@ -290,6 +290,32 @@ def advise_estimation(
         return None
 
 
+def advise_cost(
+    intent_json: str,
+    process_family: str,
+    baseline_cost_usd: float,
+) -> Optional[dict]:
+    """
+    LLM-powered cost advisor. Reviews a physics-based cost estimate and
+    adjusts for material premiums, scrap rate, and process efficiency.
+
+    Returns adjustment dict with factor and reasoning, or None if Ollama unavailable.
+    """
+    from manufacturing.prompts import COST_ADVISOR_SYSTEM
+
+    user_msg = (
+        f"Manufacturing Intent:\n{intent_json}\n\n"
+        f"Process: {process_family}\n"
+        f"Physics-based cost estimate: ${baseline_cost_usd:.2f} total"
+    )
+    try:
+        raw = _chat(COST_ADVISOR_SYSTEM, user_msg)
+        return _parse_json(raw)
+    except Exception as exc:
+        logger.warning("Cost advisor failed: %s", exc)
+        return None
+
+
 def advise_feasibility(
     intent_json: str,
     issues_json: str,

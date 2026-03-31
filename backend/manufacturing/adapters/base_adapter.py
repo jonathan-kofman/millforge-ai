@@ -198,8 +198,8 @@ class BaseAdapter(ProcessAdapter):
         self, intent: ManufacturingIntent, machine: MachineCapability
     ) -> Dict[str, Any]:
         """
-        Assemble a standardized setup sheet dict. Subclasses should call
-        super() and merge their process-specific fields.
+        Generate setup sheet — LLM-first, physics template as fallback.
+        Subclasses should call super() and merge their process_parameters.
         """
         tooling = self.get_required_tooling(intent)
         fixtures = self.get_required_fixtures(intent)
@@ -207,7 +207,8 @@ class BaseAdapter(ProcessAdapter):
         setup_time = self.estimate_setup_time(intent, machine)
         cycle_time = self.estimate_cycle_time(intent, machine)
 
-        return {
+        # Physics template (always built as fallback)
+        sheet: Dict[str, Any] = {
             "process": self.process_family.value,
             "machine_id": machine.machine_id,
             "machine_name": machine.machine_name,
@@ -231,7 +232,38 @@ class BaseAdapter(ProcessAdapter):
                 for q in quality
             ],
             "process_parameters": {},  # overridden by subclass
+            "source": "physics_template",
         }
+
+        # LLM advisory — enrich with operator-ready instructions
+        try:
+            import json as _json
+            from manufacturing.agent import generate_setup_sheet as llm_setup
+            intent_data = {
+                "part_id": intent.part_id,
+                "part_name": intent.part_name,
+                "material": intent.material.material_name,
+                "alloy": intent.material.alloy_designation,
+                "quantity": intent.target_quantity,
+                "tolerance_class": intent.tolerance_class,
+                "setup_time_minutes": setup_time,
+                "estimated_cycle_time_minutes": cycle_time,
+            }
+            llm_result = llm_setup(
+                _json.dumps(intent_data),
+                self.process_family.value,
+                machine.machine_name,
+            )
+            if llm_result:
+                sheet["setup_steps"] = llm_result.get("setup_steps", [])
+                sheet["safety_notes"] = llm_result.get("safety_notes", [])
+                sheet["quality_checkpoints"] = llm_result.get("quality_checkpoints", [])
+                sheet["tooling_notes"] = llm_result.get("tooling_notes", "")
+                sheet["source"] = "llm_generated"
+        except Exception as exc:
+            logger.debug("LLM setup sheet generation skipped: %s", exc)
+
+        return sheet
 
     # ------------------------------------------------------------------
     # Helpers available to all subclasses
