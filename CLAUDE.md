@@ -467,6 +467,120 @@ Deploy MillForge with the new normalizer **before** deploying the ARIA version t
 
 **Contract file:** `contracts/cam_setup_schema_v1.json` — JSON Schema draft-07 for the v1.0 canonical shape. Update alongside `CAMImport` when the internal canonical shape changes. The test `test_cam_import_validates_against_json_schema` validates against it.
 
+## Manufacturing Abstraction Layer (`backend/manufacturing/`)
+
+Process-agnostic manufacturing intelligence layer that enables MillForge to support multiple fabrication processes beyond CNC milling — welding, cutting, bending, stamping, EDM, molding, inspection, and robotics.
+
+### Architecture
+
+```
+backend/manufacturing/
+  __init__.py           — package root; exports all public classes
+  ontology.py           — core type system: ProcessFamily (32 variants), MaterialSpec, ManufacturingIntent, ProcessPlan
+  registry.py           — thread-safe singleton ProcessRegistry + ProcessAdapter protocol + MachineCapability
+  routing.py            — RoutingEngine: 4-factor weighted scoring (cost/time/quality/energy), multi-step routing
+  work_order.py         — WorkOrder + WorkOrderStep with 12-state FSM
+  validation.py         — cross-cutting validators for intent, work order, process steps
+  simulation.py         — CycleTimeEstimator, CostEstimator, FeasibilityChecker
+  bridge.py             — bridges new layer to existing scheduler/energy agents (backward-compatible)
+  adapters/
+    base_adapter.py     — BaseAdapter ABC; re-exports SETUP_MATRIX, THROUGHPUT for backward compat
+    cnc_milling.py      — CNCMillingAdapter: wraps legacy scheduler constants in adapter pattern
+    welding.py          — ArcWeldingAdapter, LaserWeldingAdapter, EBWeldingAdapter (travel-speed throughput)
+    bending.py          — PressBrakeAdapter: tonnage formula, springback compensation, bend deduction
+    cutting.py          — LaserCuttingAdapter, PlasmaCuttingAdapter, WaterjetCuttingAdapter
+    stamping.py         — StampingAdapter: high-volume die-based, SPM throughput
+    edm.py              — WireEDMAdapter, SinkerEDMAdapter: MRR-based throughput, dielectric consumption
+    molding.py          — InjectionMoldingAdapter: polymer/MIM, high batch minimums
+    inspection.py       — CMMInspectionAdapter, VisionInspectionAdapter, XRayInspectionAdapter (post-process)
+```
+
+### Key Concepts
+
+**ProcessFamily** — 32 enum variants covering all major manufacturing processes. Grouped into **ProcessCategory** (SUBTRACTIVE, ADDITIVE, JOINING, FORMING, CASTING_MOLDING, INSPECTION, MATERIAL_HANDLING, THERMAL, FINISHING, ASSEMBLY).
+
+**ManufacturingIntent** — describes *what* needs to be made: part ID, material spec, quantity, quality requirements, due date, cost target. Process-agnostic — the routing engine decides *how*.
+
+**ProcessAdapter** — abstract protocol that each process family implements:
+- `validate_intent(intent) → List[str]` — validation errors
+- `estimate_cycle_time(intent, machine) → float` — minutes
+- `estimate_cost(intent, machine) → float` — USD
+- `generate_setup_sheet(intent, machine) → Dict` — process-specific setup instructions
+- `get_consumables(intent) → Dict[str, float]` — material_name → kg consumed
+- `get_energy_profile(intent, machine) → EnergyProfile`
+
+**ProcessRegistry** — thread-safe singleton holding all registered adapters and machines. Supports `find_capable_machines(process_family, material)` for routing.
+
+**RoutingEngine** — `route(intent) → RoutingResult` — finds all capable process/machine combinations, scores them on 4 weighted factors (cost 0.3, time 0.3, quality 0.25, energy 0.15), returns ranked options.
+
+**Bridge module** (`bridge.py`) — backward-compatible functions:
+- `order_to_intent(order)` / `intent_to_order(intent)` — convert between legacy Order and ManufacturingIntent
+- `setup_matrix_from_registry(registry, from_mat, to_mat)` — adapter-first, falls back to SETUP_MATRIX
+- `throughput_from_registry(registry, material)` — adapter-first, falls back to THROUGHPUT dict
+- `bootstrap_registry()` — registers all 16 built-in adapters, returns singleton
+- `register_db_machines(registry, db)` — reads Machine table → MachineCapability objects
+
+### REST API (`backend/routers/manufacturing.py`)
+
+**Prefix:** `/api/manufacturing`
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/manufacturing/health` | GET | Registry stats: adapter count, machine count, supported processes |
+| `/api/manufacturing/processes` | GET | List all registered process families with adapter capabilities |
+| `/api/manufacturing/machines` | GET | List all registered machines with capabilities |
+| `/api/manufacturing/route` | POST | Route a ManufacturingIntent — returns scored options |
+| `/api/manufacturing/feasibility` | POST | Feasibility check for an intent |
+| `/api/manufacturing/validate` | POST | Validate an intent, return errors |
+| `/api/manufacturing/work-order` | POST | Create a WorkOrder from intent + selected route |
+| `/api/manufacturing/work-orders` | GET | List work orders (placeholder) |
+| `/api/manufacturing/estimate` | POST | Cycle time + cost estimate for intent + process |
+
+### Startup Integration
+
+In `main.py` lifespan, after inventory/supplier init:
+1. `bootstrap_registry()` registers all 16 adapters
+2. `register_db_machines(registry, db)` syncs Machine table to registry
+3. Registry passed to manufacturing router via `set_registry()`
+
+### Adding a New Process Adapter
+
+1. Create `backend/manufacturing/adapters/my_process.py` with a class extending `BaseAdapter`
+2. Set `process_family` property to the target `ProcessFamily` enum value
+3. Implement `validate_intent()`, `estimate_cycle_time()`, `estimate_cost()`, `generate_setup_sheet()`, `get_consumables()`, `get_energy_profile()`
+4. Register in `bridge.py:bootstrap_registry()` — one line: `MyAdapter()`
+5. Add tests to `tests/test_manufacturing_*.py`
+
+The adapter will be automatically available to the routing engine and REST API.
+
+### ARIA Schema v2 (Multi-Process)
+
+`services/aria_schema.py` now supports v2.0 with multi-process fields:
+- `process_type` (string) — e.g. "cnc_milling", "welding_arc", "bending_press_brake"
+- `process_parameters` (dict) — generic process-specific params
+- `consumables` (list) — filler wire, shielding gas, etc.
+- `quality_standards` (list) — e.g. ["AWS D1.1", "ASME IX"]
+- `energy_profile` (dict) — base_power_kw, peak_power_kw
+
+v1 payloads still work unchanged. v2 normalizer defaults missing `process_type` to "cnc_milling".
+
+Contract file: `contracts/cam_setup_schema_v2.json`
+
+### Tests
+
+173 tests across 6 test files covering ontology, registry, routing, adapters (CNC + welding + bending), validation, and simulation. All pass in <0.3s.
+
+```bash
+python -m pytest tests/test_manufacturing_*.py -v  # run manufacturing tests
+```
+
+### Key Rules
+
+1. **Never break the bridge** — `bridge.py` fallback paths must always work even if adapters are not registered
+2. **Adapter isolation** — each adapter is self-contained; no cross-adapter imports
+3. **Registry is lazy** — adapters registered at startup, but the registry works with zero adapters (empty results, no crashes)
+4. **Thread-safe** — ProcessRegistry uses threading.Lock for all mutations
+
 ## Customer Discovery Module (`backend/discovery/`, `frontend/src/pages/Discovery.jsx`)
 
 Internal tool for logging, extracting, and synthesizing customer interview data. Not a lights-out touchpoint — built for YC prep and product validation.

@@ -31,16 +31,50 @@ def _normalize_v1(raw: dict) -> dict:
     return dict(raw)
 
 
-# Template for the next version — uncomment and fill in when ARIA v2 ships.
-# def _normalize_v2(raw: dict) -> dict:
-#     """v2.0 — example: ARIA renamed fields in this version."""
-#     out = dict(raw)
-#     # Field renames: old_name → new_name
-#     _rename(out, "target_machine",      "machine_name")
-#     _rename(out, "cycle_time_minutes",  "cycle_time_min_estimate")
-#     # Ensure schema_version is normalised to what CAMImport expects
-#     out["schema_version"] = "1.0"
-#     return out
+def _normalize_v2(raw: dict) -> dict:
+    """
+    v2.0 — Multi-process setup sheet normalizer.
+
+    New fields in v2:
+      - process_type         (str) : e.g. "cnc_milling", "welding_arc", "cutting_laser"
+      - process_parameters   (dict): generic process-specific parameters
+      - consumables          (list): [{"name": str, "quantity": float, "unit": str}]
+      - quality_standards    (list): e.g. ["AWS D1.1", "ASME IX"]
+      - energy_profile       (dict): {"base_power_kw": float, "peak_power_kw": float}
+
+    Normalization strategy:
+      1. Carry forward all v1 fields unchanged (backward-compatible superset).
+      2. If process_type is missing, default to "cnc_milling" (preserves v1 behaviour).
+      3. Merge process_parameters into setup_sheet if present.
+      4. Normalize schema_version to "1.0" so downstream CAMImport models work unchanged.
+    """
+    out = dict(raw)
+
+    # Default process_type to cnc_milling for backward compat with v1 payloads
+    if "process_type" not in out:
+        out["process_type"] = "cnc_milling"
+
+    # Ensure process_parameters is a dict, not None or missing
+    if "process_parameters" not in out or out["process_parameters"] is None:
+        out["process_parameters"] = {}
+
+    # Ensure consumables is a list
+    if "consumables" not in out or out["consumables"] is None:
+        out["consumables"] = []
+
+    # Ensure quality_standards is a list
+    if "quality_standards" not in out or out["quality_standards"] is None:
+        out["quality_standards"] = []
+
+    # Ensure energy_profile is a dict
+    if "energy_profile" not in out or out["energy_profile"] is None:
+        out["energy_profile"] = {}
+
+    # Normalise schema_version to "1.0" so the existing CAMImport Pydantic model
+    # validates correctly (it was written for v1 shape; v2 is a strict superset).
+    out["schema_version"] = "1.0"
+
+    return out
 
 
 def _rename(d: dict, old: str, new: str) -> None:
@@ -55,7 +89,7 @@ def _rename(d: dict, old: str, new: str) -> None:
 
 NORMALIZERS: dict[str, Callable[[dict], dict]] = {
     "1.0": _normalize_v1,
-    # "2.0": _normalize_v2,
+    "2.0": _normalize_v2,
 }
 
 

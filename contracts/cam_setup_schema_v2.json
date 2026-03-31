@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cam_setup_schema_v2",
+  "title": "ARIA-OS CAM Setup Sheet v2",
+  "description": "Schema v2.0 — multi-process superset of v1. Adds process_type, process_parameters, consumables, quality_standards, and energy_profile. All v1 fields are preserved. Consumed by MillForge POST /api/jobs/import-from-cam after normalization by services/aria_schema.py.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "part_id",
+    "machine_name",
+    "stock_dims",
+    "cycle_time_min_estimate",
+    "generated_at"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "2.0",
+      "description": "Must be exactly '2.0' for this schema version"
+    },
+    "part_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ARIA part identifier, e.g. ARIA-P-20240101-001"
+    },
+    "machine_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target machine name from ARIA, e.g. 'Haas VF-2', 'Lincoln MIG Cell', 'Trumpf TruLaser'"
+    },
+    "process_type": {
+      "type": "string",
+      "description": "Manufacturing process family for this setup sheet. Defaults to 'cnc_milling' if omitted for backward compatibility.",
+      "default": "cnc_milling",
+      "examples": [
+        "cnc_milling",
+        "cnc_turning",
+        "welding_arc",
+        "welding_laser",
+        "cutting_laser",
+        "cutting_plasma",
+        "cutting_waterjet",
+        "bending_press_brake",
+        "stamping",
+        "edm_wire",
+        "edm_sinker",
+        "injection_molding",
+        "inspection_cmm",
+        "inspection_vision",
+        "inspection_xray"
+      ]
+    },
+    "process_parameters": {
+      "type": ["object", "null"],
+      "description": "Process-specific parameters. Structure varies by process_type. For CNC: spindle_speed_rpm, feed_rate_mm_min, depth_of_cut_mm, coolant_type. For welding: travel_speed_mm_min, wire_diameter_mm, shielding_gas. For cutting: cutting_speed_mm_min, kerf_width_mm, assist_gas. All fields are optional and process-specific.",
+      "default": {},
+      "additionalProperties": true
+    },
+    "consumables": {
+      "type": ["array", "null"],
+      "description": "List of consumables required for this setup. Each entry describes one material consumed during the process.",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Consumable name, e.g. 'filler_wire_er70s6', 'argon_gas', 'garnet_abrasive', 'cutting_coolant'"
+          },
+          "quantity": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "Quantity consumed for this job (units given in 'unit' field)"
+          },
+          "unit": {
+            "type": ["string", "null"],
+            "description": "Unit of measure: 'kg', 'liters', 'm3', 'meters', 'pieces', 'fraction'",
+            "examples": ["kg", "liters", "m3", "meters", "pieces"]
+          },
+          "part_number": {
+            "type": ["string", "null"],
+            "description": "Supplier part number or catalog reference"
+          }
+        }
+      }
+    },
+    "quality_standards": {
+      "type": ["array", "null"],
+      "description": "List of quality standards applicable to this job. MillForge uses these to configure the correct inspection checks.",
+      "default": [],
+      "items": {
+        "type": "string",
+        "examples": [
+          "AWS D1.1",
+          "ASME IX",
+          "AS9100D",
+          "ISO 2768-m",
+          "ISO 2768-f",
+          "ASME Y14.5",
+          "ASTM E1032",
+          "AMS 2753"
+        ]
+      }
+    },
+    "energy_profile": {
+      "type": ["object", "null"],
+      "description": "Power consumption profile for this operation. Used by MillForge's energy optimizer to schedule during off-peak hours.",
+      "default": {},
+      "properties": {
+        "base_power_kw": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Steady-state operating power draw in kilowatts"
+        },
+        "peak_power_kw": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Maximum instantaneous power in kilowatts (spindle start, arc strike, etc.)"
+        },
+        "idle_power_kw": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Power draw when machine is on but not actively cutting/welding"
+        },
+        "duty_cycle": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fraction of time at base power level (0.0–1.0)"
+        }
+      },
+      "additionalProperties": true
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tool_number", "description"],
+        "properties": {
+          "tool_number": { "type": "integer", "minimum": 1 },
+          "description": { "type": "string" },
+          "diameter_mm": { "type": ["number", "null"], "minimum": 0 },
+          "material": { "type": ["string", "null"] }
+        }
+      },
+      "default": []
+    },
+    "stock_dims": {
+      "type": "object",
+      "required": ["length_mm", "width_mm", "height_mm"],
+      "properties": {
+        "length_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "width_mm":  { "type": "number", "exclusiveMinimum": 0 },
+        "height_mm": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "cycle_time_min_estimate": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Estimated cycle time in MINUTES (not seconds)"
+    },
+    "second_op_required": {
+      "type": "boolean",
+      "default": false
+    },
+    "work_offset_recommendation": {
+      "type": "string",
+      "default": "",
+      "description": "e.g. 'G54'"
+    },
+    "fixturing_suggestion": {
+      "type": "string",
+      "default": "",
+      "description": "e.g. 'Kurt vise, jaw width 60mm'"
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when ARIA generated this setup sheet"
+    },
+    "material": {
+      "type": ["string", "null"],
+      "description": "Stock material, e.g. 'aluminum', 'steel', 'abs', 'titanium'"
+    },
+    "notes": {
+      "type": ["string", "null"]
+    }
+  }
+}

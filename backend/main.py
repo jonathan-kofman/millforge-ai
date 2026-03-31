@@ -42,6 +42,7 @@ from routers.analytics import router as analytics_router
 from routers.business import router as business_router
 from routers.market_quotes import router as market_quotes_router
 from routers.contracts import router as contracts_router
+from routers.manufacturing import router as manufacturing_router, set_registry as _set_mfg_registry
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
@@ -103,6 +104,18 @@ async def lifespan(app: FastAPI):
         suppliers_router.prefix,
         energy_router.prefix,
     )
+    # Bootstrap manufacturing process registry
+    db = SessionLocal()
+    try:
+        from manufacturing.bridge import bootstrap_registry, register_db_machines
+        mfg_registry = bootstrap_registry()
+        mfg_n = register_db_machines(mfg_registry, db)
+        _set_mfg_registry(mfg_registry)
+        logger.info("Manufacturing registry bootstrapped: %d DB machines registered.", mfg_n)
+    except Exception as exc:
+        logger.warning("Manufacturing registry bootstrap failed: %s", exc)
+    finally:
+        db.close()
     # Check ARIA schema compatibility — warns if ARIA is emitting a version
     # MillForge has no normalizer for (non-fatal, never blocks startup).
     from services.aria_schema import check_aria_compatibility
@@ -195,6 +208,7 @@ app.include_router(analytics_router)
 app.include_router(business_router)
 app.include_router(market_quotes_router)
 app.include_router(contracts_router)
+app.include_router(manufacturing_router)
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +247,7 @@ async def health():
         "material_sourcing":      "directory_active", # supplier directory with geo-search
         "predictive_maintenance": "automated",        # MTBF/MTTR risk scoring, urgent → exception queue
         "exception_handling":     "automated",        # 5-source aggregator; urgent maintenance auto-surfaced
+        "manufacturing_intelligence": "process_registry_active",
     }
     _AUTOMATED_STATUSES = {"automated", "real_grid_data", "real_data", "directory_active", "onnx_inference"}
     automated = sum(1 for v in touchpoints.values() if v in _AUTOMATED_STATUSES)
