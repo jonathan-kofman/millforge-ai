@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Cog, Menu, X, ChevronDown } from "lucide-react";
 import HowItWorks from "./components/HowItWorks";
 import TrustBar from "./components/TrustBar";
@@ -7,29 +7,31 @@ import QuoteForm from "./components/QuoteForm";
 import ScheduleViewer from "./components/ScheduleViewer";
 import VisionDemo from "./components/VisionDemo";
 import ContactForm from "./components/ContactForm";
-import OrdersView from "./components/OrdersView";
 import AuthModal from "./components/AuthModal";
 import BenchmarkDemo from "./components/BenchmarkDemo";
 import LightsOutWidget from "./components/LightsOutWidget";
 import EnergyWidget from "./components/EnergyWidget";
 import OnboardingWizard from "./components/OnboardingWizard";
-import Discovery from "./pages/Discovery";
-import JobsPage from "./components/JobsPage";
-import MachinesPage from "./components/MachinesPage";
-import QCAnalyticsPage from "./components/QCAnalyticsPage";
 import PricingPage from "./components/PricingPage";
-import DashboardPage from "./components/DashboardPage";
 import EnergyPage from "./components/EnergyPage";
 import SuppliersPage from "./components/SuppliersPage";
-import ManufacturingPage from "./components/ManufacturingPage";
-import OperationsPage from "./components/OperationsPage";
 import DemoChainPage from "./components/DemoChainPage";
-import NLSchedulerPage from "./components/NLSchedulerPage";
-import ToolWearDashboard from "./components/ToolWearDashboard";
-import ToolAwareSchedule from "./components/ToolAwareSchedule";
-import ARIAImport from "./components/ARIAImport";
-import QualityHub from "./components/quality/QualityHub";
 import { API_BASE } from "./config";
+
+// Auth-only pages — lazy loaded so they don't bloat the initial bundle
+const OrdersView       = lazy(() => import("./components/OrdersView"));
+const Discovery        = lazy(() => import("./pages/Discovery"));
+const JobsPage         = lazy(() => import("./components/JobsPage"));
+const MachinesPage     = lazy(() => import("./components/MachinesPage"));
+const QCAnalyticsPage  = lazy(() => import("./components/QCAnalyticsPage"));
+const DashboardPage    = lazy(() => import("./components/DashboardPage"));
+const ManufacturingPage = lazy(() => import("./components/ManufacturingPage"));
+const OperationsPage   = lazy(() => import("./components/OperationsPage"));
+const NLSchedulerPage  = lazy(() => import("./components/NLSchedulerPage"));
+const ToolWearDashboard = lazy(() => import("./components/ToolWearDashboard"));
+const ToolAwareSchedule = lazy(() => import("./components/ToolAwareSchedule"));
+const ARIAImport       = lazy(() => import("./components/ARIAImport"));
+const QualityHub       = lazy(() => import("./components/quality/QualityHub"));
 
 const PUBLIC_TABS = [
   { id: "quote",     label: "Instant Quote" },
@@ -520,6 +522,7 @@ export default function App() {
 
       {/* ── Tab content ── */}
       <main className="flex-1 max-w-6xl mx-auto px-4 py-10 w-full">
+        <Suspense fallback={<div className="flex items-center justify-center py-24"><div className="w-6 h-6 border-2 border-forge-500 border-t-transparent rounded-full animate-spin" /></div>}>
         {activeTab === "quote"          && <QuoteForm />}
         {activeTab === "schedule"       && <ScheduleViewer />}
         {activeTab === "pricing"        && <PricingPage />}
@@ -556,6 +559,7 @@ export default function App() {
             <OrdersView />
           </>
         )}
+        </Suspense>
       </main>
 
       {/* ── Footer ── */}
