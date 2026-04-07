@@ -1,0 +1,10 @@
+[phases.setup]
+nixPkgs = ["python312"]
+
+[phases.install]
+cmds = ["pip install -r backend/requirements.txt"]
+
+# startCommand in railway.json takes precedence over this.
+# Kept here as a fallback for non-Railway Nixpacks builds.
+[start]
+cmd = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"

@@ -34,7 +34,7 @@ def get_db():
 def init_db() -> None:
     """Create all tables. Called at app startup."""
     # Import here so all models are registered on Base.metadata
-    from db_models import User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission, MachineStateLog, JobFeedbackRecord, InventoryStock, Supplier, Job, Machine, QCResult  # noqa: F401
+    from db_models import User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission, MachineStateLog, JobFeedbackRecord, InventoryStock, Supplier, Job, Machine, QCResult, ToolRecord, SensorReading  # noqa: F401
     from discovery.models import Interview, Insight, DiscoveryPattern  # noqa: F401
     Base.metadata.create_all(bind=engine)
     _apply_column_migrations()
@@ -46,9 +46,13 @@ def _apply_column_migrations() -> None:
     migrations = [
         "ALTER TABLE shop_configs ADD COLUMN shifts_per_day INTEGER DEFAULT 2",
         "ALTER TABLE shop_configs ADD COLUMN hours_per_shift INTEGER DEFAULT 8",
+        "ALTER TABLE suppliers ADD COLUMN lead_time_days INTEGER DEFAULT 7",
     ]
-    with engine.connect() as conn:
-        for sql in migrations:
+    for sql in migrations:
+        # Use a fresh connection per migration — on Postgres, a failed DDL statement
+        # poisons the current transaction and all subsequent executes on that connection
+        # fail silently. Opening a new connection per statement avoids this.
+        with engine.connect() as conn:
             try:
                 conn.execute(text(sql))
                 conn.commit()

@@ -16,23 +16,41 @@ import MachinesPage from "./components/MachinesPage";
 import QCAnalyticsPage from "./components/QCAnalyticsPage";
 import PricingPage from "./components/PricingPage";
 import DashboardPage from "./components/DashboardPage";
+import EnergyPage from "./components/EnergyPage";
+import SuppliersPage from "./components/SuppliersPage";
+import ManufacturingPage from "./components/ManufacturingPage";
+import OperationsPage from "./components/OperationsPage";
+import DemoChainPage from "./components/DemoChainPage";
+import NLSchedulerPage from "./components/NLSchedulerPage";
+import ToolWearDashboard from "./components/ToolWearDashboard";
+import ToolAwareSchedule from "./components/ToolAwareSchedule";
+import ARIAImport from "./components/ARIAImport";
 import { API_BASE } from "./config";
 
 const PUBLIC_TABS = [
-  { id: "quote",    label: "Instant Quote" },
-  { id: "schedule", label: "Production Schedule" },
-  { id: "pricing",  label: "Pricing" },
-  { id: "vision",   label: "Quality Inspection" },
-  { id: "contact",  label: "Get in Touch" },
+  { id: "quote",     label: "Instant Quote" },
+  { id: "schedule",  label: "Production Schedule" },
+  { id: "pricing",   label: "Pricing" },
+  { id: "vision",    label: "Quality Inspection" },
+  { id: "energy",    label: "Energy" },
+  { id: "suppliers", label: "Suppliers" },
+  { id: "contact",   label: "Get in Touch" },
+  { id: "demo-chain", label: "ARIA Demo" },
 ];
 
 const AUTH_TABS = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "orders",    label: "My Orders" },
-  { id: "jobs",      label: "Jobs" },
-  { id: "machines",  label: "Machines" },
-  { id: "analytics", label: "Analytics" },
-  { id: "discovery", label: "Discovery" },
+  { id: "dashboard",      label: "Dashboard" },
+  { id: "orders",         label: "My Orders" },
+  { id: "jobs",           label: "Jobs" },
+  { id: "machines",       label: "Machines" },
+  { id: "analytics",      label: "Analytics" },
+  { id: "manufacturing",  label: "Manufacturing" },
+  { id: "operations",     label: "Operations" },
+  { id: "nl-scheduler",   label: "NL Scheduler" },
+  { id: "machine-health", label: "Machine Health" },
+  { id: "tool-schedule",  label: "Tool-Aware Schedule" },
+  { id: "aria-import",    label: "Import from Scan" },
+  { id: "discovery",      label: "Discovery" },
 ];
 
 export default function App() {
@@ -416,16 +434,25 @@ export default function App() {
 
       {/* ── Tab content ── */}
       <main className="flex-1 max-w-6xl mx-auto px-4 py-10 w-full">
-        {activeTab === "quote"     && <QuoteForm />}
-        {activeTab === "schedule"  && <ScheduleViewer />}
-        {activeTab === "pricing"   && <PricingPage />}
-        {activeTab === "vision"    && <VisionDemo />}
-        {activeTab === "contact"   && <ContactForm />}
-        {activeTab === "dashboard" && user && <DashboardPage />}
-        {activeTab === "discovery" && user && <Discovery />}
-        {activeTab === "jobs"      && user && <JobsPage />}
-        {activeTab === "machines"  && user && <MachinesPage />}
-        {activeTab === "analytics" && user && <QCAnalyticsPage />}
+        {activeTab === "quote"          && <QuoteForm />}
+        {activeTab === "schedule"       && <ScheduleViewer />}
+        {activeTab === "pricing"        && <PricingPage />}
+        {activeTab === "vision"         && <VisionDemo />}
+        {activeTab === "energy"         && <EnergyPage />}
+        {activeTab === "suppliers"      && <SuppliersPage />}
+        {activeTab === "contact"        && <ContactForm />}
+        {activeTab === "dashboard"      && user && <DashboardPage />}
+        {activeTab === "discovery"      && user && <Discovery />}
+        {activeTab === "jobs"           && user && <JobsPage />}
+        {activeTab === "machines"       && user && <MachinesPage />}
+        {activeTab === "analytics"      && user && <QCAnalyticsPage />}
+        {activeTab === "manufacturing"  && user && <ManufacturingPage />}
+        {activeTab === "operations"     && user && <OperationsPage />}
+        {activeTab === "nl-scheduler"   && user && <NLSchedulerPage />}
+        {activeTab === "machine-health" && user && <ToolWearDashboard />}
+        {activeTab === "tool-schedule"  && user && <ToolAwareSchedule />}
+        {activeTab === "aria-import"    && user && <ARIAImport />}
+        {activeTab === "demo-chain"     && <DemoChainPage />}
         {activeTab === "orders"   && user && (
           <>
             {onboardingStatus?.configured && !onboardingStatus?.is_complete && !showWizard && (

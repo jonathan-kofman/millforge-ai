@@ -7,6 +7,7 @@ venv/
 .env
 .env.local
 frontend/.env.production
+.pytest_cache/
 
 # Database (dev SQLite file — never commit production data)
 backend/millforge.db
@@ -28,5 +29,14 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Uploaded QC images (runtime, not source)
+backend/uploads/
+
+# Trained ML model files (generated artifacts)
+backend/models/*.pkl
+
+# Training data (large, not source)
+backend/data/
 
 .claude/skills/*.skill

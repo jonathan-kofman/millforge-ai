@@ -86,6 +86,8 @@ class ScheduleRequest(BaseModel):
     orders: List[OrderInput] = Field(..., min_length=1, description="List of orders to schedule")
     start_time: Optional[datetime] = Field(None, description="Production start time. Defaults to now.")
     battery_soc_percent: Optional[float] = Field(None, ge=0.0, le=100.0, description="Battery state of charge (0–100%). Influences energy scheduling recommendations.")
+    shop_lat: Optional[float] = Field(None, description="Shop latitude for nearby supplier lookup.")
+    shop_lng: Optional[float] = Field(None, description="Shop longitude for nearby supplier lookup.")
 
     model_config = {
         "json_schema_extra": {
@@ -105,6 +107,18 @@ class ScheduleRequest(BaseModel):
     }
 
 
+class SuggestedSupplier(BaseModel):
+    supplier_id: int
+    name: str
+    city: str
+    state: str
+    distance_miles: float
+    lead_time_days: Optional[int] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    verified: bool = False
+
+
 class ScheduledOrderOutput(BaseModel):
     order_id: str
     machine_id: int
@@ -118,6 +132,7 @@ class ScheduledOrderOutput(BaseModel):
     on_time: bool
     lateness_hours: float
     due_date: datetime
+    suggested_suppliers: List["SuggestedSupplier"] = Field(default_factory=list)
 
 
 class ScheduleSummary(BaseModel):
@@ -138,6 +153,8 @@ class ScheduleResponse(BaseModel):
     energy_analysis: Optional["EnergyAnalysis"] = None
     held_orders: List[str] = []          # order_ids blocked by critical anomalies
     anomaly_report: Optional["AnomalyDetectResponse"] = None  # auto-scan results
+    tool_changes: List[Dict[str, Any]] = Field(default_factory=list)   # tool-change events inserted between jobs
+    tool_warnings: List[str] = Field(default_factory=list)             # wear alerts for human review
 
 
 # ---------------------------------------------------------------------------
@@ -652,25 +669,6 @@ class NLAutoScheduleRequest(BaseModel):
         }
     }
 
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "instruction": "Rush all titanium orders — aerospace deadline moved up",
-                "orders": [
-                    {
-                        "order_id": "ORD-001",
-                        "material": "titanium",
-                        "quantity": 50,
-                        "dimensions": "300x200x15mm",
-                        "due_date": "2025-06-01T08:00:00Z",
-                        "priority": 5,
-                        "complexity": 1.5,
-                    }
-                ],
-            }
-        }
-    }
-
 
 class PriorityOverrideItem(BaseModel):
     order_id: str
@@ -895,7 +893,6 @@ class CsvImportConfirmResponse(BaseModel):
     skipped_count: int
 
 
-# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # /api/onboarding
 # ---------------------------------------------------------------------------
@@ -1227,3 +1224,18 @@ class ContractResponse(BaseModel):
     generated_at: str
     customer_name: Optional[str] = None
     tier: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# /api/demo/cad-to-quote
+# ---------------------------------------------------------------------------
+
+class DemoChainResponse(BaseModel):
+    """End-to-end demo: STL upload → schedule → energy estimate → quote."""
+    cad_parse: "CadParseResponse"
+    scheduled_order: "ScheduledOrderOutput"
+    energy: "EnergyEstimateResponse"
+    quote: "QuoteResponse"
+    generated_at: datetime
+    on_time: bool
+    summary: str

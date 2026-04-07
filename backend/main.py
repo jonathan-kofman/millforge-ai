@@ -7,7 +7,7 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -43,6 +43,10 @@ from routers.business import router as business_router
 from routers.market_quotes import router as market_quotes_router
 from routers.contracts import router as contracts_router
 from routers.manufacturing import router as manufacturing_router, set_registry as _set_mfg_registry
+from routers.aria_bridge import router as aria_bridge_router
+from routers.demo_chain import router as demo_chain_router
+from routers.toolwear import router as toolwear_router
+from routers.aria_scan import router as aria_scan_router
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
@@ -51,6 +55,12 @@ from routers.vision import get_vision_model_name as _get_vision_model_name
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+)
+logger = logging.getLogger("millforge")
+
 # ---------------------------------------------------------------------------
 # Machine fleet (module-level singleton — routers import this)
 # ---------------------------------------------------------------------------
@@ -58,12 +68,6 @@ machine_fleet: MachineFleet = MachineFleet(
     machine_count=int(os.getenv("MACHINE_COUNT", "3")),
     broadcast_fn=_ws_connection_manager.broadcast,
 )
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-)
-logger = logging.getLogger("millforge")
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +191,7 @@ app.include_router(inventory_router)
 app.include_router(planner_router,     include_in_schema=False)
 app.include_router(energy_router)
 app.include_router(anomaly_router,     include_in_schema=False)
-app.include_router(nl_schedule_router, include_in_schema=False)
+app.include_router(nl_schedule_router)
 app.include_router(rework_router)
 app.include_router(learning_router)
 app.include_router(twin_router)
@@ -209,6 +213,10 @@ app.include_router(business_router)
 app.include_router(market_quotes_router)
 app.include_router(contracts_router)
 app.include_router(manufacturing_router)
+app.include_router(aria_bridge_router)
+app.include_router(demo_chain_router)
+app.include_router(toolwear_router)
+app.include_router(aria_scan_router)
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +256,7 @@ async def health():
         "predictive_maintenance": "automated",        # MTBF/MTTR risk scoring, urgent → exception queue
         "exception_handling":     "automated",        # 5-source aggregator; urgent maintenance auto-surfaced
         "manufacturing_intelligence": "process_registry_active",
+        "tool_wear_monitoring":   "automated",        # spectral drift + RUL prediction, tool changes between jobs
     }
     _AUTOMATED_STATUSES = {"automated", "real_grid_data", "real_data", "directory_active", "onnx_inference"}
     automated = sum(1 for v in touchpoints.values() if v in _AUTOMATED_STATUSES)

@@ -38,7 +38,14 @@
       "Read(//c/Users/jonko/Downloads/**)",
       "Read(//c//**)",
       "Bash(python -c \":*)",
-      "Bash(alembic init:*)"
+      "Bash(alembic init:*)",
+      "Bash(git pull:*)",
+      "Bash(find C:UsersjonkoDownloadsmillforge-aimillforge-ai -type d -not -path */.git/*)",
+      "Bash(gh pr:*)",
+      "Bash(gh api:*)",
+      "Bash(curl -s https://millforge-ai.up.railway.app/health)",
+      "Bash(curl -s https://millforge-ai-production.up.railway.app/health)",
+      "Bash(curl:*)"
     ]
   }
 }

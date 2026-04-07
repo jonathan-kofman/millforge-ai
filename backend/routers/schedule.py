@@ -10,7 +10,7 @@ on the same order set.
 
 import time
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -31,6 +31,8 @@ from agents.benchmark_data import get_benchmark_orders, DATASET_DESCRIPTION, ORD
 from agents.energy_optimizer import EnergyOptimizer
 from agents.pdf_exporter import build_schedule_pdf
 from agents.anomaly_detector import AnomalyDetector
+from agents.supplier_directory import SupplierDirectory
+from models.schemas import SuggestedSupplier
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Schedule"])
@@ -40,6 +42,7 @@ _edd = Scheduler()
 _sa  = SAScheduler()
 _energy = EnergyOptimizer()
 _anomaly = AnomalyDetector()
+_supplier_dir = SupplierDirectory()
 
 # Anomaly severities that block an order from being scheduled
 _BLOCKING_SEVERITIES = {"critical"}
@@ -192,11 +195,42 @@ async def optimize_schedule(
     except Exception as e:
         logger.warning(f"Energy analysis failed (non-fatal): {e}")
 
-    return _build_response(
+    response = _build_response(
         schedule, algorithm, energy_analysis, orders,
         held_orders=list(held_order_ids),
         anomaly_report=anomaly_report,
     )
+
+    # Attach nearby supplier suggestions when shop location is provided
+    if req.shop_lat is not None and req.shop_lng is not None:
+        try:
+            for order_out in response.schedule:
+                nearby = _supplier_dir.nearby(
+                    db,
+                    lat=req.shop_lat,
+                    lng=req.shop_lng,
+                    radius_miles=250,
+                    material=order_out.material,
+                    limit=3,
+                )
+                order_out.suggested_suppliers = [
+                    SuggestedSupplier(
+                        supplier_id=s.id,
+                        name=s.name,
+                        city=s.city,
+                        state=s.state,
+                        distance_miles=round(d, 1),
+                        lead_time_days=s.lead_time_days,
+                        phone=s.phone,
+                        website=s.website,
+                        verified=s.verified,
+                    )
+                    for s, d in nearby
+                ]
+        except Exception as exc:
+            logger.warning("Supplier lookup failed (non-fatal): %s", exc)
+
+    return response
 
 
 @router.get("/schedule/demo", response_model=ScheduleResponse, summary="Demo schedule on built-in mock order set")
@@ -235,8 +269,6 @@ def _fifo_schedule(orders: list) -> tuple:
     This is the baseline a typical job shop runs before MillForge — no optimisation,
     just work the queue in the order jobs arrived.
     """
-    from datetime import timedelta
-
     start = datetime.now(timezone.utc).replace(tzinfo=None)
     machine_free = [start] * MACHINE_COUNT
     setup_hours = BASE_SETUP_MINUTES / 60
@@ -321,15 +353,13 @@ async def benchmark_schedule(
     Set `rush=true` to inject an additional priority-1 steel order with a 4-hour
     deadline — useful for demonstrating how each algorithm handles a surprise urgent job.
     """
-    from agents.scheduler import Order as _Order
-    from datetime import timedelta
     # Single reference time for both order due dates and optimizer start — ensures
     # fully deterministic results regardless of when the endpoint is called.
     ref = datetime.now(timezone.utc).replace(tzinfo=None)
     orders = get_benchmark_orders(reference_time=ref, pressure=pressure)
     if rush:
         orders = orders + [
-            _Order(
+            Order(
                 order_id="RUSH-INJECT",
                 material="steel",
                 quantity=4,
@@ -482,8 +512,6 @@ async def backtest_schedule(req: BacktestRequest) -> BacktestResponse:
     The `start_time` defaults to the earliest due date minus twice the median
     processing time — a reasonable approximation of when the batch entered the queue.
     """
-    from datetime import timedelta
-
     def _strip_tz(dt: datetime) -> datetime:
         return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
@@ -654,6 +682,50 @@ async def backtest_schedule(req: BacktestRequest) -> BacktestResponse:
         impact=impact,
         orders=order_details,
     )
+
+
+@router.post(
+    "/schedule/tool-aware",
+    response_model=ScheduleResponse,
+    summary="SA schedule with tool-change events inserted between jobs",
+)
+async def tool_aware_schedule(
+    req: ScheduleRequest,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional),
+) -> ScheduleResponse:
+    """
+    Run the SA optimizer and then insert tool-change events between jobs
+    where a tool's predicted RUL would be exhausted mid-job.
+
+    Returns the same ScheduleResponse as POST /api/schedule but with:
+    - `tool_changes` — list of tool-change events (tool_id, machine_id, between_jobs, scheduled_at)
+    - `tool_warnings` — wear alerts for any tool above the YELLOW threshold
+
+    No tool in the MillForge registry → behaves identically to POST /api/schedule?algorithm=sa.
+    """
+    from agents.tool_aware_scheduler import build_tool_aware_schedule
+    from routers.toolwear import _agent as _tool_agent
+
+    orders = [_order_input_to_domain(o) for o in req.orders]
+    start_time = req.start_time or datetime.now(timezone.utc).replace(tzinfo=None)
+
+    try:
+        schedule = _sa.optimize(orders, start_time=start_time)
+    except Exception as e:
+        logger.error("Tool-aware scheduler error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Scheduling engine error")
+
+    response = _build_response(schedule, "sa", orders=orders)
+
+    try:
+        tool_result = build_tool_aware_schedule(schedule, _tool_agent)
+        response.tool_changes = tool_result["tool_changes"]
+        response.tool_warnings = tool_result["tool_warnings"]
+    except Exception as e:
+        logger.warning("Tool-aware post-processing failed (non-fatal): %s", e)
+
+    return response
 
 
 def _order_input_to_domain(o: OrderInput) -> Order:

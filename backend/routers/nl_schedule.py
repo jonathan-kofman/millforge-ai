@@ -242,9 +242,8 @@ async def nl_auto_schedule(
         for s in schedule.scheduled_orders
     ]
 
-    nl_note = f"nl_auto: {req.instruction[:120]}"
     run = ScheduleRun(
-        algorithm=f"sa+nl",
+        algorithm="sa+nl",
         order_ids_json=json.dumps([r.order_id for r in records]),
         summary_json=json.dumps({**summary_data, "nl_instruction": req.instruction}),
         on_time_rate=schedule.on_time_rate,

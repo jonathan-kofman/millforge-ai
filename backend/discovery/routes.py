@@ -4,7 +4,7 @@ Prefix: /api/discovery
 All write endpoints require JWT auth (httpOnly cookie).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional

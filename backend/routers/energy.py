@@ -3,6 +3,7 @@
 """
 
 import logging
+import os
 from fastapi import APIRouter, HTTPException
 
 from models.schemas import (
@@ -11,7 +12,7 @@ from models.schemas import (
     ArbitrageRequest, ArbitrageResponse,
     ScenarioRequest, ScenarioResponse,
 )
-from agents.energy_optimizer import EnergyOptimizer
+from agents.energy_optimizer import EnergyOptimizer, _get_hourly_rates as _fetch_rates
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/energy", tags=["Energy"])
@@ -111,8 +112,7 @@ async def get_arbitrage_analysis(req: ArbitrageRequest) -> ArbitrageResponse:
         raise HTTPException(status_code=500, detail="Arbitrage analysis error")
 
     # Derive peak/off-peak rates from the hourly rates for the response
-    from agents.energy_optimizer import _get_hourly_rates
-    rates, _ = _get_hourly_rates()
+    rates, _ = _fetch_rates()
     peak_rate = max(rates)
     off_peak_rate = min(rates)
     savings = result["annual_savings_usd"]
@@ -141,7 +141,6 @@ async def get_carbon_intensity():
     Returns the current carbon intensity (grams of CO2 per kWh) for the grid zone.
     Uses the Electricity Maps API when configured; falls back to US grid average estimate.
     """
-    import os
     api_key = os.getenv("ELECTRICITY_MAPS_API_KEY")
     logger.info("Carbon intensity: API key present=%s", bool(api_key))
     if not api_key:
@@ -186,7 +185,6 @@ async def get_hourly_rates():
     Returns the 24-hour hourly rate curve ($/kWh) used for energy scheduling decisions.
     Uses live EIA demand-based pricing when EIA_API_KEY is set; falls back to simulated curve.
     """
-    from agents.energy_optimizer import _get_hourly_rates as _fetch_rates
     try:
         rates, data_source = _fetch_rates()
     except Exception as exc:

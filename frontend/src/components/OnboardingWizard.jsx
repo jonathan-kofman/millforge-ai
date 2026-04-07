@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { API_BASE } from "../config";
 
-const MATERIALS = ["steel", "aluminum", "titanium", "copper"];
 const SCHEDULING_METHODS = [
   { value: "fifo",   label: "FIFO (First In, First Out)" },
   { value: "edd",    label: "EDD (Earliest Due Date)" },
@@ -16,10 +15,8 @@ export default function OnboardingWizard({ onComplete, onSkip }) {
 
   const [form, setForm] = useState({
     shop_name: "",
-    machine_count: "",
     shifts_per_day: "2",
     hours_per_shift: "8",
-    materials: [],
     weekly_order_volume: "",
     scheduling_method: "",
     baseline_otd: "",
@@ -39,7 +36,7 @@ export default function OnboardingWizard({ onComplete, onSkip }) {
         const err = await res.json();
         throw new Error(err.detail || "Save failed");
       }
-      if (nextStep >= 3) {
+      if (nextStep >= 2) {
         onComplete();
       } else {
         setStep(nextStep + 1);
@@ -52,11 +49,7 @@ export default function OnboardingWizard({ onComplete, onSkip }) {
   };
 
   const skipAll = async () => {
-    // Save whatever we have so far, mark step 3 as skipped
-    await save({
-      shop_name: form.shop_name || null,
-      machine_count: form.machine_count ? Number(form.machine_count) : null,
-    }, 3);
+    await save({ shop_name: form.shop_name || null }, 2);
     onSkip();
   };
 
@@ -74,9 +67,9 @@ export default function OnboardingWizard({ onComplete, onSkip }) {
               Skip setup →
             </button>
           </div>
-          {/* Progress dots */}
+          {/* Progress bar */}
           <div className="flex items-center gap-2 mt-3">
-            {[1, 2, 3].map((s) => (
+            {[1, 2].map((s) => (
               <div
                 key={s}
                 className={`h-1.5 flex-1 rounded-full transition-colors ${
@@ -85,7 +78,7 @@ export default function OnboardingWizard({ onComplete, onSkip }) {
               />
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">Step {step} of 3</p>
+          <p className="text-xs text-gray-500 mt-2">Step {step} of 2</p>
         </div>
 
         {/* Step content */}
@@ -97,9 +90,9 @@ export default function OnboardingWizard({ onComplete, onSkip }) {
               onNext={() =>
                 save({
                   shop_name: form.shop_name || null,
-                  machine_count: form.machine_count ? Number(form.machine_count) : null,
                   shifts_per_day: form.shifts_per_day ? Number(form.shifts_per_day) : null,
                   hours_per_shift: form.hours_per_shift ? Number(form.hours_per_shift) : null,
+                  weekly_order_volume: form.weekly_order_volume ? Number(form.weekly_order_volume) : null,
                 }, 1)
               }
               onSkip={skipAll}
@@ -112,25 +105,9 @@ export default function OnboardingWizard({ onComplete, onSkip }) {
               setForm={setForm}
               onNext={() =>
                 save({
-                  materials: form.materials,
-                  weekly_order_volume: form.weekly_order_volume
-                    ? Number(form.weekly_order_volume)
-                    : null,
-                }, 2)
-              }
-              onSkip={skipAll}
-              saving={saving}
-            />
-          )}
-          {step === 3 && (
-            <Step3
-              form={form}
-              setForm={setForm}
-              onNext={() =>
-                save({
                   scheduling_method: form.scheduling_method || null,
                   baseline_otd: form.baseline_otd ? Number(form.baseline_otd) : null,
-                }, 3)
+                }, 2)
               }
               onSkip={skipAll}
               saving={saving}
@@ -164,17 +141,6 @@ function Step1({ form, setForm, onNext, onSkip, saving }) {
           />
         </div>
         <div>
-          <label className="label">Number of CNC machines</label>
-          <input
-            type="number"
-            min={1}
-            className="input"
-            placeholder="4"
-            value={form.machine_count}
-            onChange={(e) => setForm((f) => ({ ...f, machine_count: e.target.value }))}
-          />
-        </div>
-        <div>
           <label className="label">Shifts per day</label>
           <select
             className="input"
@@ -198,54 +164,6 @@ function Step1({ form, setForm, onNext, onSkip, saving }) {
             <option value="12">12 hours</option>
           </select>
         </div>
-      </div>
-      <div className="flex gap-2 mt-5">
-        <button className="btn-primary flex-1" onClick={onNext} disabled={saving}>
-          {saving ? "Saving…" : "Next →"}
-        </button>
-        <button className="btn-secondary text-sm" onClick={onSkip} disabled={saving}>
-          Skip
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Step2({ form, setForm, onNext, onSkip, saving }) {
-  const toggleMaterial = (mat) =>
-    setForm((f) => ({
-      ...f,
-      materials: f.materials.includes(mat)
-        ? f.materials.filter((m) => m !== mat)
-        : [...f.materials, mat],
-    }));
-
-  return (
-    <div>
-      <h3 className="text-base font-semibold text-white mb-1">Materials & volume</h3>
-      <p className="text-sm text-gray-400 mb-4">
-        Which materials do you run, and how many orders per week?
-      </p>
-      <div className="space-y-3">
-        <div>
-          <label className="label">Materials processed</label>
-          <div className="flex flex-wrap gap-2 mt-1">
-            {MATERIALS.map((mat) => (
-              <button
-                key={mat}
-                type="button"
-                onClick={() => toggleMaterial(mat)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  form.materials.includes(mat)
-                    ? "bg-forge-500 border-forge-500 text-white"
-                    : "border-gray-600 text-gray-400 hover:border-gray-400"
-                }`}
-              >
-                {mat.charAt(0).toUpperCase() + mat.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
         <div>
           <label className="label">Weekly order volume</label>
           <input
@@ -254,9 +172,7 @@ function Step2({ form, setForm, onNext, onSkip, saving }) {
             className="input"
             placeholder="50"
             value={form.weekly_order_volume}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, weekly_order_volume: e.target.value }))
-            }
+            onChange={(e) => setForm((f) => ({ ...f, weekly_order_volume: e.target.value }))}
           />
         </div>
       </div>
@@ -272,7 +188,7 @@ function Step2({ form, setForm, onNext, onSkip, saving }) {
   );
 }
 
-function Step3({ form, setForm, onNext, onSkip, saving }) {
+function Step2({ form, setForm, onNext, onSkip, saving }) {
   return (
     <div>
       <h3 className="text-base font-semibold text-white mb-1">Scheduling baseline</h3>

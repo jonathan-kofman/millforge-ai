@@ -325,6 +325,7 @@ class Supplier(Base):
     website: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    lead_time_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # pmpa | msci | manual | user_submitted
     data_source: Mapped[str] = mapped_column(String(50), default="manual")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
@@ -332,3 +333,49 @@ class Supplier(Base):
 
     def __repr__(self) -> str:
         return f"<Supplier id={self.id} name={self.name} state={self.state}>"
+
+
+class ToolRecord(Base):
+    """Registered CNC tool — tracks identity and expected life."""
+
+    __tablename__ = "tool_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tool_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    machine_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tool_type: Mapped[str] = mapped_column(String(50), default="end_mill")
+    material: Mapped[str] = mapped_column(String(50), default="steel")
+    expected_life_minutes: Mapped[float] = mapped_column(Float, default=480.0)
+    # latest wear state (denormalized for quick queries)
+    wear_score: Mapped[float] = mapped_column(Float, default=0.0)
+    alert_level: Mapped[str] = mapped_column(String(20), default="GREEN")
+    rul_minutes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    registered_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    readings: Mapped[List["SensorReading"]] = relationship(
+        "SensorReading", back_populates="tool", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<ToolRecord tool_id={self.tool_id} alert={self.alert_level}>"
+
+
+class SensorReading(Base):
+    """Raw spectral sensor snapshot for a tool at a point in time."""
+
+    __tablename__ = "sensor_readings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tool_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("tool_records.tool_id"), nullable=False, index=True
+    )
+    # Raw feature values stored as JSON for forward compatibility
+    features: Mapped[dict] = mapped_column(JSON, nullable=False)
+    wear_score: Mapped[float] = mapped_column(Float, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+    tool: Mapped["ToolRecord"] = relationship("ToolRecord", back_populates="readings")
+
+    def __repr__(self) -> str:
+        return f"<SensorReading tool_id={self.tool_id} wear={self.wear_score:.1f}>"

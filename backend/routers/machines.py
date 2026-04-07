@@ -12,9 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from db_models import Machine, Job
+from db_models import Machine, User
 from auth.dependencies import get_current_user
-from db_models import User
 from models.schemas import MachineCreate, MachineResponse, MachineConflictResponse
 
 logger = logging.getLogger(__name__)

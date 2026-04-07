@@ -15,9 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from sqlalchemy.orm import Session
 
 from database import get_db
-from db_models import Job, QCResult
+from db_models import Job, QCResult, User
 from auth.dependencies import get_current_user
-from db_models import User
 from models.schemas import (
     CAMImport,
     JobResponse,
@@ -25,7 +24,7 @@ from models.schemas import (
     JobListResponse,
     QCResultResponse,
 )
-from services.aria_schema import normalize, UnsupportedAriaSchemaVersion, supported_versions
+from services.aria_schema import normalize, UnsupportedAriaSchemaVersion
 
 logger = logging.getLogger(__name__)
 

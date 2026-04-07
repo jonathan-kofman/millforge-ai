@@ -2,19 +2,16 @@
 /api/analytics — QC defect analytics aggregated across all jobs.
 """
 
-import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
-from db_models import Job, QCResult
+from db_models import Job, QCResult, User
 from auth.dependencies import get_current_user
-from db_models import User
 from models.schemas import QCAnalyticsResponse, QCAnalyticsItem
 
 logger = logging.getLogger(__name__)
