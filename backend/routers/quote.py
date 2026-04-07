@@ -6,32 +6,111 @@ Profiling showed EDD vs SA delta averaged ~180 ms with negligible lead-time
 difference for single-order estimation; EDD alone is used here for latency.
 """
 
+import re
 import time
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from models.schemas import QuoteRequest, QuoteResponse
 from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT
 from agents.energy_optimizer import MACHINE_POWER_KW, _get_carbon_intensity
+from agents.market_quoter import _get_spot_price
+from database import get_db
+from db_models import OrderRecord
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Quote"])
 
-# Pricing per unit by material (USD) – placeholder until real cost model
-UNIT_PRICE: dict = {
-    "steel": 2.50,
-    "aluminum": 4.00,
-    "titanium": 18.00,
-    "copper": 6.50,
+# Machining overhead per unit (USD) — value-added labor + machine time.
+# Material cost is calculated separately from live spot prices.
+MACHINING_OVERHEAD_PER_UNIT: dict = {
+    "steel":            1.50,
+    "aluminum":         2.00,
+    "titanium":        12.00,
+    "copper":           3.50,
+    "brass":            2.20,
+    "bronze":           2.50,
+    "stainless_steel":  2.80,
+    "carbon_steel":     1.60,
+    "tool_steel":       4.00,
+    "cast_iron":        1.20,
+}
+
+# Solid densities in g/cm³ for weight estimation from bounding box dimensions
+MATERIAL_DENSITY_G_CM3: dict = {
+    "steel":            7.85,
+    "aluminum":         2.70,
+    "titanium":         4.51,
+    "copper":           8.96,
+    "brass":            8.50,
+    "bronze":           8.80,
+    "stainless_steel":  7.99,
+    "carbon_steel":     7.85,
+    "tool_steel":       7.80,
+    "cast_iron":        7.20,
 }
 
 _scheduler = Scheduler()
 
 
+def _parse_vol_cm3(dimensions: str) -> float | None:
+    """Parse 'LxWxHmm' (or '×' separator) → bounding box volume in cm³. Returns None if unparseable."""
+    cleaned = dimensions.lower().replace("×", "x").replace(" ", "")
+    cleaned = re.sub(r"[a-z]+$", "", cleaned)  # strip unit suffix
+    parts = cleaned.split("x")
+    if len(parts) == 3:
+        try:
+            dims_mm = [float(p) for p in parts]
+            return (dims_mm[0] / 10) * (dims_mm[1] / 10) * (dims_mm[2] / 10)
+        except ValueError:
+            pass
+    return None
+
+
+def _estimate_unit_weight_lb(dimensions: str, material: str) -> float:
+    """Estimate weight in lbs for one unit from bounding-box dimensions + material density."""
+    vol_cm3 = _parse_vol_cm3(dimensions)
+    if vol_cm3 is None:
+        return 1.0  # 1 lb default when dimensions can't be parsed
+    density = MATERIAL_DENSITY_G_CM3.get(material, 7.0)
+    return max(vol_cm3 * density / 453.592, 0.01)
+
+
+def _load_db_queue(db: Session) -> list[Order]:
+    """
+    Load pending/scheduled orders from DB for queue-depth estimation.
+    Falls back to the demo order set if the shop has no orders yet.
+    """
+    try:
+        records = (
+            db.query(OrderRecord)
+            .filter(OrderRecord.status.in_(["pending", "scheduled"]))
+            .limit(200)
+            .all()
+        )
+        if records:
+            return [
+                Order(
+                    order_id=r.order_id,
+                    material=r.material,
+                    quantity=r.quantity,
+                    dimensions=r.dimensions,
+                    due_date=r.due_date,
+                    priority=r.priority,
+                    complexity=r.complexity,
+                )
+                for r in records
+            ]
+    except Exception as exc:
+        logger.warning("DB queue fetch failed, using demo order set: %s", exc)
+    return get_mock_orders()
+
+
 @router.post("/quote", response_model=QuoteResponse, summary="Instant quote within real shop capacity constraints")
-async def get_quote(req: QuoteRequest) -> QuoteResponse:
+async def get_quote(req: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse:
     """
     Accept material, dimensions, and quantity; return a price and realistic
     lead-time estimate grounded in the shop's current capacity.
@@ -40,6 +119,9 @@ async def get_quote(req: QuoteRequest) -> QuoteResponse:
     queue and running the scheduler to find the earliest completion slot — not a
     static table lookup. If the shop is busy, the estimate reflects that. If
     capacity is available, the customer sees it immediately.
+
+    Pricing = (machining overhead + live material cost) × quantity × volume discount.
+    Material cost uses Yahoo Finance spot prices when available.
     """
     logger.info(f"Quote request: {req.material} x{req.quantity} [{req.dimensions}]")
 
@@ -54,8 +136,8 @@ async def get_quote(req: QuoteRequest) -> QuoteResponse:
         priority=req.priority,
     )
 
-    # Use current simulated queue to estimate realistic lead time.
-    current_queue = get_mock_orders()
+    # Use real pending orders from DB; fall back to demo set if shop is empty
+    current_queue = _load_db_queue(db)
     try:
         t0 = time.perf_counter()
         lead_time_hours = _scheduler.estimate_lead_time(new_order, current_queue)
@@ -66,30 +148,33 @@ async def get_quote(req: QuoteRequest) -> QuoteResponse:
         raise HTTPException(status_code=500, detail="Scheduling engine error")
 
     # Scale to calendar days based on shift schedule.
-    # If shifts_per_day/hours_per_shift provided, the scheduler assumes 24h
-    # continuous — divide by actual productive hours per day to get real days.
     if req.shifts_per_day and req.hours_per_shift:
         productive_hours_per_day = req.shifts_per_day * req.hours_per_shift
         lead_time_hours = lead_time_hours * (24 / productive_hours_per_day)
     lead_time_days = lead_time_hours / 24
 
-    # Price calculation: base unit price × quantity with volume discount
-    unit_price = UNIT_PRICE.get(req.material.value, 5.00)
+    # Price = machining overhead + live spot material cost
+    machining = MACHINING_OVERHEAD_PER_UNIT.get(req.material.value, 2.00)
+    spot_price_per_lb, spot_source = _get_spot_price(req.material.value)
+    unit_weight_lb = _estimate_unit_weight_lb(req.dimensions, req.material.value)
+    material_cost_per_unit = spot_price_per_lb * unit_weight_lb
+    unit_price = machining + material_cost_per_unit
+
     discount = _volume_discount(req.quantity)
     discounted_unit = unit_price * (1 - discount)
     total_price = discounted_unit * req.quantity
 
     notes = (
-        f"Lead time compressed to {lead_time_days:.1f} days vs. "
-        f"industry average of 60–90 days. "
-        f"Volume discount applied: {discount*100:.0f}%."
+        f"Lead time {lead_time_days:.1f} days based on {len(current_queue)} orders in queue. "
+        f"Material cost: ${material_cost_per_unit:.2f}/unit ({spot_source}, {unit_weight_lb:.2f} lb). "
+        f"Volume discount: {discount*100:.0f}%."
     )
 
-    # Carbon footprint: estimate energy for processing, then convert to CO2
+    # Carbon footprint
     carbon_kg: float | None = None
     try:
         tput = THROUGHPUT.get(req.material.value, 3.0)
-        proc_hours = (req.quantity / tput) * 1.0  # complexity=1.0 for quote estimate
+        proc_hours = (req.quantity / tput) * 1.0
         power_kw = MACHINE_POWER_KW.get(req.material.value, 70)
         kwh = proc_hours * power_kw
         intensity, _ = _get_carbon_intensity()

@@ -140,7 +140,7 @@ function ProcessRouter() {
                     {i === 0 && <span className="text-xs bg-forge-500 text-white px-2 py-0.5 rounded-full">Best Match</span>}
                     <span className="font-semibold text-white text-sm">{opt.process_family}</span>
                   </div>
-                  <p className="text-xs text-gray-400 mb-2">{opt.machine?.machine_name ?? opt.machine_id ?? "Synthetic estimate"}</p>
+                  <p className="text-xs text-gray-400 mb-2">{opt.machine_name ?? opt.machine_id ?? "Synthetic estimate"}</p>
                   <div className="flex flex-wrap gap-3 text-xs text-gray-500">
                     <span>Cycle: {opt.estimated_cycle_time_minutes?.toFixed(1)} min</span>
                     <span>Setup: {opt.setup_time_minutes?.toFixed(1)} min</span>
@@ -352,13 +352,13 @@ function MaterialsCatalog() {
 
 function FeasibilityCheck() {
   const [form, setForm] = useState({
-    part_id: "FEAS-001",
-    part_name: "Aerospace Bracket",
-    material_name: "titanium",
+    part_id: "",
+    part_name: "",
+    material_name: "",
     material_family: "non_ferrous",
-    target_quantity: 50,
-    tolerance_class: "AS9100",
-    priority: 2,
+    target_quantity: "",
+    tolerance_class: "ISO_2768_m",
+    priority: 5,
   });
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -447,38 +447,34 @@ function FeasibilityCheck() {
                 <p className={`font-bold text-lg ${result.feasible ? "text-green-400" : "text-red-400"}`}>
                   {result.feasible ? "Feasible" : "Infeasible"}
                 </p>
-                {result.recommended_process && (
-                  <p className="text-sm text-gray-400">Recommended: <span className="text-white">{result.recommended_process}</span></p>
+                {result.supported_processes?.length > 0 && (
+                  <p className="text-sm text-gray-400">Supported: <span className="text-white">{result.supported_processes.join(", ")}</span></p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Issues */}
-          {result.issues?.length > 0 && (
+          {/* Validation errors */}
+          {result.validation_errors?.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-white">Issues Found</p>
-              {result.issues.map((issue, i) => (
-                <div key={i} className={`rounded-lg border px-4 py-3 ${severityColor(issue.severity)}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold uppercase">{issue.severity}</span>
-                    <span className="text-sm">{issue.message}</span>
-                  </div>
-                  {issue.fix && <p className="text-xs opacity-80">Fix: {issue.fix}</p>}
+              <p className="text-sm font-semibold text-white">Validation Errors</p>
+              {result.validation_errors.map((err, i) => (
+                <div key={i} className="rounded-lg border px-4 py-3 bg-red-500/10 border-red-500/30 text-sm text-red-300">
+                  {err}
                 </div>
               ))}
             </div>
           )}
 
-          {/* Recommendations */}
-          {result.recommendations?.length > 0 && (
+          {/* Warnings */}
+          {result.routing_warnings?.length > 0 && (
             <div className="card">
-              <p className="text-sm font-semibold text-white mb-2">Recommendations</p>
+              <p className="text-sm font-semibold text-white mb-2">Routing Warnings</p>
               <ul className="space-y-1">
-                {result.recommendations.map((r, i) => (
+                {result.routing_warnings.map((w, i) => (
                   <li key={i} className="text-sm text-gray-400 flex gap-2">
                     <span className="text-forge-500 flex-shrink-0">→</span>
-                    {r}
+                    {w}
                   </li>
                 ))}
               </ul>

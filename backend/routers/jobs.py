@@ -19,6 +19,7 @@ from db_models import Job, QCResult, User
 from auth.dependencies import get_current_user
 from models.schemas import (
     CAMImport,
+    JobCreate,
     JobResponse,
     JobPatch,
     JobListResponse,
@@ -66,6 +67,33 @@ def _qc_to_response(qr: QCResult) -> QCResultResponse:
         image_path=qr.image_path,
         created_at=qr.created_at,
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/jobs — manual job creation
+# ---------------------------------------------------------------------------
+
+@router.post("", response_model=JobResponse, status_code=201)
+def create_job(
+    req: JobCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> JobResponse:
+    """Create a manually-entered job (not from CAM)."""
+    job = Job(
+        title=req.title,
+        stage="queued",
+        source="manual",
+        material=req.material,
+        required_machine_type=req.required_machine_type,
+        estimated_duration_minutes=req.estimated_duration_minutes,
+        notes=req.notes,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    logger.info(f"Manual job created: {job.id} '{job.title}' by user={user.email}")
+    return _to_response(job)
 
 
 # ---------------------------------------------------------------------------

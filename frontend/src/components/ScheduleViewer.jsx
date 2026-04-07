@@ -10,14 +10,18 @@ const MATERIAL_COLORS = {
 };
 
 export default function ScheduleViewer() {
+  const [mode, setMode] = useState("demo"); // "demo" | "live"
   const [schedule, setSchedule] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [algorithm, setAlgorithm] = useState("sa");
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState(null);
 
   const loadDemo = async (algo = algorithm) => {
     setLoading(true);
     setError(null);
+    setApplyResult(null);
     try {
       const res = await fetch(`${API_BASE}/api/schedule/demo?algorithm=${algo}`);
       if (!res.ok) throw new Error("Failed to load demo schedule");
@@ -29,28 +33,126 @@ export default function ScheduleViewer() {
     }
   };
 
-  useEffect(() => { loadDemo(); }, []);
+  const loadLive = async () => {
+    setLoading(true);
+    setError(null);
+    setApplyResult(null);
+    try {
+      // Fetch user's pending orders
+      const ordRes = await fetch(`${API_BASE}/api/orders?status=pending&limit=200`, { credentials: "include" });
+      if (!ordRes.ok) throw new Error("Failed to fetch orders — are you signed in?");
+      const ordData = await ordRes.json();
+      const orders = (ordData.orders ?? ordData ?? []).filter(o => o.status !== "completed" && o.status !== "cancelled");
+      if (orders.length === 0) {
+        setSchedule(null);
+        setError("No pending orders found. Create orders in My Orders first.");
+        return;
+      }
+      // Map to scheduler format
+      const payload = orders.map(o => ({
+        order_id: o.order_id,
+        material: o.material,
+        quantity: o.quantity ?? 1,
+        dimensions: o.dimensions ?? "100x100x10mm",
+        due_date: o.due_date ?? new Date(Date.now() + 7 * 86400000).toISOString(),
+        priority: o.priority ?? 5,
+        complexity: o.complexity ?? 1.0,
+      }));
+      const schedRes = await fetch(`${API_BASE}/api/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ orders: payload, algorithm }),
+      });
+      if (!schedRes.ok) throw new Error("Scheduling failed: " + (await schedRes.text()));
+      const result = await schedRes.json();
+      setSchedule({ ...result, _live: true, _orderIds: orders.map(o => o.order_id) });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!schedule?._live) return;
+    setApplying(true);
+    setError(null);
+    let applied = 0;
+    for (const item of schedule.schedule) {
+      try {
+        await fetch(`${API_BASE}/api/orders/${item.order_id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ status: "in_progress", notes: `Scheduled: Machine #${item.machine_id} · Est. completion ${new Date(item.completion_time).toLocaleString()}` }),
+        });
+        applied++;
+      } catch { /* non-fatal */ }
+    }
+    setApplying(false);
+    setApplyResult(`Applied — ${applied} order(s) marked in-progress with machine assignments.`);
+  };
+
+  useEffect(() => {
+    if (mode === "demo") loadDemo();
+    else setSchedule(null);
+  }, [mode]);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 className="text-2xl font-bold text-white">Production Schedule</h2>
-        <div className="flex items-center gap-2">
-          <select
-            value={algorithm}
-            onChange={e => { setAlgorithm(e.target.value); loadDemo(e.target.value); }}
-            className="input text-sm py-1.5 w-auto"
-          >
-            <option value="sa">Simulated Annealing</option>
-            <option value="edd">EDD (Greedy)</option>
-          </select>
-          <button onClick={() => loadDemo(algorithm)} className="btn-secondary text-sm" disabled={loading}>
-            {loading ? "Loading…" : "↺ Refresh"}
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Mode toggle */}
+          <div className="flex gap-1 border border-gray-700 rounded-lg p-0.5">
+            {[{ id: "demo", label: "Demo" }, { id: "live", label: "My Orders" }].map(m => (
+              <button
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${mode === m.id ? "bg-forge-500 text-white" : "text-gray-400 hover:text-white"}`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          {mode === "demo" && (
+            <>
+              <select
+                value={algorithm}
+                onChange={e => { setAlgorithm(e.target.value); loadDemo(e.target.value); }}
+                className="input text-sm py-1.5 w-auto"
+              >
+                <option value="sa">Simulated Annealing</option>
+                <option value="edd">EDD (Greedy)</option>
+              </select>
+              <button onClick={() => loadDemo(algorithm)} className="btn-secondary text-sm" disabled={loading}>
+                {loading ? "Loading…" : "↺ Refresh"}
+              </button>
+            </>
+          )}
+          {mode === "live" && (
+            <>
+              <select
+                value={algorithm}
+                onChange={e => setAlgorithm(e.target.value)}
+                className="input text-sm py-1.5 w-auto"
+              >
+                <option value="sa">Simulated Annealing</option>
+                <option value="edd">EDD (Greedy)</option>
+              </select>
+              <button onClick={loadLive} className="btn-primary text-sm" disabled={loading}>
+                {loading ? "Scheduling…" : "Generate Schedule"}
+              </button>
+            </>
+          )}
         </div>
       </div>
-      <p className="text-gray-400 mb-8">
-        AI-optimized Gantt view for the demo order queue. Each row is a machine; blocks are orders.
+
+      <p className="text-gray-400 mb-6 text-sm">
+        {mode === "demo"
+          ? "AI-optimized Gantt view for the 28-order benchmark dataset."
+          : "Schedule your actual pending orders. Sign in first to access My Orders mode."}
         {schedule?.algorithm && (
           <span className="ml-2 text-xs bg-forge-500/20 text-forge-400 px-2 py-0.5 rounded-full">
             {schedule.algorithm === "sa" ? "Simulated Annealing" : "EDD Greedy"}
@@ -64,12 +166,53 @@ export default function ScheduleViewer() {
         </div>
       )}
 
+      {mode === "live" && !schedule && !loading && !error && (
+        <div className="card text-center py-12 mb-6">
+          <p className="text-gray-400 text-sm mb-3">Click "Generate Schedule" to optimize your pending orders.</p>
+          <p className="text-xs text-gray-600">Orders from My Orders tab · SA optimizer · machine assignments included</p>
+        </div>
+      )}
+
       {loading && !schedule && (
         <div className="text-center py-20 text-gray-500">Calculating optimal schedule…</div>
       )}
 
       {schedule && (
         <>
+          {/* Apply banner (live mode only) */}
+          {schedule._live && !applyResult && (
+            <div className="flex items-center justify-between bg-forge-500/10 border border-forge-500/30 rounded-xl px-5 py-4 mb-6">
+              <div>
+                <p className="text-sm font-semibold text-white">Schedule ready</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {schedule.schedule?.length} orders · {schedule.summary?.on_time_rate_percent}% on time
+                </p>
+              </div>
+              <button
+                onClick={handleApply}
+                disabled={applying}
+                className="btn-primary text-sm"
+              >
+                {applying ? "Applying…" : "Apply Schedule →"}
+              </button>
+            </div>
+          )}
+          {applyResult && (
+            <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-5 py-4 mb-6 text-sm text-green-400">
+              {applyResult}
+            </div>
+          )}
+
+          {/* Anomaly warnings */}
+          {schedule.anomaly_report?.anomalies?.length > 0 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-5 py-3 mb-6">
+              <p className="text-sm font-semibold text-yellow-400 mb-1">Anomalies Detected</p>
+              {schedule.anomaly_report.anomalies.slice(0, 3).map((a, i) => (
+                <p key={i} className="text-xs text-yellow-300">• {a.message ?? JSON.stringify(a)}</p>
+              ))}
+            </div>
+          )}
+
           {/* Summary cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             <SummaryCard label="Total Orders"    value={schedule.summary.total_orders} />
@@ -84,8 +227,8 @@ export default function ScheduleViewer() {
           {/* Table */}
           <OrderTable schedule={schedule} />
 
-          {/* Algorithm benchmark */}
-          <BenchmarkPanel />
+          {/* Algorithm benchmark (demo only) */}
+          {mode === "demo" && <BenchmarkPanel />}
         </>
       )}
     </div>

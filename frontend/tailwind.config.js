@@ -13,6 +13,12 @@ export default {
           900: "#7c2d12",
         },
       },
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      letterSpacing: {
+        tighter: '-0.05em',
+      },
     },
   },
   plugins: [],

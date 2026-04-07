@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "../config";
 
 const MATERIAL_COLORS = {
   steel: "#3b82f6",
@@ -99,7 +100,7 @@ export default function ToolAwareSchedule() {
     setResult(null);
     try {
       const parsed = JSON.parse(orders);
-      const res = await fetch("/api/schedule/tool-aware", {
+      const res = await fetch(`${API_BASE}/api/schedule/tool-aware`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

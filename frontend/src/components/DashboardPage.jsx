@@ -1,11 +1,25 @@
 import { useState, useEffect } from "react";
+import { TrendingUp, TrendingDown } from "lucide-react";
 import { API_BASE } from "../config";
+import { SkeletonCard } from "./Skeleton";
 
-function KPI({ label, value, sub, color = "text-white" }) {
+function KPI({ label, value, sub, color = "text-white", trend }) {
   return (
-    <div className="bg-gray-800 rounded-lg p-5">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className={`text-3xl font-bold ${color}`}>{value}</p>
+    <div className="card-highlight p-5">
+      <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{label}</p>
+      <div className="flex items-end gap-2">
+        <p className={`text-3xl font-bold ${color}`}>{value}</p>
+        {trend && (
+          <span className={`text-xs font-semibold mb-1 flex items-center gap-0.5 ${
+            trend.startsWith("+") ? "text-green-400" : "text-red-400"
+          }`}>
+            {trend.startsWith("+")
+              ? <TrendingUp className="w-3 h-3" />
+              : <TrendingDown className="w-3 h-3" />}
+            {trend}
+          </span>
+        )}
+      </div>
       {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
     </div>
   );
@@ -56,7 +70,11 @@ export default function DashboardPage() {
       .catch(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="text-gray-500 text-center py-10 animate-pulse">Loading...</p>;
+  if (loading) return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-6">
+      {[1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
+    </div>
+  );
 
   const m = metrics || {};
   const h = health || {};

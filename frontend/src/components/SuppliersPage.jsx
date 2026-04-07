@@ -68,16 +68,33 @@ export default function SuppliersPage() {
   const [stats, setStats] = useState(null);
   const [materials, setMaterials] = useState([]);
   const [results, setResults] = useState([]);
+  const [searched, setSearched] = useState(false);
   const [nearbyResults, setNearbyResults] = useState([]);
+  const [nearbySearched, setNearbySearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState("search"); // "search" | "nearby"
 
   // Search form
-  const [searchForm, setSearchForm] = useState({ material: "", state: "", category: "", verified_only: false });
+  const [searchForm, setSearchForm] = useState({ name: "", material: "", state: "", category: "", verified_only: false });
   // Nearby form
-  const [nearbyForm, setNearbyForm] = useState({ lat: "41.49", lng: "-81.69", radius_miles: "250", material: "" });
+  const [nearbyForm, setNearbyForm] = useState({ lat: "", lng: "", radius_miles: "250", material: "" });
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState(null);
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) { setGeoError("Geolocation not supported by this browser."); return; }
+    setGeoLoading(true);
+    setGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setNearbyForm(f => ({ ...f, lat: pos.coords.latitude.toFixed(4), lng: pos.coords.longitude.toFixed(4) }));
+        setGeoLoading(false);
+      },
+      () => { setGeoError("Location access denied. Enter coordinates manually."); setGeoLoading(false); }
+    );
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/api/suppliers/stats`)
@@ -94,6 +111,7 @@ export default function SuppliersPage() {
     setError(null);
     try {
       const params = new URLSearchParams({ limit: "24" });
+      if (searchForm.name) params.set("name", searchForm.name);
       if (searchForm.material) params.set("material", searchForm.material);
       if (searchForm.state) params.set("state", searchForm.state.toUpperCase());
       if (searchForm.category) params.set("category", searchForm.category);
@@ -102,6 +120,7 @@ export default function SuppliersPage() {
       if (!res.ok) throw new Error("Search failed");
       const data = await res.json();
       setResults(data.suppliers ?? data ?? []);
+      setSearched(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -124,7 +143,8 @@ export default function SuppliersPage() {
       const res = await fetch(`${API_BASE}/api/suppliers/nearby?${params}`);
       if (!res.ok) throw new Error("Nearby search failed");
       const data = await res.json();
-      setNearbyResults(data ?? []);
+      setNearbyResults(data.results ?? data ?? []);
+      setNearbySearched(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -176,7 +196,16 @@ export default function SuppliersPage() {
       {mode === "search" && (
         <>
           <form onSubmit={handleSearch} className="card mb-6">
-            <div className="grid sm:grid-cols-4 gap-4">
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="label">Supplier Name</label>
+                <input
+                  className="input"
+                  placeholder="Ryerson, Olympic Steel…"
+                  value={searchForm.name}
+                  onChange={e => setSearchForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
               <div>
                 <label className="label">Material</label>
                 <input
@@ -190,6 +219,8 @@ export default function SuppliersPage() {
                   {materials.slice(0, 40).map(m => <option key={m} value={m} />)}
                 </datalist>
               </div>
+            </div>
+            <div className="grid sm:grid-cols-4 gap-4">
               <div>
                 <label className="label">State</label>
                 <input
@@ -214,7 +245,7 @@ export default function SuppliersPage() {
                   <option value="wood">Wood</option>
                 </select>
               </div>
-              <div className="flex flex-col justify-end">
+              <div className="flex flex-col justify-end col-span-2">
                 <label className="flex items-center gap-2 text-sm text-gray-400 mb-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -233,12 +264,16 @@ export default function SuppliersPage() {
 
           {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
-          {results.length > 0 && (
+          {results.length > 0 ? (
             <div>
               <p className="text-sm text-gray-500 mb-3">{results.length} results</p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {results.map(s => <SupplierCard key={s.id} supplier={s} />)}
               </div>
+            </div>
+          ) : searched && !loading && (
+            <div className="card text-center py-10 text-gray-500 text-sm">
+              No suppliers found. Try broadening your search or removing filters.
             </div>
           )}
         </>
@@ -247,12 +282,24 @@ export default function SuppliersPage() {
       {mode === "nearby" && (
         <>
           <form onSubmit={handleNearby} className="card mb-6">
-            <p className="text-xs text-gray-500 mb-4">Enter coordinates to find the nearest verified suppliers within a radius. Default is Cleveland, OH.</p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs text-gray-500">Find verified suppliers within a radius of your location.</p>
+              <button
+                type="button"
+                onClick={handleUseMyLocation}
+                disabled={geoLoading}
+                className="text-xs text-forge-400 border border-forge-500/40 rounded px-3 py-1.5 hover:bg-forge-500/10 transition-colors disabled:opacity-50"
+              >
+                {geoLoading ? "Detecting…" : "Use My Location"}
+              </button>
+            </div>
+            {geoError && <p className="text-xs text-red-400 mb-3">{geoError}</p>}
             <div className="grid sm:grid-cols-4 gap-4">
               <div>
                 <label className="label">Latitude</label>
                 <input
                   className="input"
+                  placeholder="e.g. 41.49"
                   value={nearbyForm.lat}
                   onChange={e => setNearbyForm(f => ({ ...f, lat: e.target.value }))}
                 />
@@ -261,6 +308,7 @@ export default function SuppliersPage() {
                 <label className="label">Longitude</label>
                 <input
                   className="input"
+                  placeholder="e.g. -81.69"
                   value={nearbyForm.lng}
                   onChange={e => setNearbyForm(f => ({ ...f, lng: e.target.value }))}
                 />
@@ -294,7 +342,7 @@ export default function SuppliersPage() {
 
           {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
-          {nearbyResults.length > 0 && (
+          {nearbyResults.length > 0 ? (
             <div>
               <p className="text-sm text-gray-500 mb-3">{nearbyResults.length} suppliers found, sorted by distance</p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -304,6 +352,10 @@ export default function SuppliersPage() {
                   return <SupplierCard key={supplier.id} supplier={supplier} distance={distance} />;
                 })}
               </div>
+            </div>
+          ) : nearbySearched && !nearbyLoading && (
+            <div className="card text-center py-10 text-gray-500 text-sm">
+              No suppliers found within that radius. Try expanding the search area.
             </div>
           )}
         </>

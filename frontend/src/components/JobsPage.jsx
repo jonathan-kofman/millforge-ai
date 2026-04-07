@@ -16,6 +16,13 @@ const SOURCE_BADGE = {
 
 const VALID_STAGES = ["queued", "in_progress", "qc_pending", "complete", "qc_failed"];
 
+const STAGE_TRANSITIONS = {
+  queued:      { label: "Start Job",    next: "in_progress", color: "bg-blue-700 hover:bg-blue-600 text-white" },
+  in_progress: { label: "Send to QC",  next: "qc_pending",  color: "bg-yellow-700 hover:bg-yellow-600 text-white" },
+  qc_pending:  { label: "Pass QC",     next: "complete",    color: "bg-green-700 hover:bg-green-600 text-white" },
+  qc_failed:   { label: "Re-queue",    next: "queued",      color: "bg-gray-700 hover:bg-gray-600 text-white" },
+};
+
 const EMPTY_CAM = `{
   "schema_version": "1.0",
   "part_id": "ARIA-P-20240101-001",
@@ -30,6 +37,14 @@ const EMPTY_CAM = `{
   "material": "aluminum"
 }`;
 
+const BLANK_JOB = {
+  title: "",
+  material: "steel",
+  required_machine_type: "",
+  estimated_duration_minutes: "",
+  notes: "",
+};
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState([]);
   const [total, setTotal] = useState(0);
@@ -43,12 +58,21 @@ export default function JobsPage() {
   const [importError, setImportError] = useState(null);
   const [importPreview, setImportPreview] = useState(null);
 
+  // Manual job creation
+  const [showCreateJob, setShowCreateJob] = useState(false);
+  const [jobForm, setJobForm] = useState(BLANK_JOB);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState(null);
+
   // QC submit
   const [qcJobId, setQcJobId] = useState(null);
   const [qcFile, setQcFile] = useState(null);
   const [qcLoading, setQcLoading] = useState(false);
   const [qcResult, setQcResult] = useState(null);
   const [qcError, setQcError] = useState(null);
+
+  // Rework
+  const [reworkLoading, setReworkLoading] = useState(null);  // jobId being reworked
 
   // Conflict check
   const [conflictResult, setConflictResult] = useState(null);
@@ -105,22 +129,65 @@ export default function JobsPage() {
     }
   };
 
+  const handleCreateJob = async (e) => {
+    e.preventDefault();
+    setCreateError(null);
+    setCreateLoading(true);
+    try {
+      const body = {
+        ...jobForm,
+        source: "manual",
+        estimated_duration_minutes: jobForm.estimated_duration_minutes
+          ? Number(jobForm.estimated_duration_minutes)
+          : null,
+      };
+      if (!body.notes) delete body.notes;
+      if (!body.required_machine_type) delete body.required_machine_type;
+      const res = await fetch(`${API_BASE}/api/jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `${res.status}`);
+      setShowCreateJob(false);
+      setJobForm(BLANK_JOB);
+      fetchJobs();
+    } catch (e) {
+      setCreateError(e.message);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   const handleStageChange = async (jobId, newStage) => {
-    const res = await fetch(`${API_BASE}/api/jobs/${jobId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ stage: newStage }),
-    });
-    if (res.ok) fetchJobs();
+    try {
+      const res = await fetch(`${API_BASE}/api/jobs/${jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ stage: newStage }),
+      });
+      if (!res.ok) throw new Error(`Stage update failed (${res.status})`);
+      fetchJobs();
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const handleDelete = async (jobId) => {
     if (!window.confirm("Delete this job?")) return;
-    await fetch(`${API_BASE}/api/jobs/${jobId}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
+    try {
+      const res = await fetch(`${API_BASE}/api/jobs/${jobId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+    } catch (e) {
+      setError(e.message);
+      return;
+    }
     fetchJobs();
   };
 
@@ -148,6 +215,45 @@ export default function JobsPage() {
     }
   };
 
+  const handleTriggerRework = async (job, defects) => {
+    setReworkLoading(job.id);
+    setError(null);
+    try {
+      const reworkOrders = [{
+        order_id: job.title || `JOB-${job.id}`,
+        material: job.material || "steel",
+        quantity: 1,
+        dimensions: "rework",
+        priority: 1,
+        complexity: 1.5,
+        defects,
+        severity: "major",
+      }];
+      const res = await fetch(`${API_BASE}/api/schedule/rework`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ failed_inspections: reworkOrders }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Rework failed (${res.status})`);
+      }
+      // Stage the job back to queued
+      await fetch(`${API_BASE}/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ stage: "queued" }),
+      });
+      fetchJobs();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setReworkLoading(null);
+    }
+  };
+
   const checkConflict = async (requiredType) => {
     const res = await fetch(
       `${API_BASE}/api/machines/check-conflict?required_machine_type=${encodeURIComponent(requiredType)}`,
@@ -155,6 +261,8 @@ export default function JobsPage() {
     );
     if (res.ok) setConflictResult(await res.json());
   };
+
+  const setField = (field) => (e) => setJobForm(f => ({ ...f, [field]: e.target.value }));
 
   return (
     <div className="space-y-6">
@@ -164,9 +272,14 @@ export default function JobsPage() {
           <h2 className="text-xl font-bold text-white">Jobs</h2>
           <p className="text-sm text-gray-400">{total} job{total !== 1 ? "s" : ""} · ARIA CAM imports + manual</p>
         </div>
-        <button className="btn-primary text-sm" onClick={() => setShowImport(true)}>
-          Import from CAM
-        </button>
+        <div className="flex gap-2">
+          <button className="btn-secondary text-sm" onClick={() => setShowCreateJob(true)}>
+            + Manual Job
+          </button>
+          <button className="btn-primary text-sm" onClick={() => setShowImport(true)}>
+            Import from CAM
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert-error">{error}</div>}
@@ -176,7 +289,7 @@ export default function JobsPage() {
         <div className="text-gray-400 text-sm">Loading…</div>
       ) : jobs.length === 0 ? (
         <div className="card text-center text-gray-400 text-sm py-12">
-          No jobs yet. Import a CAM setup sheet to get started.
+          No jobs yet. Create a manual job or import a CAM setup sheet.
         </div>
       ) : (
         <div className="space-y-3">
@@ -209,10 +322,23 @@ export default function JobsPage() {
                       </span>
                     )}
                   </div>
+                  {job.notes && (
+                    <p className="text-xs text-gray-500 mt-1 italic">"{job.notes}"</p>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* Stage selector */}
+                <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                  {/* Quick-advance shortcut button */}
+                  {STAGE_TRANSITIONS[job.stage] && (
+                    <button
+                      className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${STAGE_TRANSITIONS[job.stage].color}`}
+                      onClick={() => handleStageChange(job.id, STAGE_TRANSITIONS[job.stage].next)}
+                    >
+                      {STAGE_TRANSITIONS[job.stage].label}
+                    </button>
+                  )}
+
+                  {/* Stage selector (fine-grained) */}
                   <select
                     value={job.stage}
                     onChange={(e) => handleStageChange(job.id, e.target.value)}
@@ -224,7 +350,7 @@ export default function JobsPage() {
                   </select>
 
                   {/* QC submit button when in qc_pending */}
-                  {(job.stage === "qc_pending" || job.stage === "in_progress") && (
+                  {job.stage === "qc_pending" && (
                     <button
                       className="btn-secondary text-xs"
                       onClick={() => { setQcJobId(job.id); setQcResult(null); setQcError(null); }}
@@ -272,10 +398,21 @@ export default function JobsPage() {
 
               {/* QC result */}
               {qcResult && qcJobId === job.id && (
-                <div className={`text-xs p-2 rounded ${qcResult.passed ? "bg-green-900/50 text-green-300" : "bg-red-900/50 text-red-300"}`}>
-                  {qcResult.passed
-                    ? "✓ QC passed — no defects detected"
-                    : `✗ QC failed — defects: ${qcResult.defects_found.join(", ")}`}
+                <div className={`text-xs p-3 rounded flex items-start justify-between gap-3 ${qcResult.passed ? "bg-green-900/50 text-green-300" : "bg-red-900/50 text-red-300"}`}>
+                  <span>
+                    {qcResult.passed
+                      ? "✓ QC passed — no defects detected"
+                      : `✗ QC failed — defects: ${qcResult.defects_found.join(", ")}`}
+                  </span>
+                  {!qcResult.passed && (
+                    <button
+                      className="shrink-0 text-xs bg-orange-800 hover:bg-orange-700 text-orange-200 px-2.5 py-1 rounded-lg font-medium transition-colors"
+                      onClick={() => handleTriggerRework(job, qcResult.defects_found)}
+                      disabled={reworkLoading === job.id}
+                    >
+                      {reworkLoading === job.id ? "Dispatching…" : "Trigger Rework"}
+                    </button>
+                  )}
                 </div>
               )}
               {qcError && qcJobId === job.id && (
@@ -307,7 +444,6 @@ export default function JobsPage() {
               spellCheck={false}
             />
 
-            {/* Live preview */}
             {importPreview && (
               <div className="text-xs bg-gray-800 rounded p-3 space-y-1">
                 <div className="text-gray-300 font-medium">Preview</div>
@@ -326,9 +462,7 @@ export default function JobsPage() {
               </div>
             )}
 
-            {importError && (
-              <div className="text-red-400 text-xs">{importError}</div>
-            )}
+            {importError && <div className="text-red-400 text-xs">{importError}</div>}
 
             <div className="flex gap-3 justify-end">
               <button className="btn-secondary text-sm" onClick={() => setShowImport(false)}>Cancel</button>
@@ -340,6 +474,74 @@ export default function JobsPage() {
                 {importLoading ? "Importing…" : "Import Job"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Job Creation Modal */}
+      {showCreateJob && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card w-full max-w-lg flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white">Create Manual Job</h3>
+              <button className="text-gray-400 hover:text-white" onClick={() => setShowCreateJob(false)}>✕</button>
+            </div>
+
+            <form onSubmit={handleCreateJob} className="space-y-4">
+              <div>
+                <label className="label">Job Title <span className="text-red-400">*</span></label>
+                <input
+                  className="input"
+                  value={jobForm.title}
+                  onChange={setField("title")}
+                  placeholder="e.g. Bracket PN-4421 × 10"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Material</label>
+                  <select className="input" value={jobForm.material} onChange={setField("material")}>
+                    {["steel", "aluminum", "titanium", "copper"].map(m => (
+                      <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Est. Cycle Time (min)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="input"
+                    value={jobForm.estimated_duration_minutes}
+                    onChange={setField("estimated_duration_minutes")}
+                    placeholder="45"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Required Machine Type</label>
+                <input
+                  className="input"
+                  value={jobForm.required_machine_type}
+                  onChange={setField("required_machine_type")}
+                  placeholder="e.g. Haas VF-2, CNC Mill"
+                />
+              </div>
+              <div>
+                <label className="label">Notes</label>
+                <input className="input" value={jobForm.notes} onChange={setField("notes")} placeholder="Optional…" />
+              </div>
+
+              {createError && <p className="text-sm text-red-400">{createError}</p>}
+
+              <div className="flex gap-3 justify-end">
+                <button type="button" className="btn-secondary text-sm" onClick={() => setShowCreateJob(false)}>Cancel</button>
+                <button type="submit" className="btn-primary text-sm" disabled={createLoading}>
+                  {createLoading ? "Creating…" : "Create Job"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

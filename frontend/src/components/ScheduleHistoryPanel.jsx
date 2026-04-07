@@ -63,10 +63,10 @@ export default function ScheduleHistoryPanel({ refreshKey }) {
                   <span className="text-gray-400">
                     {run.order_ids.length} order{run.order_ids.length !== 1 ? "s" : ""}
                   </span>
-                  <span className={`font-semibold ${run.on_time_rate >= 90 ? "text-green-400" : run.on_time_rate >= 70 ? "text-yellow-400" : "text-red-400"}`}>
-                    {run.on_time_rate.toFixed(1)}% on-time
+                  <span className={`font-semibold ${(run.on_time_rate ?? 0) >= 90 ? "text-green-400" : (run.on_time_rate ?? 0) >= 70 ? "text-yellow-400" : "text-red-400"}`}>
+                    {run.on_time_rate != null ? run.on_time_rate.toFixed(1) : "—"}% on-time
                   </span>
-                  <span className="text-gray-500">{run.makespan_hours.toFixed(1)}h makespan</span>
+                  <span className="text-gray-500">{run.makespan_hours != null ? run.makespan_hours.toFixed(1) : "—"}h makespan</span>
                   <span className="ml-auto text-gray-600">{fmt(run.created_at)}</span>
                 </div>
               ))}

@@ -25,7 +25,20 @@
     @apply bg-gray-700 hover:bg-gray-600 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors duration-150;
   }
   .card {
-    @apply bg-gray-900 border border-gray-800 rounded-xl p-6;
+    @apply bg-gray-900 border border-gray-800 rounded-xl p-6
+           transition-all duration-200 hover:border-gray-700
+           hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/40;
+  }
+  .card-highlight {
+    @apply bg-gray-900 border border-forge-500/30 rounded-xl p-6
+           transition-all duration-200 hover:border-forge-500/60
+           hover:-translate-y-0.5 hover:shadow-lg hover:shadow-forge-500/10;
+  }
+  .btn-gradient {
+    @apply bg-gradient-to-r from-forge-500 to-orange-400 hover:from-forge-600 hover:to-orange-500
+           text-white font-bold px-8 py-4 rounded-xl text-base transition-all duration-200
+           shadow-lg shadow-forge-500/25 hover:shadow-forge-500/40 hover:-translate-y-0.5
+           inline-block;
   }
   .input {
     @apply bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forge-500 focus:border-transparent w-full;

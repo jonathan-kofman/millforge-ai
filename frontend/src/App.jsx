@@ -1,4 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Cog, Menu, X, ChevronDown } from "lucide-react";
+import HowItWorks from "./components/HowItWorks";
+import TrustBar from "./components/TrustBar";
+import AnimatedCounter from "./components/AnimatedCounter";
 import QuoteForm from "./components/QuoteForm";
 import ScheduleViewer from "./components/ScheduleViewer";
 import VisionDemo from "./components/VisionDemo";
@@ -8,7 +12,6 @@ import AuthModal from "./components/AuthModal";
 import BenchmarkDemo from "./components/BenchmarkDemo";
 import LightsOutWidget from "./components/LightsOutWidget";
 import EnergyWidget from "./components/EnergyWidget";
-import SupplierMap from "./components/SupplierMap";
 import OnboardingWizard from "./components/OnboardingWizard";
 import Discovery from "./pages/Discovery";
 import JobsPage from "./components/JobsPage";
@@ -63,6 +66,8 @@ export default function App() {
   const [showWizard, setShowWizard] = useState(false);
   const [user, setUser] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const dropdownRef = useRef(null);
   const [captureEmail, setCaptureEmail] = useState("");
   const [captureSubmitted, setCaptureSubmitted] = useState(false);
   const [captureLoading, setCaptureLoading] = useState(false);
@@ -118,6 +123,17 @@ export default function App() {
     setActiveTab("quote");
   };
 
+  // Close account dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setAccountOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   // Restore session from httpOnly cookie on page load
   useEffect(() => {
     fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
@@ -135,15 +151,13 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const TABS = [...PUBLIC_TABS, ...(user ? AUTH_TABS : [])];
-
   return (
     <div className="min-h-screen flex flex-col">
       {/* ── Header ── */}
       <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">⚙️</span>
+            <Cog className="w-7 h-7 text-forge-500" />
             <div>
               <span className="text-xl font-bold text-white tracking-tight">Mill</span>
               <span className="text-xl font-bold text-forge-500 tracking-tight">Forge AI</span>
@@ -165,7 +179,7 @@ export default function App() {
               onClick={() => setNavOpen(v => !v)}
               aria-label="Toggle menu"
             >
-              {navOpen ? "✕" : "☰"}
+              {navOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
             {user ? (
               <>
@@ -199,25 +213,38 @@ export default function App() {
             For CNC job shops and metal mills drowning in backlog and rush orders.
           </p>
           {/* Headline */}
-          <h1 className="text-5xl sm:text-6xl font-extrabold text-white mb-4 leading-tight">
-            MillForge AI ends the wait.
+          <h1 className="text-5xl sm:text-6xl font-extrabold mb-4 leading-tight tracking-tighter">
+            <span className="text-white">MillForge AI </span>
+            <span className="bg-gradient-to-r from-forge-500 to-orange-400 bg-clip-text text-transparent">
+              ends the wait.
+            </span>
           </h1>
           {/* Subheadline */}
           <p className="text-lg sm:text-xl text-gray-200 font-semibold max-w-2xl mx-auto mb-3">
             AI scheduler that lifts on-time delivery from 60% to 95%+<br className="hidden sm:block" /> using your existing machines and staff.
           </p>
-          <p className="text-sm text-gray-500 max-w-xl mx-auto mb-2">
-            Not an ERP. Not a quoting portal. Not a CAM package.
+          <p className="text-xs text-gray-500 max-w-xl mx-auto mb-6 mt-1">
+            Not an ERP. Not a quoting portal. A scheduling layer that sits on top of what you already use.
           </p>
-          <p className="text-sm text-gray-500 max-w-xl mx-auto mb-8">
-            It&apos;s a scheduling layer that sits on top of whatever you already use.
-          </p>
+          {/* Stat strip */}
+          <div className="flex flex-wrap justify-center gap-6 sm:gap-10 mb-8">
+            {[
+              ["96.4%", "On-time delivery (SA optimizer)"],
+              ["+35.7pp", "Improvement over FIFO baseline"],
+              ["< 200ms", "Schedule latency per 28 orders"],
+            ].map(([val, label]) => (
+              <div key={label} className="text-center">
+                <p className="text-2xl font-extrabold text-forge-400">{val}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
           {/* Primary CTA */}
           <a
             href="https://calendly.com/jonkofm/30min"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block bg-forge-500 hover:bg-forge-600 text-white font-bold px-8 py-4 rounded-xl text-base transition-colors duration-150 shadow-lg"
+            className="btn-gradient"
           >
             Book a 30-minute floor review →
           </a>
@@ -261,6 +288,12 @@ export default function App() {
         </div>
       </section>
 
+      {/* ── How It Works ── */}
+      <HowItWorks />
+
+      {/* ── Trust / credential bar ── */}
+      <TrustBar />
+
       {/* ── Benchmark demo ── */}
       <div id="benchmark-section" className="bg-gray-950 border-b border-gray-800">
         <BenchmarkDemo />
@@ -277,11 +310,15 @@ export default function App() {
           </p>
           <div className="flex flex-wrap justify-center gap-8 mb-8">
             <div className="text-center">
-              <p className="text-4xl font-extrabold text-gray-500">60.7%</p>
+              <p className="text-4xl font-extrabold text-gray-500">
+                <AnimatedCounter target={60.7} suffix="%" />
+              </p>
               <p className="text-xs text-gray-600 mt-1">Before MillForge: 60.7% on-time</p>
             </div>
             <div className="text-center">
-              <p className="text-4xl font-extrabold text-orange-400">96.4%</p>
+              <p className="text-4xl font-extrabold text-orange-400">
+                <AnimatedCounter target={96.4} suffix="%" />
+              </p>
               <p className="text-xs text-gray-500 mt-1">After MillForge: 96.4% on-time</p>
             </div>
           </div>
@@ -394,41 +431,88 @@ export default function App() {
                 Submit a supplier →
               </button>
             </div>
-            {/* Right: map */}
-            <div>
-              <SupplierMap />
+            {/* Right: supplier stats */}
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                [supplierStats?.total_suppliers ?? "1,100+", "Verified US Suppliers"],
+                [supplierStats?.states_covered ?? "48", "States Covered"],
+                ["4", "Material Categories"],
+              ].map(([val, label]) => (
+                <div key={label} className="bg-gray-800 rounded-xl p-4 text-center border border-gray-700">
+                  <p className="text-2xl font-bold text-forge-400">{val}</p>
+                  <p className="text-xs text-gray-500 mt-1">{label}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
       {/* ── Tab nav ── */}
-      <nav id="tab-nav" className="bg-gray-900 border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-4 flex gap-1 overflow-x-auto">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-150 ${
-                activeTab === tab.id
-                  ? "border-forge-500 text-forge-500"
-                  : "border-transparent text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              {tab.label}
-              {tab.id === "orders" && (
-                <span className="ml-1.5 text-xs bg-forge-500 text-white px-1.5 py-0.5 rounded-full">
-                  new
-                </span>
+      <nav id="tab-nav" className="bg-gray-900 border-b border-gray-800 sticky top-[73px] z-10">
+        <div className="max-w-6xl mx-auto px-4 flex items-center">
+          {/* Scrollable public tabs */}
+          <div className="flex gap-1 overflow-x-auto flex-1 min-w-0">
+            {PUBLIC_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-5 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-150 ${
+                  activeTab === tab.id
+                    ? "border-forge-500 text-forge-500"
+                    : "border-transparent text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Account dropdown — outside overflow container so it's never clipped */}
+          {user ? (
+            <div className="relative flex-shrink-0 pl-2 py-2" ref={dropdownRef}>
+              <button
+                onClick={() => setAccountOpen(o => !o)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  AUTH_TABS.some(t => t.id === activeTab)
+                    ? "bg-forge-500/20 text-forge-400"
+                    : "text-gray-400 hover:text-white hover:bg-gray-800"
+                }`}
+              >
+                {user.email?.split("@")[0] || "Account"}
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${accountOpen ? "rotate-180" : ""}`} />
+              </button>
+              {accountOpen && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-xl z-50 py-1">
+                  {AUTH_TABS.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => { setActiveTab(tab.id); setAccountOpen(false); }}
+                      className={`w-full text-left text-sm px-4 py-2 transition-colors ${
+                        activeTab === tab.id
+                          ? "text-forge-400 bg-forge-500/10"
+                          : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                  <hr className="border-gray-800 my-1" />
+                  <button
+                    onClick={() => { handleLogout(); setAccountOpen(false); }}
+                    className="w-full text-left text-sm px-4 py-2 text-red-400 hover:bg-gray-800 transition-colors"
+                  >
+                    Sign out
+                  </button>
+                </div>
               )}
-            </button>
-          ))}
-          {!user && (
+            </div>
+          ) : (
             <button
               onClick={() => setShowAuth(true)}
-              className="px-5 py-4 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-gray-600 hover:text-gray-400 transition-colors"
+              className="flex-shrink-0 px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-600 hover:text-gray-400 transition-colors"
             >
-              My Orders
+              Sign in for more →
             </button>
           )}
         </div>
@@ -448,7 +532,7 @@ export default function App() {
         {activeTab === "quality"        && user && <QualityHub />}
         {activeTab === "jobs"           && user && <JobsPage />}
         {activeTab === "machines"       && user && <MachinesPage />}
-        {activeTab === "analytics"      && user && <QCAnalyticsPage />}
+        {activeTab === "analytics"      && user && <QCAnalyticsPage onNavigate={setActiveTab} />}
         {activeTab === "manufacturing"  && user && <ManufacturingPage />}
         {activeTab === "operations"     && user && <OperationsPage />}
         {activeTab === "nl-scheduler"   && user && <NLSchedulerPage />}

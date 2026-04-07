@@ -158,6 +158,7 @@ export default function NLSchedulerPage() {
         {mode === "quick" && (
           <div>
             <label className="label">Orders (JSON array)</label>
+            <p className="text-xs text-yellow-500 mt-1 mb-1">These are example orders — replace with your real order data before submitting.</p>
             <textarea
               className="input mt-1 font-mono text-xs min-h-[180px] resize-y"
               value={ordersJson}

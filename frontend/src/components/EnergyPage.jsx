@@ -38,12 +38,19 @@ function LiveRates() {
   if (loading) return <p className="text-gray-500 text-sm">Loading rate data…</p>;
   if (error) return <p className="text-red-400 text-sm">{error}</p>;
 
-  const hourlyRates = rates?.hourly_rates || [];
-  const maxRate = Math.max(...hourlyRates.map(h => h.rate_per_kwh ?? h.rate ?? 0), 0.001);
-  const cheapWindows = windows?.cheap_windows || windows?.windows || [];
+  const hourlyRates = rates?.rates_usd_per_kwh || [];
+  const maxRate = Math.max(...hourlyRates.map(h => typeof h === "number" ? h : 0), 0.001);
+  const cheapWindows = windows?.windows || [];
+
+  const isSimulated = !rates?.data_source || rates.data_source === "simulated" || rates.data_source === "mock";
 
   return (
     <div className="space-y-6">
+      {isSimulated && (
+        <div className="text-xs text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 rounded px-3 py-2">
+          Showing simulated rate data — configure EIA_API_KEY for live PJM pricing
+        </div>
+      )}
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
@@ -65,7 +72,7 @@ function LiveRates() {
           <p className="text-sm font-semibold text-white mb-4">24-Hour Rate Curve ($/kWh)</p>
           <div className="flex items-end gap-1 h-28">
             {hourlyRates.map((h, i) => {
-              const rate = h.rate_per_kwh ?? h.rate ?? 0;
+              const rate = typeof h === "number" ? h : (h.rate_per_kwh ?? h.rate ?? 0);
               const pct = (rate / maxRate) * 100;
               const isCheap = rate <= maxRate * 0.6;
               return (
@@ -76,7 +83,7 @@ function LiveRates() {
                   />
                   {/* tooltip */}
                   <div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-700 text-xs text-white px-2 py-1 rounded whitespace-nowrap z-10">
-                    {h.hour ?? i}:00 — ${rate.toFixed(3)}
+                    {i}:00 — ${rate.toFixed(3)}
                   </div>
                 </div>
               );
@@ -101,10 +108,10 @@ function LiveRates() {
             {cheapWindows.slice(0, 6).map((w, i) => (
               <div key={i} className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
                 <span className="text-sm text-white font-medium">
-                  {w.start_hour ?? w.hour ?? "?"}:00 – {(w.end_hour ?? (w.hour + 1) ?? "?") }:00
+                  {w.hour ?? "?"}:00 – {(w.hour != null ? w.hour + (w.duration_hours ?? 1) : "?")}:00
                 </span>
                 <span className="text-xs text-green-400 font-semibold">
-                  ${(w.rate_per_kwh ?? w.rate ?? 0).toFixed(3)}/kWh
+                  ${(w.rate_usd_per_mwh != null ? w.rate_usd_per_mwh / 1000 : 0).toFixed(3)}/kWh
                 </span>
               </div>
             ))}

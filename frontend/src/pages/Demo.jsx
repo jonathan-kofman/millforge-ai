@@ -4,6 +4,7 @@
  * Designed to load in < 2s and work on mobile.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import { AlertTriangle } from "lucide-react";
 import { API_BASE } from "../config";
 
 const FALLBACK = {
@@ -225,7 +226,9 @@ export default function Demo() {
         </div>
 
         {data?._cached && (
-          <p className="text-xs text-gray-600 text-center mt-4">showing cached result — backend loading</p>
+          <p className="text-xs text-yellow-500 text-center mt-4 flex items-center justify-center gap-1">
+            <AlertTriangle className="w-3.5 h-3.5" /> Showing cached demo data — live backend unavailable
+          </p>
         )}
       </main>
 

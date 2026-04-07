@@ -61,6 +61,8 @@ export default function SupplierMap() {
         zoom: 4,
         zoomControl: true,
         scrollWheelZoom: false,
+        dragging: !window.L.Browser.mobile,
+        tap: false,
       });
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -178,7 +180,7 @@ export default function SupplierMap() {
       </div>
 
       {/* Map */}
-      <div className="relative w-full rounded-lg border border-gray-700 overflow-hidden" style={{ height: "380px" }}>
+      <div className="relative w-full rounded-lg border border-gray-700" style={{ height: "380px", overflow: "visible", zIndex: 0 }}>
         <div ref={mapRef} className="w-full h-full" />
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60 z-10">

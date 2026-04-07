@@ -53,6 +53,9 @@ class OrderRecord(Base):
     # pending | scheduled | in_progress | completed | cancelled
     status: Mapped[str] = mapped_column(String(20), default="pending")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    customer_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    po_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    part_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_by_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )

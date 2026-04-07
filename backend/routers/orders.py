@@ -61,6 +61,9 @@ def _to_response(rec: OrderRecord) -> OrderResponse:
         due_date=rec.due_date,
         status=rec.status,
         notes=rec.notes,
+        customer_name=getattr(rec, "customer_name", None),
+        po_number=getattr(rec, "po_number", None),
+        part_number=getattr(rec, "part_number", None),
         created_by_id=rec.created_by_id,
         created_at=rec.created_at,
         updated_at=rec.updated_at,
@@ -86,6 +89,9 @@ async def create_order(
         complexity=req.complexity,
         due_date=due_date,
         notes=req.notes,
+        customer_name=req.customer_name,
+        po_number=req.po_number,
+        part_number=req.part_number,
         created_by_id=user.id,
     )
     db.add(rec)

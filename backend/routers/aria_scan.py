@@ -16,13 +16,21 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from agents.aria_bridge_agent import ARIABridgeAgent
 from agents.stl_analyzer import STLAnalyzer
-from agents.scheduler import Scheduler, Order, get_mock_orders
-from routers.quote import UNIT_PRICE, _volume_discount
+from agents.scheduler import Scheduler, Order
+from agents.market_quoter import _get_spot_price
+from routers.quote import (
+    MACHINING_OVERHEAD_PER_UNIT,
+    _volume_discount,
+    _estimate_unit_weight_lb,
+    _load_db_queue,
+)
+from database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/aria", tags=["ARIA Scan Bridge"])
@@ -99,7 +107,7 @@ def _entry_to_dict(entry: CatalogEntry) -> Dict[str, Any]:
     }
 
 
-def _build_quote(catalog_dict: Dict[str, Any], quantity: int) -> Dict[str, Any]:
+def _build_quote(catalog_dict: Dict[str, Any], quantity: int, db: Session) -> Dict[str, Any]:
     """Run the quote pipeline and return the full quote response dict."""
     quote_data = _agent.catalog_to_quote(catalog_dict, quantity)
     material = quote_data["material"]
@@ -113,14 +121,19 @@ def _build_quote(catalog_dict: Dict[str, Any], quantity: int) -> Dict[str, Any]:
         due_date=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=14),
         priority=int(catalog_dict.get("priority", 5)),
     )
-    current_queue = get_mock_orders()
+    current_queue = _load_db_queue(db)
     try:
         lead_time_hours = _scheduler.estimate_lead_time(new_order, current_queue)
     except Exception as e:
         logger.warning("Scheduler error during ARIA quote: %s", e)
         lead_time_hours = 24.0
 
-    unit_price = UNIT_PRICE.get(material, 5.00)
+    # Price = machining overhead + live spot material cost
+    machining = MACHINING_OVERHEAD_PER_UNIT.get(material, 2.00)
+    spot_price_per_lb, spot_source = _get_spot_price(material)
+    unit_weight_lb = _estimate_unit_weight_lb(dimensions, material)
+    unit_price = machining + spot_price_per_lb * unit_weight_lb
+
     discount = _volume_discount(quantity)
     discounted_unit = unit_price * (1 - discount)
     total_price = discounted_unit * quantity
@@ -137,6 +150,7 @@ def _build_quote(catalog_dict: Dict[str, Any], quantity: int) -> Dict[str, Any]:
         "complexity": quote_data["complexity"],
         "estimated_machining_minutes": quote_data["estimated_machining_minutes"],
         "source_part_id": quote_data["source_part_id"],
+        "spot_price_source": spot_source,
         "valid_until": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7)).isoformat(),
     }
 
@@ -146,7 +160,7 @@ def _build_quote(catalog_dict: Dict[str, Any], quantity: int) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @router.post("/import", summary="Import a scanned part as a schedulable order")
-async def import_from_scan(req: ImportRequest) -> Dict[str, Any]:
+async def import_from_scan(req: ImportRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
     Accept an ARIA-OS catalog entry and return a ready-to-schedule order dict
     plus an instant quote.
@@ -164,7 +178,7 @@ async def import_from_scan(req: ImportRequest) -> Dict[str, Any]:
         order = _agent.catalog_to_order(catalog_dict, quantity=quantity,
                                         due_date=due_date, priority=priority)
         summary = _agent.part_summary(catalog_dict)
-        quote = _build_quote(catalog_dict, quantity)
+        quote = _build_quote(catalog_dict, quantity, db)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -176,14 +190,14 @@ async def import_from_scan(req: ImportRequest) -> Dict[str, Any]:
 
 
 @router.post("/quote", summary="Get an instant quote for a scanned part")
-async def quote_from_scan(req: QuoteFromScanRequest) -> Dict[str, Any]:
+async def quote_from_scan(req: QuoteFromScanRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
     Accept an ARIA-OS catalog entry and return an instant quote.
     Does not create an order.
     """
     catalog_dict = _entry_to_dict(req.catalog_entry)
     try:
-        quote = _build_quote(catalog_dict, req.quantity)
+        quote = _build_quote(catalog_dict, req.quantity, db)
         summary = _agent.part_summary(catalog_dict)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))

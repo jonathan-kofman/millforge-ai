@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { AlertTriangle } from "lucide-react";
 import { API_BASE } from "../config";
 
 // ── SVG ring for on-time percentage ──────────────────────────────────────────
@@ -196,7 +197,6 @@ export default function BenchmarkDemo() {
       triggerFlash();
     } catch (err) {
       setData(FALLBACK_DATA);
-      setError(null); // show cached result silently
     } finally {
       setLoading(false);
     }
@@ -359,7 +359,9 @@ export default function BenchmarkDemo() {
       )}
 
       {data?._cached && (
-        <p className="text-xs text-gray-600 text-center mt-2">cached result — backend offline or slow</p>
+        <p className="text-xs text-yellow-500 text-center mt-2 flex items-center justify-center gap-1">
+          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Showing cached demo data — live backend unavailable
+        </p>
       )}
     </section>
   );

@@ -17,6 +17,22 @@ function Inventory() {
   const [error, setError] = useState(null);
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState(null);
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) { setGeoError("Geolocation not supported by this browser."); return; }
+    setGeoLoading(true);
+    setGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(pos.coords.latitude.toFixed(4));
+        setLng(pos.coords.longitude.toFixed(4));
+        setGeoLoading(false);
+      },
+      () => { setGeoError("Location access denied. Enter coordinates manually."); setGeoLoading(false); }
+    );
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/api/inventory/status`, { credentials: "include" })
@@ -98,15 +114,26 @@ function Inventory() {
 
       {/* Reorder with suppliers */}
       <div className="card">
-        <p className="text-sm font-semibold text-white mb-3">Auto-Reorder with Nearest Suppliers</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-white">Auto-Reorder with Nearest Suppliers</p>
+          <button
+            type="button"
+            onClick={handleUseMyLocation}
+            disabled={geoLoading}
+            className="text-xs text-forge-400 border border-forge-500/40 rounded px-3 py-1.5 hover:bg-forge-500/10 transition-colors disabled:opacity-50"
+          >
+            {geoLoading ? "Detecting…" : "Use My Location"}
+          </button>
+        </div>
+        {geoError && <p className="text-xs text-red-400 mb-2">{geoError}</p>}
         <div className="flex gap-3 mb-3">
           <div className="flex-1">
             <label className="label">Your Latitude</label>
-            <input className="input" value={lat} onChange={e => setLat(e.target.value)} />
+            <input className="input" placeholder="e.g. 41.49" value={lat} onChange={e => setLat(e.target.value)} />
           </div>
           <div className="flex-1">
             <label className="label">Your Longitude</label>
-            <input className="input" value={lng} onChange={e => setLng(e.target.value)} />
+            <input className="input" placeholder="e.g. -81.69" value={lng} onChange={e => setLng(e.target.value)} />
           </div>
         </div>
         <button onClick={handleReorder} disabled={reorderLoading} className="btn-primary">
@@ -157,8 +184,8 @@ function Maintenance() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_BASE}/api/maintenance/risk-score`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
-      fetch(`${API_BASE}/api/maintenance/schedule`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
+      fetch(`${API_BASE}/api/maintenance/signals`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
+      fetch(`${API_BASE}/api/maintenance/signals`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
     ])
       .then(([r, s]) => { setRiskData(r); setSchedule(s); })
       .catch(e => setError(e.message))
@@ -252,6 +279,49 @@ function DigitalTwin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Log actual times form
+  const [logForm, setLogForm] = useState({
+    order_id: "", material: "steel", machine_id: "1",
+    actual_setup_minutes: "", actual_processing_minutes: "",
+    provenance: "operator_logged",
+  });
+  const [logSubmitting, setLogSubmitting] = useState(false);
+  const [logResult, setLogResult] = useState(null);
+  const [logError, setLogError] = useState(null);
+
+  const handleLogSubmit = async (e) => {
+    e.preventDefault();
+    setLogSubmitting(true);
+    setLogError(null);
+    setLogResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/learning/feedback`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: logForm.order_id,
+          material: logForm.material,
+          machine_id: parseInt(logForm.machine_id, 10),
+          actual_setup_minutes: parseFloat(logForm.actual_setup_minutes),
+          actual_processing_minutes: parseFloat(logForm.actual_processing_minutes),
+          provenance: logForm.provenance,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail ?? "Log failed");
+      const data = await res.json();
+      setLogResult(`Logged · ${data.canonical_id}`);
+      setLogForm(f => ({ ...f, order_id: "", actual_setup_minutes: "", actual_processing_minutes: "" }));
+      // Refresh calibration report
+      fetch(`${API_BASE}/api/learning/calibration-report`, { credentials: "include" })
+        .then(r => r.ok ? r.json() : null).then(setCalibration).catch(() => {});
+    } catch (err) {
+      setLogError(err.message);
+    } finally {
+      setLogSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     Promise.all([
       fetch(`${API_BASE}/api/learning/setup-time-accuracy`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
@@ -316,41 +386,139 @@ function DigitalTwin() {
         </div>
       )}
 
-      {/* Calibration report */}
-      {calibration?.records?.length > 0 ? (
-        <div className="card">
-          <p className="text-sm font-semibold text-white mb-3">Last {calibration.records.length} Jobs — Predicted vs Actual</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-gray-500 border-b border-gray-800">
-                  <th className="text-left py-2 pr-4">Order</th>
-                  <th className="text-right pr-4">Pred Setup</th>
-                  <th className="text-right pr-4">Actual Setup</th>
-                  <th className="text-right pr-4">Pred Process</th>
-                  <th className="text-right">Actual Process</th>
-                </tr>
-              </thead>
-              <tbody>
-                {calibration.records.slice(0, 10).map((r, i) => (
-                  <tr key={i} className="border-b border-gray-800/50 text-gray-400">
-                    <td className="py-2 pr-4 font-mono text-gray-500 truncate max-w-24">{r.order_id ?? r.canonical_id?.slice(0, 12)}</td>
-                    <td className="text-right pr-4">{r.predicted_setup_minutes?.toFixed(1)}</td>
-                    <td className="text-right pr-4">{r.actual_setup_minutes?.toFixed(1)}</td>
-                    <td className="text-right pr-4">{r.predicted_processing_minutes?.toFixed(1)}</td>
-                    <td className="text-right">{r.actual_processing_minutes?.toFixed(1)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Log actual times form */}
+      <div className="card">
+        <p className="text-sm font-semibold text-white mb-1">Log Actual Job Times</p>
+        <p className="text-xs text-gray-500 mb-4">
+          After a job completes, enter the actual setup and processing times. After 20 records the ML model activates and replaces the physics fallback.
+        </p>
+        <form onSubmit={handleLogSubmit} className="space-y-3">
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div>
+              <label className="label">Order ID</label>
+              <input
+                className="input"
+                placeholder="ORD-001"
+                required
+                value={logForm.order_id}
+                onChange={e => setLogForm(f => ({ ...f, order_id: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label">Material</label>
+              <select
+                className="input"
+                value={logForm.material}
+                onChange={e => setLogForm(f => ({ ...f, material: e.target.value }))}
+              >
+                <option value="steel">Steel</option>
+                <option value="aluminum">Aluminum</option>
+                <option value="titanium">Titanium</option>
+                <option value="copper">Copper</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Machine #</label>
+              <input
+                className="input"
+                type="number"
+                min="1"
+                required
+                value={logForm.machine_id}
+                onChange={e => setLogForm(f => ({ ...f, machine_id: e.target.value }))}
+              />
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="card text-center py-8">
-          <p className="text-gray-500 text-sm">No calibration data yet.</p>
-          <p className="text-xs text-gray-600 mt-1">Calibration improves as jobs complete and actuals are logged via MTConnect or manual entry.</p>
-        </div>
-      )}
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div>
+              <label className="label">Actual Setup (min)</label>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.5"
+                required
+                placeholder="e.g. 25"
+                value={logForm.actual_setup_minutes}
+                onChange={e => setLogForm(f => ({ ...f, actual_setup_minutes: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label">Actual Processing (min)</label>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.5"
+                required
+                placeholder="e.g. 120"
+                value={logForm.actual_processing_minutes}
+                onChange={e => setLogForm(f => ({ ...f, actual_processing_minutes: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label">Source</label>
+              <select
+                className="input"
+                value={logForm.provenance}
+                onChange={e => setLogForm(f => ({ ...f, provenance: e.target.value }))}
+              >
+                <option value="operator_logged">Operator logged</option>
+                <option value="mtconnect_auto">MTConnect auto</option>
+                <option value="estimated">Estimated</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="submit" disabled={logSubmitting} className="btn-primary text-sm">
+              {logSubmitting ? "Logging…" : "Log Times"}
+            </button>
+            {logResult && <p className="text-xs text-green-400">{logResult}</p>}
+            {logError && <p className="text-xs text-red-400">{logError}</p>}
+          </div>
+        </form>
+      </div>
+
+      {/* Calibration report */}
+      {(() => {
+        const rows = calibration?.jobs ?? calibration?.records ?? [];
+        return rows.length > 0 ? (
+          <div className="card">
+            <p className="text-sm font-semibold text-white mb-3">Last {rows.length} Jobs — Predicted vs Actual</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-gray-500 border-b border-gray-800">
+                    <th className="text-left py-2 pr-4">Order</th>
+                    <th className="text-right pr-4">Pred Setup</th>
+                    <th className="text-right pr-4">Actual Setup</th>
+                    <th className="text-right pr-4">Pred Process</th>
+                    <th className="text-right pr-4">Actual Process</th>
+                    <th className="text-right">Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 15).map((r, i) => (
+                    <tr key={i} className="border-b border-gray-800/50 text-gray-400">
+                      <td className="py-2 pr-4 font-mono text-gray-500 truncate max-w-24">{r.order_id ?? r.canonical_id?.slice(0, 12)}</td>
+                      <td className="text-right pr-4">{r.predicted_setup_minutes?.toFixed(1) ?? "—"}</td>
+                      <td className="text-right pr-4">{r.actual_setup_minutes?.toFixed(1) ?? "—"}</td>
+                      <td className="text-right pr-4">{r.predicted_processing_minutes?.toFixed(1) ?? "—"}</td>
+                      <td className="text-right pr-4">{r.actual_processing_minutes?.toFixed(1) ?? "—"}</td>
+                      <td className="text-right text-gray-600 text-xs">{r.data_provenance ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="card text-center py-8">
+            <p className="text-gray-500 text-sm">No calibration data yet.</p>
+            <p className="text-xs text-gray-600 mt-1">Use the form above to log actual job times and start calibrating the twin.</p>
+          </div>
+        );
+      })()}
     </div>
   );
 }

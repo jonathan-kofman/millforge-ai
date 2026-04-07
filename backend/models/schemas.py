@@ -368,13 +368,22 @@ class OrderCreateRequest(BaseModel):
     complexity: float = Field(1.0, ge=0.1, le=5.0)
     due_date: Optional[datetime] = None   # defaults to +14 days
     notes: Optional[str] = None
+    customer_name: Optional[str] = None
+    po_number: Optional[str] = None
+    part_number: Optional[str] = None
 
 
 class OrderUpdateRequest(BaseModel):
     priority: Optional[int] = Field(None, ge=1, le=10)
+    complexity: Optional[float] = Field(None, ge=0.1, le=5.0)
     due_date: Optional[datetime] = None
     status: Optional[str] = Field(None, description="pending|scheduled|in_progress|completed|cancelled")
     notes: Optional[str] = None
+    customer_name: Optional[str] = None
+    po_number: Optional[str] = None
+    part_number: Optional[str] = None
+    dimensions: Optional[str] = None
+    quantity: Optional[int] = Field(None, gt=0)
 
 
 class OrderResponse(BaseModel):
@@ -388,6 +397,9 @@ class OrderResponse(BaseModel):
     due_date: datetime
     status: str
     notes: Optional[str] = None
+    customer_name: Optional[str] = None
+    po_number: Optional[str] = None
+    part_number: Optional[str] = None
     created_by_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -1008,6 +1020,14 @@ class JobResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class JobCreate(BaseModel):
+    title: str = Field(..., min_length=1)
+    material: Optional[str] = None
+    required_machine_type: Optional[str] = None
+    estimated_duration_minutes: Optional[float] = Field(None, gt=0)
+    notes: Optional[str] = None
 
 
 class JobPatch(BaseModel):

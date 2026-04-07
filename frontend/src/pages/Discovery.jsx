@@ -236,7 +236,12 @@ function Patterns({ interviewCount }) {
             {synthMeta && <span className="ml-1 text-gray-500">Last synthesis: {synthMeta.interviews} interviews, {synthMeta.insights} insights.</span>}
           </p>
         </div>
-        <button onClick={handleSynthesize} disabled={synthesizing || interviewCount === 0} className="btn-primary text-sm whitespace-nowrap disabled:opacity-50">
+        <button
+          onClick={handleSynthesize}
+          disabled={synthesizing || interviewCount === 0}
+          className="btn-primary text-sm whitespace-nowrap disabled:opacity-50"
+          title={interviewCount === 0 ? "Log at least one interview before synthesizing" : undefined}
+        >
           {synthesizing ? "Synthesizing…" : "Run Synthesis →"}
         </button>
       </div>
@@ -322,7 +327,12 @@ function NextQuestions({ interviewCount }) {
             Claude generates targeted questions based on what you've learned across {interviewCount} interview{interviewCount !== 1 ? "s" : ""} so far.
           </p>
         </div>
-        <button onClick={handleGenerate} disabled={loading} className="btn-primary text-sm whitespace-nowrap disabled:opacity-50">
+        <button
+          onClick={handleGenerate}
+          disabled={loading || interviewCount === 0}
+          className="btn-primary text-sm whitespace-nowrap disabled:opacity-50"
+          title={interviewCount === 0 ? "Log at least one interview to generate questions" : undefined}
+        >
           {loading ? "Generating…" : "Generate Questions →"}
         </button>
       </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { API_BASE } from "../config";
 
-export default function QCAnalyticsPage() {
+export default function QCAnalyticsPage({ onNavigate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -105,6 +105,14 @@ export default function QCAnalyticsPage() {
           <p className="text-gray-500 text-sm mt-1">
             Submit a QC image from the Jobs tab to see defect analytics here.
           </p>
+          {onNavigate && (
+            <button
+              className="btn-primary text-sm mt-4"
+              onClick={() => onNavigate("jobs")}
+            >
+              Go to Jobs
+            </button>
+          )}
         </div>
       )}
 

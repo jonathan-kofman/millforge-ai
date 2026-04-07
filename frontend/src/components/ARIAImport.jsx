@@ -136,7 +136,7 @@ function QuoteCard({ quote }) {
 // ---------------------------------------------------------------------------
 
 function JSONImportTab({ onResult }) {
-  const [json, setJson] = useState(EXAMPLE_CATALOG);
+  const [json, setJson] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [dueDays, setDueDays] = useState(14);
   const [loading, setLoading] = useState(false);
@@ -170,6 +170,7 @@ function JSONImportTab({ onResult }) {
         className="input font-mono text-xs"
         rows={12}
         value={json}
+        placeholder={EXAMPLE_CATALOG}
         onChange={(e) => setJson(e.target.value)}
       />
       <div className="flex gap-3">

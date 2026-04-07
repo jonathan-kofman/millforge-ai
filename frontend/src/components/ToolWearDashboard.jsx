@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { API_BASE } from "../config";
 import {
   LineChart,
   Line,
@@ -136,12 +137,12 @@ export default function ToolWearDashboard() {
   const [history, setHistory] = useState(null); // { tool_id, scores }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [registerForm, setRegisterForm] = useState({ tool_id: "", machine_id: 1, tool_type: "end_mill", material: "steel" });
+  const [registerForm, setRegisterForm] = useState({ tool_id: "", machine_id: 1, tool_type: "end_mill", material: "steel", expected_life_minutes: 480 });
   const [showRegister, setShowRegister] = useState(false);
 
   const fetchTools = useCallback(async () => {
     try {
-      const res = await fetch("/api/toolwear/tools", { credentials: "include" });
+      const res = await fetch(`${API_BASE}/api/toolwear/tools`, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       setTools(await res.json());
     } catch (e) {
@@ -155,7 +156,7 @@ export default function ToolWearDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/toolwear/simulate/${toolId}?steps=40`, {
+      const res = await fetch(`${API_BASE}/api/toolwear/simulate/${toolId}?steps=40`, {
         method: "POST",
         credentials: "include",
       });
@@ -174,7 +175,7 @@ export default function ToolWearDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/toolwear/reset/${toolId}`, {
+      const res = await fetch(`${API_BASE}/api/toolwear/reset/${toolId}`, {
         method: "POST",
         credentials: "include",
       });
@@ -193,19 +194,19 @@ export default function ToolWearDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/toolwear/tools", {
+      const res = await fetch(`${API_BASE}/api/toolwear/tools`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...registerForm,
           machine_id: parseInt(registerForm.machine_id),
-          expected_life_minutes: 480,
+          expected_life_minutes: parseInt(registerForm.expected_life_minutes) || 480,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       setShowRegister(false);
-      setRegisterForm({ tool_id: "", machine_id: 1, tool_type: "end_mill", material: "steel" });
+      setRegisterForm({ tool_id: "", machine_id: 1, tool_type: "end_mill", material: "steel", expected_life_minutes: 480 });
       await fetchTools();
     } catch (e) {
       setError(e.message);
@@ -297,6 +298,16 @@ export default function ToolWearDashboard() {
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="label">Expected Life (minutes)</label>
+            <input
+              className="input"
+              type="number"
+              min="1"
+              value={registerForm.expected_life_minutes}
+              onChange={(e) => setRegisterForm((p) => ({ ...p, expected_life_minutes: e.target.value }))}
+            />
           </div>
           <div className="col-span-2 flex gap-2">
             <button type="submit" className="btn-primary" disabled={loading}>

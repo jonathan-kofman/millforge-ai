@@ -85,6 +85,7 @@ class SupplierDirectory:
         self,
         db: Session,
         *,
+        name: Optional[str] = None,
         material: Optional[str] = None,
         category: Optional[str] = None,
         state: Optional[str] = None,
@@ -97,6 +98,9 @@ class SupplierDirectory:
 
         if verified_only:
             q = q.filter(Supplier.verified.is_(True))
+
+        if name:
+            q = q.filter(Supplier.name.ilike(f"%{name}%"))
 
         if state:
             q = q.filter(Supplier.state.ilike(state))

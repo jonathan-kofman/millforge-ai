@@ -58,6 +58,10 @@ def _apply_column_migrations() -> None:
         # Tool presetter columns
         "ALTER TABLE tool_records ADD COLUMN measured_length_mm FLOAT",
         "ALTER TABLE tool_records ADD COLUMN measured_diameter_mm FLOAT",
+        # Order customer tracking fields
+        "ALTER TABLE orders ADD COLUMN customer_name VARCHAR(255)",
+        "ALTER TABLE orders ADD COLUMN po_number VARCHAR(100)",
+        "ALTER TABLE orders ADD COLUMN part_number VARCHAR(100)",
     ]
     for sql in migrations:
         # Use a fresh connection per migration — on Postgres, a failed DDL statement

@@ -66,8 +66,29 @@ export default function MachinesPage() {
 
   const handleDelete = async (id) => {
     if (!window.confirm("Remove this machine?")) return;
-    await fetch(`${API_BASE}/api/machines/${id}`, { method: "DELETE", credentials: "include" });
+    try {
+      const res = await fetch(`${API_BASE}/api/machines/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+    } catch (e) {
+      setError(e.message);
+      return;
+    }
     fetchMachines();
+  };
+
+  const handleToggleAvailable = async (m) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/machines/${m.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ is_available: !m.is_available }),
+      });
+      if (!res.ok) throw new Error(`Update failed (${res.status})`);
+      fetchMachines();
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const MACHINE_TYPE_COLORS = {
@@ -109,9 +130,13 @@ export default function MachinesPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>
                       {m.machine_type}
                     </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${m.is_available ? "bg-green-900 text-green-300" : "bg-gray-700 text-gray-400"}`}>
+                    <button
+                      onClick={() => handleToggleAvailable(m)}
+                      title="Click to toggle availability"
+                      className={`text-xs px-2 py-0.5 rounded-full transition-colors cursor-pointer ${m.is_available ? "bg-green-900 text-green-300 hover:bg-red-900 hover:text-red-300" : "bg-gray-700 text-gray-400 hover:bg-green-900 hover:text-green-300"}`}
+                    >
                       {m.is_available ? "available" : "unavailable"}
-                    </span>
+                    </button>
                   </div>
                 </div>
                 {m.notes && <p className="text-xs text-gray-400">{m.notes}</p>}

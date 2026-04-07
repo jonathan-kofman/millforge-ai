@@ -143,7 +143,7 @@ export default function EnergyWidget() {
             />
           </div>
           <SparkLine rates={rates} />
-          <p className="text-xs text-gray-600">{ratesLive ? "EIA live 24-hour curve" : "24-hour pricing curve (simulated)"}</p>
+          <p className={`text-xs ${ratesLive ? "text-gray-500" : "text-yellow-500"}`}>{ratesLive ? "EIA live 24-hour curve" : "Simulated data — EIA key not configured"}</p>
         </div>
 
         {/* Best window card */}

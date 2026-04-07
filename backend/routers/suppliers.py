@@ -34,6 +34,7 @@ _directory = SupplierDirectory()
     summary="List and search suppliers",
 )
 async def list_suppliers(
+    name: Optional[str] = Query(None, description="Filter by supplier name (partial match)"),
     material: Optional[str] = Query(None, description="Filter by material (e.g. steel, aluminum)"),
     category: Optional[str] = Query(None, description="Filter by category (metals, plastics, composites, wood, raw_materials)"),
     state: Optional[str] = Query(None, description="Filter by US state abbreviation (e.g. OH, PA)"),
@@ -44,6 +45,7 @@ async def list_suppliers(
 ) -> SupplierListResponse:
     suppliers, total = _directory.search(
         db,
+        name=name,
         material=material,
         category=category,
         state=state,

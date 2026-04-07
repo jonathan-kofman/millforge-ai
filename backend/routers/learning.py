@@ -2,7 +2,10 @@
 /api/learning — setup time ML accuracy and job feedback calibration report.
 """
 
+from typing import Literal, Optional
+
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from agents.setup_time_predictor import SetupTimePredictor
@@ -15,6 +18,17 @@ _predictor = SetupTimePredictor()
 _feedback_logger = FeedbackLogger()
 
 
+class FeedbackLogRequest(BaseModel):
+    order_id: str
+    material: str
+    machine_id: int = Field(ge=1)
+    actual_setup_minutes: float = Field(ge=0)
+    actual_processing_minutes: float = Field(ge=0)
+    predicted_setup_minutes: float = Field(default=0.0, ge=0)
+    predicted_processing_minutes: float = Field(default=0.0, ge=0)
+    provenance: Literal["operator_logged", "mtconnect_auto", "estimated"] = "operator_logged"
+
+
 @router.get("/setup-time-accuracy", summary="Setup time ML model accuracy")
 async def setup_time_accuracy():
     """
@@ -23,6 +37,27 @@ async def setup_time_accuracy():
     When untrained (<20 feedback records), reports fallback to SETUP_MATRIX.
     """
     return _predictor.accuracy_report()
+
+
+@router.post("/feedback", summary="Log actual job times for scheduling twin calibration")
+async def log_feedback(req: FeedbackLogRequest, db: Session = Depends(get_db)):
+    """
+    Operator-submitted actual setup and processing times for a completed job.
+    Used to calibrate the RandomForest setup time predictor.
+    Requires 20+ records before the ML model activates (falls back to SETUP_MATRIX until then).
+    """
+    record = _feedback_logger.log(
+        db,
+        order_id=req.order_id,
+        material=req.material,
+        machine_id=req.machine_id,
+        predicted_setup_minutes=req.predicted_setup_minutes,
+        actual_setup_minutes=req.actual_setup_minutes,
+        predicted_processing_minutes=req.predicted_processing_minutes,
+        actual_processing_minutes=req.actual_processing_minutes,
+        provenance=req.provenance,
+    )
+    return {"status": "logged", "canonical_id": record.canonical_id}
 
 
 @router.get("/calibration-report", summary="Predicted vs actual job metrics (last 50 jobs)")

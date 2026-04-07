@@ -112,24 +112,32 @@ def test_all_materials_accepted(client):
 # ---------------------------------------------------------------------------
 
 def test_no_discount_below_500(client):
-    """quantity < 500 → no discount; unit_price_usd should equal UNIT_PRICE['steel']."""
-    data = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 100}).json()
-    assert abs(data["unit_price_usd"] - 2.50) < 0.001
+    """quantity < 500 → no discount; 5% discount at 500 → ratio should be ~0.95."""
+    base = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 100}).json()
+    discounted = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 500}).json()
+    assert base["unit_price_usd"] > 0
+    assert abs(discounted["unit_price_usd"] / base["unit_price_usd"] - 0.95) < 0.001
 
 
 def test_five_percent_discount_at_500(client):
+    """500 units → 5% off vs. 100 units (no discount)."""
+    base = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 100}).json()
     data = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 500}).json()
-    assert abs(data["unit_price_usd"] - 2.50 * 0.95) < 0.001
+    assert abs(data["unit_price_usd"] / base["unit_price_usd"] - 0.95) < 0.001
 
 
 def test_ten_percent_discount_at_1000(client):
+    """1000 units → 10% off vs. 100 units (no discount)."""
+    base = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 100}).json()
     data = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 1000}).json()
-    assert abs(data["unit_price_usd"] - 2.50 * 0.90) < 0.001
+    assert abs(data["unit_price_usd"] / base["unit_price_usd"] - 0.90) < 0.001
 
 
 def test_twenty_percent_discount_at_10000(client):
+    """10000 units → 20% off vs. 100 units (no discount)."""
+    base = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 100}).json()
     data = post_quote(client, {**VALID_PAYLOAD, "material": "steel", "quantity": 10000}).json()
-    assert abs(data["unit_price_usd"] - 2.50 * 0.80) < 0.001
+    assert abs(data["unit_price_usd"] / base["unit_price_usd"] - 0.80) < 0.001
 
 
 def test_discount_note_present_for_large_order(client):
