@@ -15,8 +15,8 @@ function Inventory() {
   const [loading, setLoading] = useState(true);
   const [reorderLoading, setReorderLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [lat, setLat] = useState("41.49");
-  const [lng, setLng] = useState("-81.69");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
 
   useEffect(() => {
     fetch(`${API_BASE}/api/inventory/status`, { credentials: "include" })
@@ -30,7 +30,8 @@ function Inventory() {
     setReorderLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ lat, lng, radius_miles: "500" });
+      const params = new URLSearchParams({ radius_miles: "500" });
+      if (lat && lng) { params.set("lat", lat); params.set("lng", lng); }
       const res = await fetch(`${API_BASE}/api/inventory/reorder-with-suppliers?${params}`, {
         credentials: "include",
       });

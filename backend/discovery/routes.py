@@ -5,7 +5,7 @@ All write endpoints require JWT auth (httpOnly cookie).
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -31,17 +31,18 @@ class InterviewCreate(BaseModel):
 
 
 class InsightOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     category: str
     content: str
     severity: int
     quote: Optional[str]
 
-    class Config:
-        from_attributes = True
-
 
 class InterviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     contact_name: str
     shop_name: str
@@ -51,11 +52,10 @@ class InterviewOut(BaseModel):
     created_at: str
     insight_count: int
 
-    class Config:
-        from_attributes = True
-
 
 class InterviewDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     contact_name: str
     shop_name: str
@@ -66,11 +66,10 @@ class InterviewDetail(BaseModel):
     created_at: str
     insights: list[InsightOut]
 
-    class Config:
-        from_attributes = True
-
 
 class PatternOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     label: str
     insight_ids: list
@@ -78,9 +77,6 @@ class PatternOut(BaseModel):
     evidence_quotes: list
     feature_tag: str
     created_at: str
-
-    class Config:
-        from_attributes = True
 
 
 class NextQuestion(BaseModel):

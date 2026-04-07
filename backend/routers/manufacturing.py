@@ -30,8 +30,13 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+import json as _json
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from database import get_db
 
 from manufacturing.bridge import bootstrap_registry
 from manufacturing.ontology import (
@@ -500,7 +505,7 @@ async def validate_manufacturing_intent(body: ManufacturingIntentRequest) -> Val
     response_model=WorkOrderOut,
     summary="Create a WorkOrder from a ManufacturingIntent",
 )
-async def create_work_order(body: WorkOrderRequest) -> WorkOrderOut:
+async def create_work_order(body: WorkOrderRequest, db: Session = Depends(get_db)) -> WorkOrderOut:
     """
     Route the intent and create a WorkOrder from the best match.
 
@@ -605,7 +610,7 @@ async def create_work_order(body: WorkOrderRequest) -> WorkOrderOut:
         total_estimated_cost_usd=selected.estimated_cost_usd,
     )
 
-    return WorkOrderOut(
+    out = WorkOrderOut(
         work_order_id=work_order.work_order_id,
         part_id=intent.part_id,
         part_name=intent.part_name,
@@ -628,18 +633,48 @@ async def create_work_order(body: WorkOrderRequest) -> WorkOrderOut:
         created_at=work_order.created_at,
     )
 
+    # Persist to DB
+    try:
+        from db_models import WorkOrderRecord
+        record = WorkOrderRecord(
+            work_order_id=out.work_order_id,
+            part_id=out.part_id,
+            status=out.status,
+            priority=out.priority,
+            payload_json=_json.dumps(out.model_dump(mode="json")),
+        )
+        db.add(record)
+        db.commit()
+    except Exception as exc:
+        logger.warning("Failed to persist work order %s: %s", out.work_order_id, exc)
+
+    return out
+
 
 @router.get(
     "/work-orders",
     response_model=List[Dict[str, Any]],
-    summary="List work orders (placeholder — no DB persistence yet)",
+    summary="List work orders",
 )
-async def list_work_orders() -> List[Dict[str, Any]]:
-    """
-    Placeholder endpoint — returns empty list until a WorkOrder DB model
-    is added. Will be wired to the DB in a future iteration.
-    """
-    return []
+async def list_work_orders(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """Return work orders created via POST /work-order, most recent first."""
+    try:
+        from db_models import WorkOrderRecord
+        rows = (
+            db.query(WorkOrderRecord)
+            .order_by(WorkOrderRecord.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return [_json.loads(r.payload_json) for r in rows]
+    except Exception as exc:
+        logger.warning("Failed to list work orders: %s", exc)
+        return []
 
 
 @router.post(

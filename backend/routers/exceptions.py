@@ -118,14 +118,14 @@ async def exception_summary(db: Session = Depends(get_db)):
     "/{exc_id:path}/resolve",
     summary="Mark an exception resolved",
 )
-async def resolve_exception(exc_id: str):
+async def resolve_exception(exc_id: str, db: Session = Depends(get_db)):
     """
     Mark an exception as resolved. It will no longer appear in the default
     (unresolved) list. Pass `?include_resolved=true` to see it.
 
     Idempotent — resolving an already-resolved exception is a no-op.
     """
-    mark_resolved(exc_id)
+    mark_resolved(exc_id, db=db)
     return {"id": exc_id, "resolved": True}
 
 
@@ -133,10 +133,10 @@ async def resolve_exception(exc_id: str):
     "/{exc_id:path}/unresolve",
     summary="Reopen a resolved exception",
 )
-async def unresolve_exception(exc_id: str):
+async def unresolve_exception(exc_id: str, db: Session = Depends(get_db)):
     """
     Reopen a previously resolved exception. Useful when a fix didn't hold
     (e.g. a machine faulted again after reset).
     """
-    was_resolved = mark_unresolved(exc_id)
+    was_resolved = mark_unresolved(exc_id, db=db)
     return {"id": exc_id, "resolved": False, "was_resolved": was_resolved}

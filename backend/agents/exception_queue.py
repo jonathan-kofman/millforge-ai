@@ -22,9 +22,9 @@ Each exception carries:
   - occurred_at  ISO timestamp
   - resolved     bool (default False; set via PATCH /api/exceptions/{id}/resolve)
 
-Resolution is stored in an in-process dict (survives for the server lifetime).
-For a real deployment, persist to a DB table. The architecture makes that easy —
-swap `_resolutions` for a DB query without touching the aggregator logic.
+Resolutions are persisted to the `exception_resolutions` DB table and cached in
+`_resolutions` for fast in-process lookups. On first gather(), the cache is
+warm-loaded from DB so resolutions survive server restarts.
 """
 
 from __future__ import annotations
@@ -36,29 +36,63 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# In-process resolution store (keyed by exception_id → resolved_at ISO string)
+# Resolution store — in-process cache backed by DB
+# (keyed by exception_id → resolved_at ISO string)
 # ---------------------------------------------------------------------------
 _resolutions: Dict[str, str] = {}
+_db_synced: bool = False  # True after first DB warm-load
+
+
+def _sync_from_db(db) -> None:
+    """Load DB resolutions into the in-memory cache (runs once per process)."""
+    global _db_synced
+    if _db_synced:
+        return
+    try:
+        from db_models import ExceptionResolution
+        rows = db.query(ExceptionResolution).all()
+        for row in rows:
+            _resolutions[row.exc_id] = row.resolved_at
+        _db_synced = True
+    except Exception as exc:
+        logger.warning("Failed to sync exception resolutions from DB: %s", exc)
 
 
 def _is_resolved(exc_id: str) -> bool:
     return exc_id in _resolutions
 
 
-def mark_resolved(exc_id: str) -> bool:
-    """Mark an exception as resolved. Returns True if it existed, False if unknown."""
+def mark_resolved(exc_id: str, db=None) -> bool:
+    """Mark an exception as resolved. Persists to DB if db session provided."""
     if exc_id in _resolutions:
         return True
     _resolutions[exc_id] = datetime.now(timezone.utc).isoformat()
+    if db is not None:
+        try:
+            from db_models import ExceptionResolution
+            if not db.query(ExceptionResolution).filter(ExceptionResolution.exc_id == exc_id).first():
+                db.add(ExceptionResolution(exc_id=exc_id, resolved_at=_resolutions[exc_id]))
+                db.commit()
+        except Exception as exc:
+            logger.warning("Failed to persist exception resolution: %s", exc)
     logger.info("Exception resolved: %s", exc_id)
     return True
 
 
-def mark_unresolved(exc_id: str) -> bool:
+def mark_unresolved(exc_id: str, db=None) -> bool:
     """Reopen a previously resolved exception. Returns True if it was resolved."""
     if exc_id not in _resolutions:
         return False
     del _resolutions[exc_id]
+    if db is not None:
+        try:
+            from db_models import ExceptionResolution
+            row = db.query(ExceptionResolution).filter(ExceptionResolution.exc_id == exc_id).first()
+            if row:
+                db.delete(row)
+                db.commit()
+        except Exception as exc:
+            logger.warning("Failed to remove exception resolution from DB: %s", exc)
     logger.info("Exception re-opened: %s", exc_id)
     return True
 
@@ -158,6 +192,8 @@ class ExceptionQueueAgent:
         -------
         List[ExceptionItem] sorted by (severity, occurred_at desc)
         """
+        _sync_from_db(db)
+
         collectors = [
             self._machine_faults,
             self._held_orders,
