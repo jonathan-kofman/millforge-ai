@@ -47,6 +47,13 @@ from routers.aria_bridge import router as aria_bridge_router
 from routers.demo_chain import router as demo_chain_router
 from routers.toolwear import router as toolwear_router
 from routers.aria_scan import router as aria_scan_router
+# Quality & Compliance modules
+from routers.mtr import router as mtr_router
+from routers.drawing import router as drawing_router
+from routers.logbook import router as logbook_router
+from routers.as9100 import router as as9100_router
+from routers.inserts import router as inserts_router
+from routers.presetter import router as presetter_router
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
@@ -217,6 +224,13 @@ app.include_router(aria_bridge_router)
 app.include_router(demo_chain_router)
 app.include_router(toolwear_router)
 app.include_router(aria_scan_router)
+# Quality & Compliance modules
+app.include_router(mtr_router)
+app.include_router(drawing_router)
+app.include_router(logbook_router)
+app.include_router(as9100_router)
+app.include_router(inserts_router)
+app.include_router(presetter_router)
 
 
 # ---------------------------------------------------------------------------

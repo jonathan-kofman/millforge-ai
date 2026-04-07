@@ -25,6 +25,8 @@ onnxruntime>=1.17.0
 anthropic>=0.40.0
 # PDF export
 reportlab>=4.0.0
+# PDF processing (quality modules)
+pdfplumber>=0.10.0
 # Rate limiting
 slowapi==0.1.9
 # Testing

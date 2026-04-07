@@ -34,7 +34,15 @@ def get_db():
 def init_db() -> None:
     """Create all tables. Called at app startup."""
     # Import here so all models are registered on Base.metadata
-    from db_models import User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission, MachineStateLog, JobFeedbackRecord, InventoryStock, Supplier, Job, Machine, QCResult, ToolRecord, SensorReading  # noqa: F401
+    from db_models import (  # noqa: F401
+        User, OrderRecord, ScheduleRun, InspectionRecord, ContactSubmission,
+        MachineStateLog, JobFeedbackRecord, InventoryStock, Supplier, Job,
+        Machine, QCResult, ToolRecord, SensorReading,
+        # Quality & Compliance modules
+        MaterialCert, DrawingInspection, LogbookEntry, LogbookAISummary,
+        AS9100Clause, AS9100ComplianceStatus, AS9100Procedure, AS9100AuditTrail,
+        ToolingInsert, ToolPresetMeasurement,
+    )
     from discovery.models import Interview, Insight, DiscoveryPattern  # noqa: F401
     Base.metadata.create_all(bind=engine)
     _apply_column_migrations()
@@ -47,6 +55,9 @@ def _apply_column_migrations() -> None:
         "ALTER TABLE shop_configs ADD COLUMN shifts_per_day INTEGER DEFAULT 2",
         "ALTER TABLE shop_configs ADD COLUMN hours_per_shift INTEGER DEFAULT 8",
         "ALTER TABLE suppliers ADD COLUMN lead_time_days INTEGER DEFAULT 7",
+        # Tool presetter columns
+        "ALTER TABLE tool_records ADD COLUMN measured_length_mm FLOAT",
+        "ALTER TABLE tool_records ADD COLUMN measured_diameter_mm FLOAT",
     ]
     for sql in migrations:
         # Use a fresh connection per migration — on Postgres, a failed DDL statement

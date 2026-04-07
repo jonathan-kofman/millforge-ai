@@ -25,6 +25,7 @@ import NLSchedulerPage from "./components/NLSchedulerPage";
 import ToolWearDashboard from "./components/ToolWearDashboard";
 import ToolAwareSchedule from "./components/ToolAwareSchedule";
 import ARIAImport from "./components/ARIAImport";
+import QualityHub from "./components/quality/QualityHub";
 import { API_BASE } from "./config";
 
 const PUBLIC_TABS = [
@@ -51,6 +52,7 @@ const AUTH_TABS = [
   { id: "tool-schedule",  label: "Tool-Aware Schedule" },
   { id: "aria-import",    label: "Import from Scan" },
   { id: "discovery",      label: "Discovery" },
+  { id: "quality",        label: "Quality & Compliance" },
 ];
 
 export default function App() {
@@ -443,6 +445,7 @@ export default function App() {
         {activeTab === "contact"        && <ContactForm />}
         {activeTab === "dashboard"      && user && <DashboardPage />}
         {activeTab === "discovery"      && user && <Discovery />}
+        {activeTab === "quality"        && user && <QualityHub />}
         {activeTab === "jobs"           && user && <JobsPage />}
         {activeTab === "machines"       && user && <MachinesPage />}
         {activeTab === "analytics"      && user && <QCAnalyticsPage />}
