@@ -15,7 +15,7 @@ export default function QualityOverview() {
       fetch(`${API_BASE}/api/quality/drawing?limit=5`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : []))
         .catch(() => []),
-      fetch(`${API_BASE}/api/quality/as9100/readiness?user_id=1`, { credentials: "include" })
+      fetch(`${API_BASE}/api/quality/as9100/readiness`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
     ]).then(([m, d, r]) => {
@@ -26,7 +26,7 @@ export default function QualityOverview() {
     });
   }, []);
 
-  if (loading) return <div className="p-6 text-forge-300">Loading quality overview...</div>;
+  if (loading) return <div className="p-6 text-gray-500 animate-pulse">Loading...</div>;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">

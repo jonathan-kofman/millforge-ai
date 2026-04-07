@@ -93,7 +93,7 @@ export default function App() {
       await fetch(`${API_BASE}/api/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: captureEmail, email: captureEmail, message: "Requested sample report", source: "email_capture" }),
+        body: JSON.stringify({ name: captureEmail.split("@")[0], email: captureEmail, message: "Requested sample report", source: "email_capture" }),
       });
     } catch {}
     setCaptureSubmitted(true);

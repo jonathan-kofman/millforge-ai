@@ -61,7 +61,7 @@ export default function PricingPage() {
       ? n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
       : "—";
 
-  if (loading) return <p className="text-gray-500 text-center py-10">Loading pricing...</p>;
+  if (loading) return <p className="text-gray-500 text-center py-10 animate-pulse">Loading...</p>;
 
   return (
     <div className="space-y-16">

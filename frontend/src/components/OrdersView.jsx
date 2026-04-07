@@ -14,8 +14,8 @@ const STATUS_COLORS = {
 const MATERIALS = ["steel", "aluminum", "titanium", "copper"];
 
 const BLANK_FORM = {
-  material: "steel", dimensions: "200x100x10mm",
-  quantity: 100, priority: 5, notes: "",
+  material: "steel", dimensions: "",
+  quantity: "", priority: 5, notes: "",
 };
 
 export default function OrdersView() {
@@ -142,13 +142,13 @@ export default function OrdersView() {
       </div>
 
       {error && (
-        <div className="mt-4 p-3 bg-red-900/40 border border-red-700 rounded-lg text-red-300 text-sm">
+        <div className="mt-4 alert-error">
           {error}
         </div>
       )}
 
       {scheduleError && (
-        <div className="mt-4 p-3 bg-red-900/40 border border-red-700 rounded-lg text-red-300 text-sm">
+        <div className="mt-4 alert-error">
           Schedule error: {scheduleError}
         </div>
       )}

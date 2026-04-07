@@ -5,11 +5,12 @@ export default function AS9100Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [syncMessage, setSyncMessage] = useState(null);
   const [initializing, setInitializing] = useState(false);
 
   const loadDashboard = () => {
     setLoading(true);
-    fetch(`${API_BASE}/api/quality/as9100/dashboard?user_id=1`, { credentials: "include" })
+    fetch(`${API_BASE}/api/quality/as9100/dashboard`, { credentials: "include" })
       .then((r) => {
         if (r.ok) return r.json();
         throw new Error("Not initialized");
@@ -30,7 +31,7 @@ export default function AS9100Dashboard() {
     setInitializing(true);
     setError(null);
     try {
-      await fetch(`${API_BASE}/api/quality/as9100/initialize?user_id=1`, {
+      await fetch(`${API_BASE}/api/quality/as9100/initialize`, {
         method: "POST", credentials: "include",
       });
       loadDashboard();
@@ -42,13 +43,14 @@ export default function AS9100Dashboard() {
   };
 
   const syncEvidence = async () => {
+    setSyncMessage(null);
     try {
-      const res = await fetch(`${API_BASE}/api/quality/as9100/sync?user_id=1`, {
+      const res = await fetch(`${API_BASE}/api/quality/as9100/sync`, {
         method: "POST", credentials: "include",
       });
       if (res.ok) {
         const data = await res.json();
-        alert(`Synced: ${data.ingested.mtr} MTRs, ${data.ingested.inspection} inspections, ${data.ingested.logbook} logbook entries`);
+        setSyncMessage(`Synced: ${data.ingested.mtr} MTRs, ${data.ingested.inspection} inspections, ${data.ingested.logbook} logbook entries`);
         loadDashboard();
       }
     } catch (e) {
@@ -56,7 +58,7 @@ export default function AS9100Dashboard() {
     }
   };
 
-  if (loading) return <div className="p-6 text-forge-300">Loading AS9100 dashboard...</div>;
+  if (loading) return <div className="p-6 text-gray-500 animate-pulse">Loading...</div>;
 
   if (!dashboard || dashboard.total_clauses === 0) {
     return (
@@ -91,6 +93,9 @@ export default function AS9100Dashboard() {
           Sync Evidence from Modules
         </button>
       </div>
+
+      {error && <div className="alert-error">{error}</div>}
+      {syncMessage && <div className="alert-success">{syncMessage}</div>}
 
       {/* Progress Bar */}
       <div className="card p-6">

@@ -28,11 +28,11 @@ const SUB_TABS = [
 
 function ProcessRouter() {
   const [form, setForm] = useState({
-    part_id: "PART-001",
-    part_name: "Test Bracket",
-    material_name: "aluminum",
-    material_family: "non_ferrous",
-    target_quantity: 100,
+    part_id: "",
+    part_name: "",
+    material_name: "steel",
+    material_family: "ferrous",
+    target_quantity: "",
     tolerance_class: "ISO_2768_m",
     priority: 5,
   });

@@ -17,21 +17,21 @@ const EXAMPLE_CATALOG = JSON.stringify(
 );
 
 const ALERT_COLORS = {
-  GREEN: "text-green-700 bg-green-50 border-green-200",
-  YELLOW: "text-yellow-700 bg-yellow-50 border-yellow-200",
-  RED: "text-red-700 bg-red-50 border-red-200",
-  CRITICAL: "text-purple-700 bg-purple-50 border-purple-200",
+  GREEN: "text-green-400 bg-green-900/30 border-green-700",
+  YELLOW: "text-yellow-400 bg-yellow-900/30 border-yellow-700",
+  RED: "text-red-400 bg-red-900/30 border-red-700",
+  CRITICAL: "text-purple-400 bg-purple-900/30 border-purple-700",
 };
 
 function ComplexityBadge({ value }) {
   const color =
     value >= 4.0
-      ? "bg-red-100 text-red-700"
+      ? "bg-red-900/40 text-red-400"
       : value >= 3.0
-      ? "bg-yellow-100 text-yellow-700"
+      ? "bg-yellow-900/40 text-yellow-400"
       : value >= 2.0
-      ? "bg-blue-100 text-blue-700"
-      : "bg-green-100 text-green-700";
+      ? "bg-blue-900/40 text-blue-400"
+      : "bg-green-900/40 text-green-400";
   return (
     <span className={`text-xs font-semibold px-2 py-0.5 rounded ${color}`}>
       {value.toFixed(1)}×
@@ -41,43 +41,43 @@ function ComplexityBadge({ value }) {
 
 function PartSummaryCard({ summary }) {
   return (
-    <div className="card border border-gray-200 p-4 space-y-2">
+    <div className="card p-4 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-sm font-bold text-gray-900">
+        <span className="font-mono text-sm font-bold text-gray-100">
           {summary.part_id}
         </span>
         <span
           className={`text-xs px-2 py-0.5 rounded border ${
             summary.material_valid
-              ? "bg-green-50 border-green-200 text-green-700"
-              : "bg-red-50 border-red-200 text-red-700"
+              ? "bg-green-900/30 border-green-700 text-green-400"
+              : "bg-red-900/30 border-red-700 text-red-400"
           }`}
         >
           {summary.material_mapped}
           {!summary.material_valid && " (unmapped)"}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-400">
         <span>
-          <span className="text-gray-400">Dimensions</span>{" "}
+          <span className="text-gray-500">Dimensions</span>{" "}
           {summary.dimensions}
         </span>
         <span>
-          <span className="text-gray-400">Volume</span>{" "}
+          <span className="text-gray-500">Volume</span>{" "}
           {summary.volume_mm3 != null
             ? `${(summary.volume_mm3 / 1000).toFixed(1)} cm³`
             : "—"}
         </span>
         <span className="flex items-center gap-1">
-          <span className="text-gray-400">Complexity</span>{" "}
+          <span className="text-gray-500">Complexity</span>{" "}
           <ComplexityBadge value={summary.complexity} />
         </span>
         <span>
-          <span className="text-gray-400">Features</span>{" "}
+          <span className="text-gray-500">Features</span>{" "}
           {summary.feature_count}
         </span>
         <span className="col-span-2">
-          <span className="text-gray-400">Machining est.</span>{" "}
+          <span className="text-gray-500">Machining est.</span>{" "}
           {summary.estimated_machining_minutes.toFixed(0)} min
         </span>
       </div>
@@ -86,7 +86,7 @@ function PartSummaryCard({ summary }) {
           {summary.primitive_types.map((t, i) => (
             <span
               key={i}
-              className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded"
+              className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded"
             >
               {t}
             </span>
@@ -99,8 +99,8 @@ function PartSummaryCard({ summary }) {
 
 function QuoteCard({ quote }) {
   return (
-    <div className="card border border-blue-200 bg-blue-50 p-4 space-y-3">
-      <div className="text-sm font-semibold text-blue-900">Instant Quote</div>
+    <div className="card border-blue-700 bg-blue-900/20 p-4 space-y-3">
+      <div className="text-sm font-semibold text-blue-300">Instant Quote</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Unit price", value: `$${quote.unit_price_usd.toFixed(2)}` },
@@ -118,12 +118,12 @@ function QuoteCard({ quote }) {
           },
         ].map(({ label, value }) => (
           <div key={label} className="text-center">
-            <div className="text-lg font-bold text-blue-800">{value}</div>
-            <div className="text-xs text-blue-600">{label}</div>
+            <div className="text-lg font-bold text-blue-200">{value}</div>
+            <div className="text-xs text-blue-400">{label}</div>
           </div>
         ))}
       </div>
-      <div className="text-xs text-blue-700">
+      <div className="text-xs text-blue-400">
         Quote valid until{" "}
         {new Date(quote.valid_until).toLocaleDateString()}
       </div>
@@ -195,7 +195,7 @@ function JSONImportTab({ onResult }) {
         </div>
       </div>
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+        <div className="text-sm text-red-400 bg-red-900/30 border border-red-700 rounded p-2">
           {error}
         </div>
       )}
@@ -266,7 +266,7 @@ function STLUploadTab({ onResult }) {
           ref={fileRef}
           type="file"
           accept=".stl"
-          className="block w-full text-sm text-gray-600 file:mr-4 file:py-1 file:px-3 file:rounded file:border file:border-gray-300 file:text-sm file:bg-white file:text-gray-700 hover:file:bg-gray-50"
+          className="block w-full text-sm text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded file:border file:border-gray-600 file:text-sm file:bg-gray-800 file:text-gray-300 hover:file:bg-gray-700"
         />
       </div>
       <div className="flex gap-3">
@@ -296,7 +296,7 @@ function STLUploadTab({ onResult }) {
         </div>
       </div>
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+        <div className="text-sm text-red-400 bg-red-900/30 border border-red-700 rounded p-2">
           {error}
         </div>
       )}
@@ -366,7 +366,7 @@ function BatchImportTab() {
         onChange={(e) => setJson(e.target.value)}
       />
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+        <div className="text-sm text-red-400 bg-red-900/30 border border-red-700 rounded p-2">
           {error}
         </div>
       )}
@@ -376,17 +376,17 @@ function BatchImportTab() {
       {result && (
         <div className="space-y-2 mt-2">
           <div className="flex gap-4 text-sm">
-            <span className="text-green-700 font-semibold">
+            <span className="text-green-400 font-semibold">
               ✓ {result.imported} imported
             </span>
             {result.skipped > 0 && (
-              <span className="text-red-600 font-semibold">
+              <span className="text-red-400 font-semibold">
                 ✗ {result.skipped} skipped
               </span>
             )}
           </div>
           {result.skipped_details?.length > 0 && (
-            <div className="text-xs text-red-600 space-y-1">
+            <div className="text-xs text-red-400 space-y-1">
               {result.skipped_details.map((s, i) => (
                 <div key={i}>
                   {s.part_id}: {s.error}
@@ -398,7 +398,7 @@ function BatchImportTab() {
             {result.orders.map((o) => (
               <div
                 key={o.order_id}
-                className="text-xs font-mono text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1"
+                className="text-xs font-mono text-gray-300 bg-gray-800 border border-gray-700 rounded px-2 py-1"
               >
                 {o.order_id} · {o.material} · qty {o.quantity}
               </div>
@@ -436,7 +436,7 @@ export default function ARIAImport() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Import from Scan</h1>
+        <h1 className="text-2xl font-bold text-gray-100">Import from Scan</h1>
         <p className="text-sm text-gray-500 mt-1">
           ARIA-OS catalog → instant quote → schedulable order. No CAD software
           required.
@@ -444,15 +444,15 @@ export default function ARIAImport() {
       </div>
 
       {/* Tab nav */}
-      <div className="flex border-b border-gray-200">
+      <div className="flex border-b border-gray-800">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => { setActiveTab(t.id); setResult(null); }}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === t.id
-                ? "border-forge-navy text-forge-navy"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+                ? "border-forge-500 text-forge-500"
+                : "border-transparent text-gray-400 hover:text-gray-200"
             }`}
           >
             {t.label}
@@ -461,7 +461,7 @@ export default function ARIAImport() {
       </div>
 
       {/* Tab content */}
-      <div className="card border border-gray-200 p-4">
+      <div className="card p-4">
         {activeTab === "json" && (
           <JSONImportTab onResult={setResult} />
         )}
@@ -480,11 +480,11 @@ export default function ARIAImport() {
           {result.quote && <QuoteCard quote={result.quote} />}
 
           {result.stl_analysis && (
-            <div className="card border border-gray-200 p-4">
-              <div className="text-sm font-semibold text-gray-900 mb-2">
+            <div className="card p-4">
+              <div className="text-sm font-semibold text-gray-100 mb-2">
                 STL Geometry
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-gray-600">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-gray-400">
                 {[
                   { label: "Dimensions", value: result.stl_analysis.dimensions },
                   { label: "Volume", value: result.stl_analysis.volume_mm3 > 0 ? `${(result.stl_analysis.volume_mm3 / 1000).toFixed(1)} cm³` : "—" },
@@ -493,7 +493,7 @@ export default function ARIAImport() {
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <div className="text-gray-400">{label}</div>
-                    <div className="font-medium text-gray-800">{value}</div>
+                    <div className="font-medium text-gray-200">{value}</div>
                   </div>
                 ))}
               </div>

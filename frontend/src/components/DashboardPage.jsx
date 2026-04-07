@@ -56,7 +56,7 @@ export default function DashboardPage() {
       .catch(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="text-gray-500 text-center py-10">Loading dashboard...</p>;
+  if (loading) return <p className="text-gray-500 text-center py-10 animate-pulse">Loading...</p>;
 
   const m = metrics || {};
   const h = health || {};

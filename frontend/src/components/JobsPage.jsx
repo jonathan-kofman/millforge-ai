@@ -169,7 +169,7 @@ export default function JobsPage() {
         </button>
       </div>
 
-      {error && <div className="text-red-400 text-sm">{error}</div>}
+      {error && <div className="alert-error">{error}</div>}
 
       {/* Job list */}
       {loading ? (

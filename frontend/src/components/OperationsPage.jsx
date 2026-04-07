@@ -376,8 +376,8 @@ export default function OperationsPage() {
             onClick={() => setActiveTab(t.id)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === t.id
-                ? "border-forge-500 text-forge-400"
-                : "border-transparent text-gray-500 hover:text-gray-300"
+                ? "border-forge-500 text-forge-500"
+                : "border-transparent text-gray-400 hover:text-gray-200"
             }`}
           >
             {t.label}
