@@ -42,8 +42,16 @@ class FeedbackLogger:
         predicted_processing_minutes: float,
         actual_processing_minutes: float,
         provenance: DataProvenance = "operator_logged",
+        simulation_confidence: float | None = None,
+        tolerance_class: str | None = None,
     ):
-        """Persist a single job outcome. Returns the saved JobFeedbackRecord."""
+        """Persist a single job outcome. Returns the saved JobFeedbackRecord.
+
+        simulation_confidence — ARIA CAM confidence score (0–1). When present,
+          enriches the ML predictor's feature set beyond material/machine/time.
+        tolerance_class — "standard" | "medium" | "tight" | "ultra". Tighter
+          tolerances correlate with longer setup times in practice.
+        """
         from db_models import JobFeedbackRecord  # avoid circular import at module level
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -59,6 +67,8 @@ class FeedbackLogger:
             predicted_processing_minutes=predicted_processing_minutes,
             actual_processing_minutes=actual_processing_minutes,
             data_provenance=provenance,
+            simulation_confidence=simulation_confidence,
+            tolerance_class=tolerance_class,
             logged_at=now,
         )
         db.add(record)
@@ -98,6 +108,8 @@ class FeedbackLogger:
                     r.actual_processing_minutes - r.predicted_processing_minutes, 2
                 ),
                 "data_provenance": r.data_provenance,
+                "simulation_confidence": r.simulation_confidence,
+                "tolerance_class": r.tolerance_class,
                 "logged_at": r.logged_at.isoformat(),
             }
             for r in records

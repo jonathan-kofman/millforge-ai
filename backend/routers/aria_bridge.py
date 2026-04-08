@@ -18,12 +18,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
 from db_models import Job, QCResult
+from services.pipeline_events import emit as _emit_event
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +212,7 @@ def submit_from_aria(
         stage="queued",
         source="aria_cam",
         material=payload.material,
-        required_machine_type=_infer_machine_type(payload.required_operations),
+        required_machine_type=_infer_machine_type(payload.required_operations, payload.extra),
         estimated_duration_minutes=payload.estimated_cycle_time_minutes,
         notes=(
             f"ARIA bridge | tol={payload.tolerance_class} | "
@@ -230,12 +232,44 @@ def submit_from_aria(
         payload.material,
         payload.estimated_cycle_time_minutes,
     )
+    _emit_event(
+        "aria→millforge",
+        "job_received",
+        job_id=str(job.id),
+        trace_id=payload.extra.get("trace_id") if payload.extra else None,
+        status_code=200,
+        extra={"aria_job_id": payload.aria_job_id, "part_name": payload.part_name},
+    )
 
     return _ack_response(job, payload.aria_job_id)
 
 
-def _infer_machine_type(operations: list[str]) -> Optional[str]:
-    """Map ARIA operation list to a MillForge machine type hint."""
+def _infer_machine_type(operations: list[str], extra: dict | None = None) -> Optional[str]:
+    """Map ARIA operation list + DFM process recommendation to a MillForge machine type.
+
+    Uses the DFM agent's process_recommendation from extra.process_recommendation
+    when available, falling back to operation-based heuristics.
+    """
+    # Check for DFM process recommendation first
+    if extra:
+        process_rec = (extra.get("process_recommendation") or "").lower()
+        _PROCESS_TO_MACHINE = {
+            "cnc_milling": "cnc_mill", "milling": "cnc_mill",
+            "turning": "lathe", "cnc_turning": "lathe",
+            "grinding": "grinder",
+            "sheet_metal": "press_brake", "bending": "press_brake",
+            "welding": "welding_cell", "welding_arc": "welding_cell",
+            "cutting_laser": "laser_cutter", "laser": "laser_cutter",
+            "cutting_plasma": "plasma_cutter",
+            "cutting_waterjet": "waterjet",
+            "stamping": "stamping_press",
+            "edm": "edm", "wire_edm": "edm",
+            "injection_molding": "injection_molder",
+            "inspection": "cmm",
+        }
+        if process_rec in _PROCESS_TO_MACHINE:
+            return _PROCESS_TO_MACHINE[process_rec]
+
     ops_lower = {op.lower() for op in operations}
     if ops_lower & {"turning", "boring", "reaming"}:
         return "lathe"
@@ -249,8 +283,10 @@ def _infer_machine_type(operations: list[str]) -> Optional[str]:
 
 
 def _ack_response(job: Job, aria_job_id: str, *, duplicate: bool = False) -> dict:
+    trace_id = (job.cam_metadata or {}).get("extra", {}).get("trace_id", aria_job_id)
     return {
         "aria_job_id": aria_job_id,
+        "trace_id": trace_id,
         "millforge_job_id": job.id,
         "status": "queued",
         "queue_position": None,   # scheduler determines position at run time
@@ -400,6 +436,17 @@ def push_feedback(
         accuracy_pct,
         payload.qc_passed,
     )
+    _emit_event(
+        "millforge→aria",
+        "feedback_stored",
+        job_id=str(job.id),
+        trace_id=(job.cam_metadata or {}).get("extra", {}).get("trace_id"),
+        extra={
+            "aria_job_id": payload.aria_job_id,
+            "qc_passed": payload.qc_passed,
+            "accuracy_pct": accuracy_pct,
+        },
+    )
 
     return {
         "aria_job_id": payload.aria_job_id,
@@ -409,6 +456,81 @@ def push_feedback(
         "cycle_time_accuracy_pct": accuracy_pct,
         "estimated_cycle_time_minutes": estimated,
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/bridge/progress/{aria_job_id}  — Server-Sent Events
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/api/bridge/progress/{aria_job_id}",
+    summary="Stream live job progress as Server-Sent Events",
+    description=(
+        "Subscribe to job stage transitions for a specific ARIA job. "
+        "Emits an event on each stage change (queued→in_progress→qc_pending→complete/qc_failed). "
+        "Closes automatically on terminal stage or after 5-minute timeout."
+    ),
+)
+async def stream_job_progress(
+    aria_job_id: str,
+    _auth: None = Depends(_verify_bridge_key),
+):
+    import asyncio as _asyncio
+
+    async def _generator():
+        from database import SessionLocal as _SessionLocal
+        last_stage: str | None = None
+        elapsed = 0
+        not_found_ticks = 0
+        POLL_S = 2
+        TIMEOUT_S = 300
+
+        while elapsed < TIMEOUT_S:
+            db = _SessionLocal()
+            try:
+                job = (
+                    db.query(Job)
+                    .filter(func.json_extract(Job.cam_metadata, "$.aria_job_id") == aria_job_id)
+                    .first()
+                )
+                if not job:
+                    not_found_ticks += 1
+                    if not_found_ticks > 5:  # 10 seconds of not found
+                        yield f'data: {json.dumps({"stage": "not_found", "aria_job_id": aria_job_id})}\n\n'
+                        return
+                else:
+                    if job.stage != last_stage:
+                        last_stage = job.stage
+                        event: dict = {
+                            "stage": job.stage,
+                            "aria_job_id": aria_job_id,
+                            "millforge_job_id": job.id,
+                            "part_name": job.title,
+                            "elapsed_s": elapsed,
+                        }
+                        if job.stage in ("complete", "qc_failed"):
+                            qc = _qc_summary(db, job)
+                            if qc:
+                                event["qc"] = qc
+                            yield f'data: {json.dumps(event)}\n\n'
+                            return  # terminal — close stream
+                        yield f'data: {json.dumps(event)}\n\n'
+            finally:
+                db.close()
+
+            await _asyncio.sleep(POLL_S)
+            elapsed += POLL_S
+
+        yield f'data: {json.dumps({"stage": "timeout", "aria_job_id": aria_job_id, "elapsed_s": elapsed})}\n\n'
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable nginx buffering
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

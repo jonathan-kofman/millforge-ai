@@ -654,24 +654,45 @@ async def create_work_order(body: WorkOrderRequest, db: Session = Depends(get_db
 @router.get(
     "/work-orders",
     response_model=List[Dict[str, Any]],
-    summary="List work orders",
+    summary="List ARIA-sourced manufacturing jobs",
 )
 async def list_work_orders(
-    skip: int = 0,
-    limit: int = 100,
+    stage: Optional[str] = None,
+    limit: int = 50,
     db: Session = Depends(get_db),
 ) -> List[Dict[str, Any]]:
-    """Return work orders created via POST /work-order, most recent first."""
+    """Return ARIA-sourced jobs (source: aria_bridge or aria_rework), newest first.
+
+    Filter by ?stage= (queued, in_progress, qc_pending, complete, qc_failed).
+    """
     try:
-        from db_models import WorkOrderRecord
-        rows = (
-            db.query(WorkOrderRecord)
-            .order_by(WorkOrderRecord.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-        return [_json.loads(r.payload_json) for r in rows]
+        from db_models import Job
+
+        query = db.query(Job).order_by(Job.created_at.desc())
+        if stage:
+            query = query.filter(Job.stage == stage)
+        rows = query.limit(limit * 3).all()  # over-fetch to account for non-ARIA rows
+
+        result = []
+        for job in rows:
+            meta = job.cam_metadata or {}
+            source = meta.get("source", "")
+            if source not in ("aria_bridge", "aria_rework"):
+                continue
+            result.append({
+                "id": job.id,
+                "title": job.title or f"Job #{job.id}",
+                "stage": job.stage,
+                "material": job.material,
+                "estimated_duration_minutes": job.estimated_duration_minutes,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "source": source,
+                "aria_job_id": meta.get("aria_job_id"),
+            })
+            if len(result) >= limit:
+                break
+
+        return result
     except Exception as exc:
         logger.warning("Failed to list work orders: %s", exc)
         return []

@@ -2,6 +2,8 @@
 /api/learning — setup time ML accuracy and job feedback calibration report.
 """
 
+import logging
+import threading
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
@@ -10,7 +12,9 @@ from sqlalchemy.orm import Session
 
 from agents.setup_time_predictor import SetupTimePredictor
 from agents.feedback_logger import FeedbackLogger
-from database import get_db
+from database import get_db, SessionLocal
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/learning", tags=["Learning"])
 
@@ -27,6 +31,26 @@ class FeedbackLogRequest(BaseModel):
     predicted_setup_minutes: float = Field(default=0.0, ge=0)
     predicted_processing_minutes: float = Field(default=0.0, ge=0)
     provenance: Literal["operator_logged", "mtconnect_auto", "estimated"] = "operator_logged"
+    simulation_confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
+    tolerance_class: Optional[str] = None
+
+
+def _maybe_auto_retrain(total: int) -> None:
+    """Fire background retrain when total feedback count hits a 10-record milestone ≥ 20."""
+    if total < 20 or total % 10 != 0:
+        return
+
+    def _retrain() -> None:
+        db = SessionLocal()
+        try:
+            result = _predictor.train_from_db(db)
+            logger.info("Auto-retrain triggered at %d records: %s", total, result)
+        except Exception as exc:
+            logger.warning("Auto-retrain failed: %s", exc)
+        finally:
+            db.close()
+
+    threading.Thread(target=_retrain, daemon=True).start()
 
 
 @router.get("/setup-time-accuracy", summary="Setup time ML model accuracy")
@@ -56,8 +80,26 @@ async def log_feedback(req: FeedbackLogRequest, db: Session = Depends(get_db)):
         predicted_processing_minutes=req.predicted_processing_minutes,
         actual_processing_minutes=req.actual_processing_minutes,
         provenance=req.provenance,
+        simulation_confidence=req.simulation_confidence,
+        tolerance_class=req.tolerance_class,
     )
+
+    from db_models import JobFeedbackRecord
+    total = db.query(JobFeedbackRecord).count()
+    _maybe_auto_retrain(total)
+
     return {"status": "logged", "canonical_id": record.canonical_id}
+
+
+@router.post("/retrain", summary="Retrain setup time predictor on all feedback records")
+async def retrain(db: Session = Depends(get_db)):
+    """
+    Manually trigger a retrain of the RandomForest setup time predictor
+    on all stored JobFeedbackRecord rows.
+
+    Returns accuracy metrics. Requires ≥20 records to train.
+    """
+    return _predictor.train_from_db(db)
 
 
 @router.get("/calibration-report", summary="Predicted vs actual job metrics (last 50 jobs)")

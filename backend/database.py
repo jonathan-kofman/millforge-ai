@@ -62,6 +62,9 @@ def _apply_column_migrations() -> None:
         "ALTER TABLE orders ADD COLUMN customer_name VARCHAR(255)",
         "ALTER TABLE orders ADD COLUMN po_number VARCHAR(100)",
         "ALTER TABLE orders ADD COLUMN part_number VARCHAR(100)",
+        # Adaptive learning — ARIA simulation metadata on feedback records
+        "ALTER TABLE job_feedback ADD COLUMN simulation_confidence FLOAT",
+        "ALTER TABLE job_feedback ADD COLUMN tolerance_class VARCHAR(50)",
     ]
     for sql in migrations:
         # Use a fresh connection per migration — on Postgres, a failed DDL statement

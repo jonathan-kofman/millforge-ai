@@ -214,6 +214,9 @@ class JobFeedbackRecord(Base):
     actual_processing_minutes: Mapped[float] = mapped_column(Float, nullable=False)
     # operator_logged | mtconnect_auto | estimated
     data_provenance: Mapped[str] = mapped_column(String(30), nullable=False, default="operator_logged")
+    # ARIA-sourced fields — populated automatically from cam_metadata when available
+    simulation_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    tolerance_class: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     logged_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     def __repr__(self) -> str:

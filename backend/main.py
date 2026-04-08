@@ -252,6 +252,31 @@ async def root():
     return {"service": "MillForge API", "status": "ok", "version": "0.6.0"}
 
 
+@app.get("/api/health/pipeline-events", tags=["Health"])
+async def pipeline_events(
+    boundary: str = None,
+    event_type: str = None,
+    trace_id: str = None,
+    job_id: str = None,
+    limit: int = 100,
+):
+    """Query the pipeline observability event log.
+
+    Returns JSONL events emitted at key boundaries:
+    - aria→millforge: job submissions, circuit breaker trips
+    - millforge→aria: feedback pushes
+    """
+    from services.pipeline_events import query_events
+    events = query_events(
+        boundary=boundary,
+        event_type=event_type,
+        trace_id=trace_id,
+        job_id=job_id,
+        limit=min(limit, 1000),
+    )
+    return {"count": len(events), "events": events}
+
+
 @app.get("/health", tags=["Health"])
 async def health():
     vision_model = _get_vision_model_name()
@@ -301,6 +326,32 @@ async def health():
         "anomaly_detection": "rule-based + Claude refinement",
     }
 
+    # Pipeline connectivity probes (non-blocking — best effort)
+    aria_url = os.getenv("MILLFORGE_API_URL") or os.getenv("ARIA_API_BASE", "")
+    pipeline_status = {
+        "aria_bridge_configured": bool(aria_url),
+        "millforge_api_url": aria_url or "not configured",
+        "circuit_state": "unknown",
+        "recent_event_count": 0,
+    }
+    try:
+        from services.pipeline_events import query_events
+        recent_events = query_events(limit=50)
+        pipeline_status["recent_event_count"] = len(recent_events)
+        # Derive circuit state from most recent boundary event
+        for ev in recent_events:
+            if ev.get("boundary") == "aria→millforge":
+                et = ev.get("event_type", "")
+                if et == "circuit_open":
+                    pipeline_status["circuit_state"] = "open"
+                elif et in ("job_received", "submission_error"):
+                    pipeline_status["circuit_state"] = (
+                        "degraded" if et == "submission_error" else "closed"
+                    )
+                break
+    except Exception:
+        pass
+
     return {
         "status": "ok",
         "version": "0.6.0",
@@ -310,4 +361,5 @@ async def health():
         "total_touchpoints": total,
         "readiness_percent": round(automated / total * 100),
         "data_sources": data_sources,
+        "pipeline": pipeline_status,
     }

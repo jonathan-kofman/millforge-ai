@@ -45,6 +45,56 @@ const BLANK_JOB = {
   notes: "",
 };
 
+function FeedbackForm({ job, loading, error, onSubmit, onCancel }) {
+  const est = job.estimated_duration_minutes || 30;
+  const [setupMin, setSetupMin] = useState(Math.round(est * 0.2));
+  const [runMin, setRunMin] = useState(Math.round(est * 0.8));
+  const [source, setSource] = useState("operator_logged");
+
+  return (
+    <div className="border-t border-gray-700 pt-3 space-y-2">
+      <div className="flex gap-3 items-end flex-wrap">
+        <div>
+          <label className="block text-[10px] text-gray-500 mb-0.5">Setup (min)</label>
+          <input
+            type="number" min={0} value={setupMin}
+            onChange={(e) => setSetupMin(Number(e.target.value))}
+            className="input text-xs py-1 px-2 w-20"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] text-gray-500 mb-0.5">Run (min)</label>
+          <input
+            type="number" min={0} value={runMin}
+            onChange={(e) => setRunMin(Number(e.target.value))}
+            className="input text-xs py-1 px-2 w-20"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] text-gray-500 mb-0.5">Source</label>
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="input text-xs py-1 px-2"
+          >
+            <option value="operator_logged">I timed this</option>
+            <option value="mtconnect_auto">Machine reported</option>
+          </select>
+        </div>
+        <button
+          className="btn-primary text-xs py-1 px-3"
+          disabled={loading}
+          onClick={() => onSubmit(job, setupMin, runMin, source)}
+        >
+          {loading ? "…" : "Log"}
+        </button>
+        <button className="text-gray-500 text-xs hover:text-gray-300" onClick={onCancel}>cancel</button>
+      </div>
+      {error && <div className="text-xs text-red-400">{error}</div>}
+    </div>
+  );
+}
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState([]);
   const [total, setTotal] = useState(0);
@@ -76,6 +126,12 @@ export default function JobsPage() {
 
   // Conflict check
   const [conflictResult, setConflictResult] = useState(null);
+
+  // Feedback form
+  const [feedbackOpen, setFeedbackOpen] = useState(null);   // job.id currently expanded
+  const [feedbackLogged, setFeedbackLogged] = useState({});  // { [jobId]: true } after logging
+  const [feedbackError, setFeedbackError] = useState(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -262,6 +318,38 @@ export default function JobsPage() {
     if (res.ok) setConflictResult(await res.json());
   };
 
+  const handleFeedbackSubmit = async (job, setupMin, runMin, source) => {
+    setFeedbackLoading(true);
+    setFeedbackError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/learning/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          order_id: String(job.id),
+          material: job.material,
+          machine_id: job.machine_id ?? 1,
+          actual_setup_minutes: setupMin,
+          actual_processing_minutes: runMin,
+          provenance: source,
+          simulation_confidence: job.cam_metadata?.simulation_results?.simulation_confidence ?? null,
+          tolerance_class: job.cam_metadata?.tolerance_class ?? null,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.detail || `Error ${res.status}`);
+      }
+      setFeedbackLogged((prev) => ({ ...prev, [job.id]: true }));
+      setFeedbackOpen(null);
+    } catch (e) {
+      setFeedbackError(e.message);
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
   const setField = (field) => (e) => setJobForm(f => ({ ...f, [field]: e.target.value }));
 
   return (
@@ -417,6 +505,30 @@ export default function JobsPage() {
               )}
               {qcError && qcJobId === job.id && (
                 <div className="text-xs text-red-400">{qcError}</div>
+              )}
+
+              {/* Feedback: Log actual times (complete / qc_failed jobs) */}
+              {(job.stage === "complete" || job.stage === "qc_failed") && (
+                job.cam_metadata?.aria_feedback || feedbackLogged[job.id] ? (
+                  <div className="text-xs text-green-400 pt-2 border-t border-gray-700/50">
+                    ✓ {job.cam_metadata?.aria_feedback ? "Auto-logged" : "Logged"}
+                  </div>
+                ) : feedbackOpen === job.id ? (
+                  <FeedbackForm
+                    job={job}
+                    loading={feedbackLoading}
+                    error={feedbackError}
+                    onSubmit={handleFeedbackSubmit}
+                    onCancel={() => { setFeedbackOpen(null); setFeedbackError(null); }}
+                  />
+                ) : (
+                  <button
+                    className="text-xs text-gray-500 hover:text-gray-300 pt-2 border-t border-gray-700/50 text-left transition-colors"
+                    onClick={() => { setFeedbackOpen(job.id); setFeedbackError(null); }}
+                  >
+                    Log times →
+                  </button>
+                )
               )}
             </div>
           ))}

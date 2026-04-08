@@ -34,18 +34,39 @@ MIN_TRAINING_RECORDS = 20
 MATERIALS = ["steel", "aluminum", "titanium", "copper"]
 _MATERIAL_INDEX = {m: i for i, m in enumerate(MATERIALS)}
 
+TOLERANCE_CLASSES = ["standard", "medium", "tight", "ultra"]
+_TOLERANCE_INDEX = {t: i for i, t in enumerate(TOLERANCE_CLASSES)}
+
+# Feature count for the current model version.
+# Increment when adding features — triggers automatic refit if saved model mismatches.
+_N_FEATURES = 7   # from_mat, to_mat, machine_id, hour, day, sim_confidence, tolerance_class
+
 
 def _encode_material(m: str) -> int:
     """Integer-encode a material string. Unknown materials map to len(MATERIALS)."""
     return _MATERIAL_INDEX.get(m.lower(), len(MATERIALS))
 
 
+def _encode_tolerance(t: str) -> float:
+    """Map tolerance class string to a numeric feature (0=standard … 3=ultra).
+
+    Also accepts raw float pass-through (e.g. from a legacy record).
+    """
+    if isinstance(t, (int, float)):
+        return float(t)
+    return float(_TOLERANCE_INDEX.get(str(t).lower(), 0))
+
+
 class SetupTimePredictor:
     """
     Predicts CNC machine setup time (minutes) for a material changeover.
 
-    Features: from_material (int), to_material (int), machine_id (int),
-              hour_of_day (int 0-23), day_of_week (int 0-6 Mon-Sun)
+    Features (7):
+      from_material (int), to_material (int), machine_id (int),
+      hour_of_day (int 0-23), day_of_week (int 0-6 Mon-Sun),
+      simulation_confidence (float 0-1),   ← from ARIA CAM simulation
+      tolerance_class (float 0-3)           ← 0=standard,1=medium,2=tight,3=ultra
+
     Target:   actual setup time in minutes (float)
     """
 
@@ -70,6 +91,8 @@ class SetupTimePredictor:
         machine_id: int,
         hour_of_day: int = 8,
         day_of_week: int = 0,
+        simulation_confidence: float = 0.8,
+        tolerance_class: str = "standard",
     ) -> float:
         """Return predicted setup time in minutes. Falls back to SETUP_MATRIX if untrained."""
         if not self._trained or self._model is None:
@@ -81,6 +104,8 @@ class SetupTimePredictor:
             machine_id,
             hour_of_day,
             day_of_week,
+            float(simulation_confidence),
+            _encode_tolerance(tolerance_class),
         ]])
         return float(self._model.predict(features)[0])
 
@@ -113,6 +138,8 @@ class SetupTimePredictor:
                 r["machine_id"],
                 r.get("hour_of_day", 8),
                 r.get("day_of_week", 0),
+                float(r.get("simulation_confidence", 0.8)),
+                _encode_tolerance(r.get("tolerance_class", "standard")),
             ]
             for r in records
         ])
@@ -149,6 +176,33 @@ class SetupTimePredictor:
             "model_path": str(MODEL_PATH) if self._trained else None,
         }
 
+    def train_from_db(self, db) -> dict:
+        """Query all JobFeedbackRecord rows and train on them.
+
+        Uses material as both from_material and to_material — the feedback
+        record tracks the job material but not the previous machine material,
+        so same-material changeover is the best approximation available.
+        """
+        from db_models import JobFeedbackRecord
+
+        rows = db.query(JobFeedbackRecord).all()
+        records = [
+            {
+                "from_material": r.material,
+                "to_material": r.material,
+                "machine_id": r.machine_id,
+                "actual_setup_minutes": r.actual_setup_minutes,
+                "simulation_confidence": (
+                    r.simulation_confidence
+                    if r.simulation_confidence is not None
+                    else 0.8
+                ),
+                "tolerance_class": r.tolerance_class or "standard",
+            }
+            for r in rows
+        ]
+        return self.train(records)
+
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
@@ -164,7 +218,19 @@ class SetupTimePredictor:
         if not SKLEARN_AVAILABLE or not MODEL_PATH.exists():
             return
         try:
-            self._model = joblib.load(MODEL_PATH)
+            model = joblib.load(MODEL_PATH)
+            # Reject models trained on a different feature count — they will
+            # produce wrong predictions silently if we let them through.
+            n_features = getattr(model, "n_features_in_", None)
+            if n_features is not None and n_features != _N_FEATURES:
+                logger.warning(
+                    "SetupTimePredictor: saved model has %d features, expected %d — "
+                    "discarding (will retrain on next feedback batch)",
+                    n_features, _N_FEATURES,
+                )
+                MODEL_PATH.unlink(missing_ok=True)
+                return
+            self._model = model
             self._trained = True
             logger.info("SetupTimePredictor loaded from %s", MODEL_PATH)
         except Exception as exc:

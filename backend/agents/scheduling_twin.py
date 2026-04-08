@@ -46,12 +46,25 @@ class SchedulingTwin:
         machine_id: int = 1,
         hour_of_day: int = 8,
         day_of_week: int = 0,
+        simulation_confidence: float = 0.8,
+        tolerance_class: str = "standard",
     ) -> dict:
-        """Predict setup/changeover time in minutes."""
+        """Predict setup/changeover time in minutes.
+
+        simulation_confidence — ARIA CAM simulation confidence score (0–1).
+          Lower confidence (e.g. 0.4) typically correlates with more complex
+          setups and wider tolerances, both of which increase setup time.
+
+        tolerance_class — from the ARIA job submission:
+          "standard" | "medium" | "tight" | "ultra"
+          Tighter tolerances require slower feeds and more careful setup.
+        """
         predictor = _get_setup_predictor()
         if predictor is not None and predictor._trained:
             minutes = predictor.predict(
-                from_material, to_material, machine_id, hour_of_day, day_of_week
+                from_material, to_material, machine_id, hour_of_day, day_of_week,
+                simulation_confidence=simulation_confidence,
+                tolerance_class=tolerance_class,
             )
             source = "ml_model"
         else:
@@ -65,6 +78,8 @@ class SchedulingTwin:
             "machine_id": machine_id,
             "predicted_setup_minutes": round(minutes, 1),
             "source": source,
+            "simulation_confidence": simulation_confidence,
+            "tolerance_class": tolerance_class,
         }
 
     def predict_completion(

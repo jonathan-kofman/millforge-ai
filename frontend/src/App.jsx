@@ -17,6 +17,7 @@ import EnergyPage from "./components/EnergyPage";
 import SuppliersPage from "./components/SuppliersPage";
 import DemoChainPage from "./components/DemoChainPage";
 import { API_BASE } from "./config";
+import PipelineHealth from "./components/PipelineHealth";
 
 // Auth-only pages — lazy loaded so they don't bloat the initial bundle
 const OrdersView       = lazy(() => import("./components/OrdersView"));
@@ -530,7 +531,14 @@ export default function App() {
         {activeTab === "energy"         && <EnergyPage />}
         {activeTab === "suppliers"      && <SuppliersPage />}
         {activeTab === "contact"        && <ContactForm />}
-        {activeTab === "dashboard"      && user && <DashboardPage />}
+        {activeTab === "dashboard" && user && (
+          <div className="space-y-4 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2"><DashboardPage /></div>
+              <PipelineHealth />
+            </div>
+          </div>
+        )}
         {activeTab === "discovery"      && user && <Discovery />}
         {activeTab === "quality"        && user && <QualityHub />}
         {activeTab === "jobs"           && user && <JobsPage />}

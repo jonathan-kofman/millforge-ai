@@ -27,8 +27,17 @@ logger = logging.getLogger(__name__)
 # keys match MillForge's CAMImport Pydantic model (schema_version "1.0" shape).
 
 def _normalize_v1(raw: dict) -> dict:
-    """v1.0 — canonical shape, identity transform."""
-    return dict(raw)
+    """v1.0 — canonical shape with stock_dims key normalization."""
+    out = dict(raw)
+    # Normalize stock_dims: ARIA may emit x_mm/y_mm/z_mm instead of length/width/height
+    sd = out.get("stock_dims", {}) or {}
+    if "x_mm" in sd and "length_mm" not in sd:
+        out["stock_dims"] = {
+            "length_mm": sd.get("x_mm", 100.0),
+            "width_mm":  sd.get("y_mm", 100.0),
+            "height_mm": sd.get("z_mm", 10.0),
+        }
+    return out
 
 
 def _normalize_v2(raw: dict) -> dict:
