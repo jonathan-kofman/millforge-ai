@@ -32,6 +32,11 @@ class User(Base):
     company: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    # Stripe subscription (optional — set via billing webhooks)
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    subscription_tier: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    subscription_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     orders: Mapped[List["OrderRecord"]] = relationship("OrderRecord", back_populates="owner")
 
@@ -261,6 +266,9 @@ class Job(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
     qc_results: Mapped[List["QCResult"]] = relationship("QCResult", back_populates="job")
+    operations: Mapped[List["Operation"]] = relationship(
+        "Operation", foreign_keys="Operation.job_id", back_populates="job"
+    )
 
     def __repr__(self) -> str:
         return f"<Job id={self.id} title={self.title!r} stage={self.stage}>"
@@ -693,3 +701,295 @@ class WorkOrderRecord(Base):
 
     def __repr__(self) -> str:
         return f"<WorkOrderRecord {self.work_order_id} status={self.status}>"
+
+
+# =============================================================================
+# WORK CENTER SCHEMA — generalized manufacturing abstraction (0004 migration)
+# =============================================================================
+
+class WorkCenter(Base):
+    """Universal machine / work station. Category covers all fab process types."""
+
+    __tablename__ = "work_centers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # cnc_mill | cnc_lathe | cnc_router | cnc_grinder | laser_cutter | waterjet |
+    # plasma_cutter | press_brake | punch_press | shear | mig_welder | tig_welder |
+    # spot_welder | manual_mill | manual_lathe | drill_press | band_saw |
+    # surface_grinder | heat_treat_oven | powder_coat_booth | paint_booth |
+    # anodizing_line | plating_line | blast_cabinet | assembly_bench |
+    # inspection_station | cmm | fdm_printer | sla_printer | packaging_station | other
+    category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    # available | in_use | setup | maintenance | breakdown | offline
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="available", index=True)
+    hourly_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    setup_time_default_min: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    # {"mon":[7,17],"tue":[7,17],...}
+    available_hours_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    capabilities_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    operations: Mapped[List["Operation"]] = relationship("Operation", back_populates="work_center")
+    floor_events: Mapped[List["ShopFloorEvent"]] = relationship("ShopFloorEvent", back_populates="work_center")
+
+    @property
+    def capabilities(self) -> dict:
+        return json.loads(self.capabilities_json) if self.capabilities_json else {}
+
+    def __repr__(self) -> str:
+        return f"<WorkCenter id={self.id} name={self.name} category={self.category}>"
+
+
+class Operator(Base):
+    """Shop floor operator with PIN tablet login and work center qualifications."""
+
+    __tablename__ = "operators"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    initials: Mapped[str] = mapped_column(String(6), nullable=False)
+    pin_code_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    qualifications_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    operations: Mapped[List["Operation"]] = relationship("Operation", back_populates="operator")
+    floor_events: Mapped[List["ShopFloorEvent"]] = relationship("ShopFloorEvent", back_populates="operator")
+
+    @property
+    def qualifications(self) -> list:
+        return json.loads(self.qualifications_json) if self.qualifications_json else []
+
+    def __repr__(self) -> str:
+        return f"<Operator id={self.id} name={self.name}>"
+
+
+class ShopQuote(Base):
+    """DB-persisted shop quote with full cost breakdown."""
+
+    __tablename__ = "shop_quotes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    quote_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    part_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    part_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    revision: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    material: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    routing_template_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("routing_templates.id"), nullable=True)
+    material_cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    labor_cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    overhead_cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    subcontract_cost: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    markup_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.15)
+    total_price: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    price_per_part: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    # draft | sent | accepted | rejected | expired
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft", index=True)
+    valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    routing_template: Mapped[Optional["RoutingTemplate"]] = relationship("RoutingTemplate", back_populates="shop_quotes")
+    operations: Mapped[List["Operation"]] = relationship("Operation", back_populates="shop_quote")
+
+    @property
+    def subtotal(self) -> float:
+        return self.material_cost + self.labor_cost + self.overhead_cost + self.subcontract_cost
+
+    def __repr__(self) -> str:
+        return f"<ShopQuote {self.quote_number} status={self.status} total={self.total_price}>"
+
+
+class RoutingTemplate(Base):
+    """Reusable sequence of operations for a known part family."""
+
+    __tablename__ = "routing_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    steps: Mapped[List["RoutingStep"]] = relationship(
+        "RoutingStep", back_populates="template",
+        order_by="RoutingStep.sequence_number", cascade="all, delete-orphan"
+    )
+    shop_quotes: Mapped[List["ShopQuote"]] = relationship("ShopQuote", back_populates="routing_template")
+
+    def __repr__(self) -> str:
+        return f"<RoutingTemplate id={self.id} name={self.name}>"
+
+
+class RoutingStep(Base):
+    """One step within a routing template."""
+
+    __tablename__ = "routing_steps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    template_id: Mapped[int] = mapped_column(Integer, ForeignKey("routing_templates.id"), nullable=False, index=True)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    operation_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    work_center_category: Mapped[str] = mapped_column(String(50), nullable=False)
+    estimated_setup_min: Mapped[float] = mapped_column(Float, nullable=False, default=30.0)
+    estimated_run_min_per_part: Mapped[float] = mapped_column(Float, nullable=False, default=5.0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    template: Mapped["RoutingTemplate"] = relationship("RoutingTemplate", back_populates="steps")
+
+    def __repr__(self) -> str:
+        return f"<RoutingStep seq={self.sequence_number} op={self.operation_name}>"
+
+
+class Operation(Base):
+    """Process-agnostic unit of work. One operation = one run at one work center."""
+
+    __tablename__ = "operations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    order_ref: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    job_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("jobs.id"), nullable=True, index=True)
+    shop_quote_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("shop_quotes.id"), nullable=True)
+    work_center_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("work_centers.id"), nullable=True, index=True)
+    operator_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("operators.id"), nullable=True)
+    depends_on_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("operations.id"), nullable=True)
+    # ARIA bridge V2 — process-agnostic fields
+    inspection_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_subcontracted: Mapped[bool] = mapped_column(Boolean, default=False)
+    subcontractor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    subcontractor_lead_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    detected_features_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    operation_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    work_center_category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    # pending | queued | in_progress | paused | complete | on_hold | cancelled | rework
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+
+    estimated_setup_min: Mapped[float] = mapped_column(Float, nullable=False, default=30.0)
+    estimated_run_min: Mapped[float] = mapped_column(Float, nullable=False, default=60.0)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    actual_setup_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    actual_run_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    quantity_complete: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    quantity_scrapped: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    scrap_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    setup_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    run_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    work_center: Mapped[Optional["WorkCenter"]] = relationship("WorkCenter", back_populates="operations")
+    operator: Mapped[Optional["Operator"]] = relationship("Operator", back_populates="operations")
+    shop_quote: Mapped[Optional["ShopQuote"]] = relationship("ShopQuote", back_populates="operations")
+    job: Mapped[Optional["Job"]] = relationship("Job", foreign_keys=[job_id], back_populates="operations")
+    floor_events: Mapped[List["ShopFloorEvent"]] = relationship("ShopFloorEvent", back_populates="operation")
+    ncrs: Mapped[List["NonConformanceReport"]] = relationship("NonConformanceReport", back_populates="operation")
+
+    def __repr__(self) -> str:
+        return f"<Operation id={self.id} op={self.operation_name} status={self.status}>"
+
+
+class ShopFloorEvent(Base):
+    """Append-only event log. Every status change, clock-in/out, material issue, quality hold."""
+
+    __tablename__ = "shop_floor_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    operation_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("operations.id"), nullable=True, index=True)
+    work_center_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("work_centers.id"), nullable=True, index=True)
+    operator_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("operators.id"), nullable=True)
+    # op_started | setup_complete | op_completed | op_paused | quality_hold |
+    # material_issued | status_change | operator_login
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    payload_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+    operation: Mapped[Optional["Operation"]] = relationship("Operation", back_populates="floor_events")
+    work_center: Mapped[Optional["WorkCenter"]] = relationship("WorkCenter", back_populates="floor_events")
+    operator: Mapped[Optional["Operator"]] = relationship("Operator", back_populates="floor_events")
+
+    @property
+    def payload(self) -> dict:
+        return json.loads(self.payload_json) if self.payload_json else {}
+
+    def __repr__(self) -> str:
+        return f"<ShopFloorEvent type={self.event_type} at={self.occurred_at}>"
+
+
+class NonConformanceReport(Base):
+    """NCR: a specific quality failure tied to an operation."""
+
+    __tablename__ = "non_conformance_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    operation_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("operations.id"), nullable=True)
+    order_ref: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    # critical | major | minor
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="minor")
+    # open | in_rework | resolved | closed
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    resolution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    operation: Mapped[Optional["Operation"]] = relationship("Operation", back_populates="ncrs")
+
+    def __repr__(self) -> str:
+        return f"<NCR id={self.id} sev={self.severity} status={self.status}>"
+
+
+class FirstArticleInspection(Base):
+    """FAI record: dimensional measurements against a print/spec."""
+
+    __tablename__ = "first_article_inspections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    order_ref: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    part_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    part_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    revision: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    inspector: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # pass | fail | conditional
+    result: Mapped[str] = mapped_column(String(20), nullable=False, default="pass")
+    # [{"dim_id":"1","nominal":25.0,"tolerance":0.025,"actual":25.012,"pass":true}, ...]
+    measurements_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    @property
+    def measurements(self) -> list:
+        return json.loads(self.measurements_json)
+
+    @property
+    def dims_total(self) -> int:
+        return len(self.measurements)
+
+    @property
+    def dims_passed(self) -> int:
+        return sum(1 for m in self.measurements if m.get("pass", False))
+
+    def __repr__(self) -> str:
+        return f"<FAI id={self.id} part={self.part_name} result={self.result}>"
