@@ -21,6 +21,7 @@ frontend/.vite/
 # Logs
 logs/
 *.log
+*.jsonl
 
 # OS
 .DS_Store

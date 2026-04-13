@@ -429,6 +429,37 @@ Run: `python scripts/seed_suppliers.py [--clear]`
 
 **ARIA-OS integration note:** When ARIA generates a toolpath, it exports the stock STL to this endpoint. The response pre-fills a draft order; the operator confirms or schedules immediately. This removes the "engineer reads CAD and fills in a form" touchpoint.
 
+## ARIA Bridge Endpoints (`backend/routers/aria_bridge.py`)
+
+The full ARIA → MillForge handoff lives in `aria_bridge.py`. Three Pydantic schemas and 6 endpoints:
+
+**Schemas:**
+- `ARIAJobSubmission` — full CAM submission (geometry_hash required, simulation_results required). `structsight_context` optional field for StructSight engineering handoff.
+- `ARIABundleSubmission` — lightweight pre-CAM bundle from an ARIA run folder. Requires only `run_id`, `goal`, `part_name`. `material`, `step_path`, `stl_path`, `geometry_hash` are all optional. `structsight_context` optional.
+- `_FeedbackRequest` — post-completion QC feedback from MillForge back to ARIA.
+
+**Endpoints:**
+| Method | Path | Stage | Notes |
+|--------|------|-------|-------|
+| POST | `/api/jobs/from-aria` | `queued` | Full CAM submission — requires CAM toolpath + simulation |
+| POST | `/api/aria/bundle` | `pending_cam` | Pre-CAM run bundle — register geometry + DFM before CAM runs |
+| GET | `/api/bridge/status/{aria_job_id}` | — | Poll job progress by ARIA job ID |
+| POST | `/api/bridge/feedback` | — | Push actual cycle time + QC results back to ARIA |
+| GET | `/api/bridge/feedback/{aria_job_id}` | — | Retrieve stored feedback record |
+| GET | `/api/bridge/progress/{aria_job_id}` | — | SSE stream of stage transitions |
+
+**Auth:** Set `ARIA_BRIDGE_KEY` env var to require `X-API-Key` header. Leave unset in dev.
+
+**Bundle flow (typical):**
+1. ARIA completes geometry + DFM → `POST /api/aria/bundle` with `run_manifest.json` fields
+2. MillForge creates Job in `pending_cam`, returns `millforge_job_id`
+3. ARIA completes CAM → `POST /api/jobs/from-aria` with `extra.aria_run_id` to link
+4. MillForge upgrades job to `queued`
+
+**StructSight bridge:** Both `ARIAJobSubmission` and `ARIABundleSubmission` accept `structsight_context: dict` — a StructSight JSON response (`discipline`, `assumptions`, `verification_required`, `risk_flags`, `size_class`) stored in `cam_metadata.structsight_context` for shop-floor and scheduling context.
+
+**Idempotency:** Both `from-aria` (keyed on `aria_job_id`) and `bundle` (keyed on `run_id`) are idempotent — re-submitting returns the existing job with `duplicate: true`.
+
 ## ARIA Schema Version Registry (`backend/services/aria_schema.py`)
 
 MillForge auto-adapts to ARIA schema changes through a normalizer registry — no hardcoded version whitelist in the router.

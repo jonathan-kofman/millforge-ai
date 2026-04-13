@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Cog, Menu, X, ChevronDown } from "lucide-react";
+import AppDashboard from "./pages/AppDashboard";
 import HowItWorks from "./components/HowItWorks";
 import TrustBar from "./components/TrustBar";
 import AnimatedCounter from "./components/AnimatedCounter";
@@ -61,7 +62,23 @@ const AUTH_TABS = [
   { id: "quality",        label: "Quality & Compliance" },
 ];
 
+const AUTH_TAB_IDS = new Set(AUTH_TABS.map((t) => t.id));
+
+/** Deep links from ARIA dashboard: `/?tab=jobs&job=42` — cookie session unchanged (opens same app origin). */
+function readMillforgeUrlIntent() {
+  if (typeof window === "undefined") return { tab: null, jobId: null };
+  const p = new URLSearchParams(window.location.search);
+  const tab = p.get("tab");
+  const jobRaw = p.get("job");
+  const jobId = jobRaw ? parseInt(jobRaw, 10) : NaN;
+  return {
+    tab: tab && AUTH_TAB_IDS.has(tab) ? tab : null,
+    jobId: Number.isFinite(jobId) ? jobId : null,
+  };
+}
+
 export default function App() {
+  const urlIntentRef = useRef(readMillforgeUrlIntent());
   const [activeTab, setActiveTab] = useState("quote");
   const [showAuth, setShowAuth] = useState(false);
   const [supplierStats, setSupplierStats] = useState(null);
@@ -137,6 +154,17 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Public deep link: /?tab=pricing — Stripe return URLs use this
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab === "pricing") {
+      setActiveTab("pricing");
+      requestAnimationFrame(() => {
+        document.getElementById("tab-nav")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, []);
+
   // Restore session from httpOnly cookie on page load
   useEffect(() => {
     fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
@@ -153,6 +181,28 @@ export default function App() {
       .then((d) => d && setSupplierStats(d))
       .catch(() => {});
   }, []);
+
+  // ARIA (or bookmarks): /?tab=jobs&job=123 — switch tab after session restores; does not clear login.
+  useEffect(() => {
+    const { tab, jobId } = urlIntentRef.current;
+    if (!tab || !user) return;
+    setActiveTab(tab);
+    if (jobId != null) {
+      requestAnimationFrame(() => {
+        document.getElementById("tab-nav")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [user]);
+
+  // Authenticated users get the full dark dashboard experience
+  if (user) {
+    return <AppDashboard user={user} onLogout={handleLogout} />;
+  }
+
+  // Auth flow — full-page, matches dashboard aesthetic
+  if (showAuth) {
+    return <AuthModal onSuccess={handleAuthSuccess} onClose={() => setShowAuth(false)} />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -526,7 +576,7 @@ export default function App() {
         <Suspense fallback={<div className="flex items-center justify-center py-24"><div className="w-6 h-6 border-2 border-forge-500 border-t-transparent rounded-full animate-spin" /></div>}>
         {activeTab === "quote"          && <QuoteForm />}
         {activeTab === "schedule"       && <ScheduleViewer />}
-        {activeTab === "pricing"        && <PricingPage />}
+        {activeTab === "pricing"        && <PricingPage user={user} />}
         {activeTab === "vision"         && <VisionDemo />}
         {activeTab === "energy"         && <EnergyPage />}
         {activeTab === "suppliers"      && <SuppliersPage />}
@@ -541,7 +591,9 @@ export default function App() {
         )}
         {activeTab === "discovery"      && user && <Discovery />}
         {activeTab === "quality"        && user && <QualityHub />}
-        {activeTab === "jobs"           && user && <JobsPage />}
+        {activeTab === "jobs"           && user && (
+          <JobsPage focusJobId={urlIntentRef.current.jobId} />
+        )}
         {activeTab === "machines"       && user && <MachinesPage />}
         {activeTab === "analytics"      && user && <QCAnalyticsPage onNavigate={setActiveTab} />}
         {activeTab === "manufacturing"  && user && <ManufacturingPage />}

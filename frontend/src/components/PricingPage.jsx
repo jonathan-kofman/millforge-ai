@@ -12,10 +12,15 @@ const TIER_BADGES = {
   growth: "Most Popular",
 };
 
-export default function PricingPage() {
+export default function PricingPage({ user }) {
   const [tiers, setTiers] = useState([]);
   const [billing, setBilling] = useState("annual");
   const [loading, setLoading] = useState(true);
+  const [stripeEnabled, setStripeEnabled] = useState(false);
+  const [guestEmail, setGuestEmail] = useState("");
+  const [subscribeLoading, setSubscribeLoading] = useState(false);
+  const [checkoutMessage, setCheckoutMessage] = useState(null);
+  const [checkoutError, setCheckoutError] = useState(null);
   const [roiForm, setRoiForm] = useState({
     machine_count: 10,
     orders_per_month: 200,
@@ -35,6 +40,74 @@ export default function PricingPage() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/billing/config`)
+      .then((r) => r.json())
+      .then((d) => setStripeEnabled(!!d.stripe_enabled))
+      .catch(() => setStripeEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("checkout") === "cancelled") {
+      setCheckoutMessage("Checkout cancelled — no charges.");
+      return;
+    }
+    const sid = p.get("session_id");
+    if (p.get("checkout") !== "success" || !sid) return;
+    fetch(`${API_BASE}/api/billing/checkout-session?session_id=${encodeURIComponent(sid)}`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) {
+          setCheckoutMessage(
+            `Subscription confirmed — ${d.tier_id || "plan"} (${d.billing_cycle || "billing"}). ` +
+              `Receipt sent to ${d.customer_email || user?.email || "your email"}.`
+          );
+        } else {
+          setCheckoutError("Could not confirm payment — contact support if you were charged.");
+        }
+      })
+      .catch(() => setCheckoutError("Could not verify checkout session."));
+  }, [user]);
+
+  const startSubscribe = async (tierId) => {
+    if (!tierId || tierId === "custom") return;
+    setCheckoutError(null);
+    const email = user?.email || guestEmail.trim();
+    if (!email) {
+      setCheckoutError("Enter your work email to continue.");
+      return;
+    }
+    setSubscribeLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/billing/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          tier_id: tierId,
+          billing_cycle: billing === "annual" ? "annual" : "monthly",
+          ...(user ? {} : { customer_email: email }),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+      const detail = data.detail;
+      const msg =
+        typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((x) => x.msg).join("; ") : "Checkout failed";
+      setCheckoutError(msg || "Checkout failed");
+    } catch {
+      setCheckoutError("Network error");
+    } finally {
+      setSubscribeLoading(false);
+    }
+  };
 
   const calcROI = async (e) => {
     e.preventDefault();
@@ -89,6 +162,33 @@ export default function PricingPage() {
         </div>
       </div>
 
+      {checkoutMessage && (
+        <div className="rounded-xl border border-green-700 bg-green-950/50 text-green-100 px-4 py-3 text-sm text-center">
+          {checkoutMessage}
+        </div>
+      )}
+      {checkoutError && (
+        <div className="rounded-xl border border-red-800 bg-red-950/40 text-red-200 px-4 py-3 text-sm text-center">
+          {checkoutError}
+        </div>
+      )}
+
+      {stripeEnabled && !user && (
+        <div className="max-w-md mx-auto">
+          <label className="block text-center">
+            <span className="text-xs text-gray-500 uppercase tracking-wide">Work email (for Stripe receipt)</span>
+            <input
+              type="email"
+              className="input mt-1 w-full"
+              placeholder="you@jobshop.com"
+              value={guestEmail}
+              onChange={(e) => setGuestEmail(e.target.value)}
+              autoComplete="email"
+            />
+          </label>
+        </div>
+      )}
+
       {/* Tier cards */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {tiers.map((tier) => {
@@ -131,18 +231,36 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <a
-                href="https://calendly.com/jonkofm/30min"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`text-center py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                  tier.id === "growth"
-                    ? "bg-forge-500 hover:bg-forge-600 text-white"
-                    : "bg-gray-800 hover:bg-gray-700 text-gray-200"
-                }`}
-              >
-                {tier.price_monthly_usd ? "Start free pilot" : "Contact sales"}
-              </a>
+              <div className="flex flex-col gap-2">
+                {stripeEnabled && tier.price_monthly_usd ? (
+                  <button
+                    type="button"
+                    disabled={subscribeLoading}
+                    onClick={() => startSubscribe(tier.id)}
+                    className={`text-center py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${
+                      tier.id === "growth"
+                        ? "bg-forge-500 hover:bg-forge-600 text-white"
+                        : "bg-gray-800 hover:bg-gray-700 text-gray-200"
+                    }`}
+                  >
+                    {subscribeLoading ? "Redirecting…" : "Subscribe with card"}
+                  </button>
+                ) : null}
+                <a
+                  href="https://calendly.com/jonkofm/30min"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`text-center py-2.5 rounded-lg text-sm font-semibold transition-colors border border-gray-700 ${
+                    stripeEnabled && tier.price_monthly_usd
+                      ? "text-gray-300 hover:bg-gray-800"
+                      : tier.id === "growth"
+                        ? "bg-forge-500 hover:bg-forge-600 text-white border-transparent"
+                        : "bg-gray-800 hover:bg-gray-700 text-gray-200 border-transparent"
+                  }`}
+                >
+                  {tier.price_monthly_usd ? "Book a call" : "Contact sales"}
+                </a>
+              </div>
             </div>
           );
         })}

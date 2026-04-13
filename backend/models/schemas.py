@@ -1156,6 +1156,47 @@ class TierRecommendRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# /api/billing
+# ---------------------------------------------------------------------------
+
+class BillingCheckoutRequest(BaseModel):
+    tier_id: str = Field(..., description="starter | growth | enterprise")
+    billing_cycle: str = Field(..., description="monthly | annual")
+    customer_email: Optional[str] = Field(
+        None,
+        description="Required when not authenticated (guest checkout).",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "tier_id": "growth",
+                "billing_cycle": "annual",
+                "customer_email": "ops@jobshop.example",
+            }
+        }
+    }
+
+
+class BillingCheckoutResponse(BaseModel):
+    checkout_url: str
+
+
+class BillingConfigResponse(BaseModel):
+    stripe_enabled: bool
+    publishable_key: Optional[str] = Field(None, description="pk_test_... for Stripe.js (optional)")
+
+
+class BillingCheckoutSessionResponse(BaseModel):
+    success: bool
+    payment_status: Optional[str] = None
+    tier_id: Optional[str] = None
+    billing_cycle: Optional[str] = None
+    subscription_status: Optional[str] = None
+    customer_email: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
 # /api/market-quotes
 # ---------------------------------------------------------------------------
 
@@ -1259,3 +1300,317 @@ class DemoChainResponse(BaseModel):
     generated_at: datetime
     on_time: bool
     summary: str
+
+
+# ---------------------------------------------------------------------------
+# Work Center Schema (0004) — request/response contracts
+# ---------------------------------------------------------------------------
+
+WORK_CENTER_CATEGORIES = [
+    "cnc_mill", "cnc_lathe", "cnc_router", "cnc_grinder",
+    "laser_cutter", "waterjet", "plasma_cutter",
+    "press_brake", "punch_press", "shear",
+    "mig_welder", "tig_welder", "spot_welder",
+    "manual_mill", "manual_lathe", "drill_press", "band_saw", "surface_grinder",
+    "heat_treat_oven", "powder_coat_booth", "paint_booth",
+    "anodizing_line", "plating_line", "blast_cabinet",
+    "assembly_bench", "inspection_station", "cmm",
+    "fdm_printer", "sla_printer", "packaging_station", "other",
+]
+
+OPERATION_STATUSES = [
+    "pending", "queued", "in_progress", "paused",
+    "complete", "on_hold", "cancelled", "rework",
+]
+
+
+class WorkCenterCreate(BaseModel):
+    name: str
+    category: str
+    hourly_rate: Optional[float] = None
+    setup_time_default_min: int = 30
+    available_hours: Optional[Dict[str, Any]] = None
+    capabilities: Optional[Dict[str, Any]] = None
+    notes: Optional[str] = None
+
+
+class WorkCenterResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    category: str
+    status: str
+    hourly_rate: Optional[float]
+    setup_time_default_min: int
+    capabilities: Dict[str, Any]
+    notes: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OperatorCreate(BaseModel):
+    name: str
+    initials: str
+    pin_code: str = Field(..., min_length=4, max_length=8, description="Raw PIN — will be hashed")
+    qualifications: List[str] = Field(default_factory=list)
+
+
+class OperatorResponse(BaseModel):
+    id: int
+    name: str
+    initials: str
+    is_active: bool
+    qualifications: List[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OperatorLoginRequest(BaseModel):
+    pin_code: str
+
+
+class RoutingStepCreate(BaseModel):
+    sequence_number: int = 10
+    operation_name: str
+    work_center_category: str
+    estimated_setup_min: float = 30.0
+    estimated_run_min_per_part: float = 5.0
+    notes: Optional[str] = None
+
+
+class RoutingStepResponse(RoutingStepCreate):
+    id: int
+    template_id: int
+
+    model_config = {"from_attributes": True}
+
+
+class RoutingTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    steps: List[RoutingStepCreate] = Field(default_factory=list)
+
+
+class RoutingTemplateResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    description: Optional[str]
+    is_active: bool
+    steps: List[RoutingStepResponse]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OperationCreate(BaseModel):
+    sequence_number: int = 10
+    operation_name: str
+    work_center_category: str
+    work_center_id: Optional[int] = None
+    estimated_setup_min: float = 30.0
+    estimated_run_min: float = 60.0
+    quantity: int = 1
+    notes: Optional[str] = None
+    order_ref: Optional[str] = None
+    shop_quote_id: Optional[int] = None
+    depends_on_id: Optional[int] = None
+
+
+class OperationResponse(BaseModel):
+    id: int
+    operation_name: str
+    work_center_category: str
+    work_center_id: Optional[int]
+    operator_id: Optional[int]
+    sequence_number: int
+    status: str
+    estimated_setup_min: float
+    estimated_run_min: float
+    actual_setup_min: Optional[float]
+    actual_run_min: Optional[float]
+    quantity: int
+    quantity_complete: Optional[int]
+    quantity_scrapped: Optional[int]
+    setup_started_at: Optional[datetime]
+    run_started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    order_ref: Optional[str]
+    shop_quote_id: Optional[int]
+    notes: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OperationCompleteRequest(BaseModel):
+    quantity_complete: int
+    quantity_scrapped: int = 0
+    scrap_reason: Optional[str] = None
+
+
+class OperationPauseRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class ShopQuoteLineItem(BaseModel):
+    """One operation row in a quote — for building the quote cost breakdown."""
+    operation_name: str
+    work_center_category: str
+    estimated_setup_min: float
+    estimated_run_min_per_part: float
+    hourly_rate: float
+
+
+class ShopQuoteCreate(BaseModel):
+    customer_name: str
+    part_name: str
+    part_number: Optional[str] = None
+    revision: Optional[str] = None
+    quantity: int = Field(..., gt=0)
+    material: Optional[str] = None
+    routing_template_id: Optional[int] = None
+    line_items: List[ShopQuoteLineItem] = Field(default_factory=list)
+    overhead_multiplier: float = Field(default=1.5, description="Labor × this = overhead")
+    markup_pct: float = Field(default=0.15, description="Markup on subtotal")
+    notes: Optional[str] = None
+
+
+class ShopQuoteResponse(BaseModel):
+    id: int
+    quote_number: str
+    customer_name: str
+    part_name: str
+    part_number: Optional[str]
+    quantity: int
+    material: Optional[str]
+    material_cost: float
+    labor_cost: float
+    overhead_cost: float
+    subcontract_cost: float
+    markup_pct: float
+    total_price: float
+    price_per_part: float
+    status: str
+    valid_until: Optional[datetime]
+    notes: Optional[str]
+    created_at: datetime
+    # Historical accuracy hint (populated when data exists)
+    accuracy_hint: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class NonConformanceReportCreate(BaseModel):
+    operation_id: Optional[int] = None
+    order_ref: Optional[str] = None
+    severity: str = Field(default="minor", pattern="^(critical|major|minor)$")
+    description: str
+
+
+class NonConformanceReportResponse(BaseModel):
+    id: int
+    operation_id: Optional[int]
+    order_ref: Optional[str]
+    severity: str
+    status: str
+    description: str
+    resolution: Optional[str]
+    created_at: datetime
+    resolved_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class FAIMeasurement(BaseModel):
+    dim_id: str
+    nominal: float
+    tolerance: float
+    actual: float
+    pass_: bool = Field(..., alias="pass")
+
+    model_config = {"populate_by_name": True}
+
+
+class FirstArticleInspectionCreate(BaseModel):
+    order_ref: Optional[str] = None
+    part_name: str
+    part_number: Optional[str] = None
+    revision: Optional[str] = None
+    inspector: Optional[str] = None
+    measurements: List[FAIMeasurement] = Field(default_factory=list)
+    notes: Optional[str] = None
+
+
+class FirstArticleInspectionResponse(BaseModel):
+    id: int
+    order_ref: Optional[str]
+    part_name: str
+    part_number: Optional[str]
+    revision: Optional[str]
+    inspector: Optional[str]
+    result: str
+    dims_total: int
+    dims_passed: int
+    notes: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ShopFloorEventResponse(BaseModel):
+    id: int
+    operation_id: Optional[int]
+    work_center_id: Optional[int]
+    operator_id: Optional[int]
+    event_type: str
+    payload: Dict[str, Any]
+    occurred_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Operator tablet endpoints (Prompt 2)
+# ---------------------------------------------------------------------------
+
+class OperatorTabletLoginRequest(BaseModel):
+    """Tablet login: scoped to a shop (user_id) + operator PIN."""
+    user_id: int
+    pin_code: str = Field(..., min_length=4, max_length=8)
+
+
+class OperatorLoginResponse(BaseModel):
+    operator_id: int
+    name: str
+    initials: str
+    qualified_work_centers: List["WorkCenterResponse"]
+
+
+class OperatorFlagRequest(BaseModel):
+    operator_id: int
+    severity: str = Field(default="minor", pattern="^(critical|major|minor)$")
+    description: str
+
+
+class ActiveOperationSummary(BaseModel):
+    id: int
+    operation_name: str
+    order_ref: Optional[str]
+    status: str
+    setup_started_at: Optional[datetime]
+    run_started_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class WorkCenterStatusResponse(BaseModel):
+    work_center_id: int
+    name: str
+    category: str
+    status: str
+    active_operation: Optional[ActiveOperationSummary]
+    queue_depth: int
+    estimated_hours_remaining: float

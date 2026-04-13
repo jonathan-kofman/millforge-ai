@@ -95,7 +95,7 @@ function FeedbackForm({ job, loading, error, onSubmit, onCancel }) {
   );
 }
 
-export default function JobsPage() {
+export default function JobsPage({ focusJobId = null }) {
   const [jobs, setJobs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -133,6 +133,9 @@ export default function JobsPage() {
   const [feedbackError, setFeedbackError] = useState(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
 
+  /** Expand full ARIA / CAM JSON for a job row */
+  const [openAriaDetails, setOpenAriaDetails] = useState({});
+
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -150,6 +153,24 @@ export default function JobsPage() {
   }, []);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
+
+  useEffect(() => {
+    if (focusJobId == null || loading || jobs.length === 0) return;
+    const el = document.getElementById(`millforge-job-${focusJobId}`);
+    if (!el) return;
+    const ring = ["ring-2", "ring-forge-500/90", "ring-offset-2", "ring-offset-gray-950", "rounded-lg"];
+    const t1 = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add(...ring);
+    }, 100);
+    const t2 = window.setTimeout(() => {
+      el.classList.remove(...ring);
+    }, 5200);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [focusJobId, loading, jobs]);
 
   // Parse JSON while user types and show preview
   useEffect(() => {
@@ -382,7 +403,7 @@ export default function JobsPage() {
       ) : (
         <div className="space-y-3">
           {jobs.map((job) => (
-            <div key={job.id} className="card flex flex-col gap-3">
+            <div key={job.id} id={`millforge-job-${job.id}`} className="card flex flex-col gap-3 transition-shadow">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -529,6 +550,23 @@ export default function JobsPage() {
                     Log times →
                   </button>
                 )
+              )}
+
+              {job.source === "aria_cam" && job.cam_metadata && Object.keys(job.cam_metadata).length > 0 && (
+                <div className="border-t border-gray-700/80 pt-2 mt-1">
+                  <button
+                    type="button"
+                    className="text-xs text-forge-400 hover:text-forge-300 font-medium"
+                    onClick={() => setOpenAriaDetails((o) => ({ ...o, [job.id]: !o[job.id] }))}
+                  >
+                    {openAriaDetails[job.id] ? "▼ Hide" : "▶"} ARIA / CAM details (full payload)
+                  </button>
+                  {openAriaDetails[job.id] && (
+                    <pre className="mt-2 text-[10px] leading-relaxed text-gray-400 bg-gray-900/90 rounded-lg p-3 overflow-x-auto max-h-72 overflow-y-auto whitespace-pre-wrap border border-gray-800">
+                      {JSON.stringify(job.cam_metadata, null, 2)}
+                    </pre>
+                  )}
+                </div>
               )}
             </div>
           ))}

@@ -40,6 +40,7 @@ from routers.jobs import router as jobs_router
 from routers.machines import router as machines_router, conflict_router as machines_conflict_router
 from routers.analytics import router as analytics_router
 from routers.business import router as business_router
+from routers.billing import router as billing_router
 from routers.market_quotes import router as market_quotes_router
 from routers.contracts import router as contracts_router
 from routers.manufacturing import router as manufacturing_router, set_registry as _set_mfg_registry
@@ -54,6 +55,7 @@ from routers.logbook import router as logbook_router
 from routers.as9100 import router as as9100_router
 from routers.inserts import router as inserts_router
 from routers.presetter import router as presetter_router
+from routers.operator import router as operator_router
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
@@ -217,6 +219,7 @@ app.include_router(jobs_router)
 app.include_router(machines_router)
 app.include_router(analytics_router)
 app.include_router(business_router)
+app.include_router(billing_router)
 app.include_router(market_quotes_router)
 app.include_router(contracts_router)
 app.include_router(manufacturing_router)
@@ -231,6 +234,7 @@ app.include_router(logbook_router)
 app.include_router(as9100_router)
 app.include_router(inserts_router)
 app.include_router(presetter_router)
+app.include_router(operator_router)
 
 
 # ---------------------------------------------------------------------------
