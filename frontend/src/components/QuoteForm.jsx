@@ -1,7 +1,54 @@
 import { useState } from "react";
 import { API_BASE } from "../config";
 
-const MATERIALS = ["steel", "aluminum", "titanium", "copper"];
+const MATERIALS = [
+  "steel", "aluminum", "titanium", "copper",
+  "stainless_steel", "carbon_steel", "brass", "bronze", "tool_steel", "cast_iron",
+];
+
+const MATERIAL_LABELS = {
+  steel: "Steel", aluminum: "Aluminum", titanium: "Titanium", copper: "Copper",
+  stainless_steel: "Stainless Steel", carbon_steel: "Carbon Steel",
+  brass: "Brass", bronze: "Bronze", tool_steel: "Tool Steel", cast_iron: "Cast Iron",
+};
+
+const PROCESS_GROUPS = [
+  {
+    label: "Machining",
+    processes: [
+      { value: "cnc_milling",   label: "CNC Milling"   },
+      { value: "cnc_turning",   label: "CNC Turning"   },
+    ],
+  },
+  {
+    label: "Cutting",
+    processes: [
+      { value: "cutting_laser",    label: "Laser"    },
+      { value: "cutting_plasma",   label: "Plasma"   },
+      { value: "cutting_waterjet", label: "Waterjet" },
+    ],
+  },
+  {
+    label: "Forming",
+    processes: [
+      { value: "bending_press_brake", label: "Bending"  },
+      { value: "stamping",            label: "Stamping"  },
+    ],
+  },
+  {
+    label: "Joining",
+    processes: [
+      { value: "welding_arc", label: "Arc Welding" },
+    ],
+  },
+  {
+    label: "EDM",
+    processes: [
+      { value: "edm_wire",   label: "Wire EDM"   },
+      { value: "edm_sinker", label: "Sinker EDM" },
+    ],
+  },
+];
 
 const PRIORITY_OPTIONS = [
   { value: 1,  label: "Rush",   desc: "Drop everything" },
@@ -14,6 +61,7 @@ const DEFAULT_FORM = {
   dimensions: "200x100x10mm",
   quantity: 500,
   priority: 5,
+  process_type: "cnc_milling",
   shifts_per_day: "",
   hours_per_shift: "",
 };
@@ -43,6 +91,8 @@ export default function QuoteForm({ onNavigate }) {
     }));
   };
 
+  const selectedProcess = PROCESS_GROUPS.flatMap(g => g.processes).find(p => p.value === form.process_type);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -53,6 +103,7 @@ export default function QuoteForm({ onNavigate }) {
         ...form,
         shifts_per_day: form.shifts_per_day ? Number(form.shifts_per_day) : undefined,
         hours_per_shift: form.hours_per_shift ? Number(form.hours_per_shift) : undefined,
+        process_type: form.process_type || "cnc_milling",
       };
       const res = await fetch(`${API_BASE}/api/quote`, {
         method: "POST",
@@ -80,13 +131,41 @@ export default function QuoteForm({ onNavigate }) {
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-5">
+        {/* Process type selector */}
+        <div>
+          <label className="label">Process</label>
+          <div className="space-y-2">
+            {PROCESS_GROUPS.map(group => (
+              <div key={group.label}>
+                <p className="text-xs text-gray-600 mb-1">{group.label}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.processes.map(p => (
+                    <button
+                      type="button"
+                      key={p.value}
+                      onClick={() => setForm(f => ({ ...f, process_type: p.value }))}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all duration-150 ${
+                        form.process_type === p.value
+                          ? "bg-forge-500/15 border-forge-500/50 text-forge-400"
+                          : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Row 1: Material + Quantity */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label">Material</label>
             <select name="material" value={form.material} onChange={handleChange} className="input">
               {MATERIALS.map((m) => (
-                <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                <option key={m} value={m}>{MATERIAL_LABELS[m] || m}</option>
               ))}
             </select>
           </div>
@@ -107,12 +186,21 @@ export default function QuoteForm({ onNavigate }) {
 
         {/* Row 2: Dimensions */}
         <div>
-          <label className="label">Dimensions (L×W×H)</label>
+          <label className="label">
+            {form.process_type === "welding_arc" ? "Weld Length (L×W mm)" :
+             form.process_type?.startsWith("cutting_") ? "Sheet Size (L×W×T mm)" :
+             form.process_type === "stamping" ? "Blank Size (L×W×T mm)" :
+             "Dimensions (L×W×H)"}
+          </label>
           <input
             name="dimensions"
             value={form.dimensions}
             onChange={handleChange}
-            placeholder="e.g. 200x100x10mm"
+            placeholder={
+              form.process_type === "welding_arc" ? "e.g. 500x300mm" :
+              form.process_type?.startsWith("cutting_") ? "e.g. 600x400x6mm" :
+              "e.g. 200x100x10mm"
+            }
             className="input"
             required
           />
@@ -200,7 +288,7 @@ export default function QuoteForm({ onNavigate }) {
             <Stat label="Total Price"      value={`$${result.total_price_usd.toLocaleString()}`} highlight />
             <Stat label="Lead Time"        value={`${result.estimated_lead_time_days} days`}     highlight />
             <Stat label="Unit Price"       value={`$${result.unit_price_usd}`} />
-            <Stat label="Machine Hours"    value={`${result.estimated_lead_time_hours}h`} />
+            <Stat label="Process Hours"    value={`${result.estimated_lead_time_hours}h`} />
           </div>
 
           {result.carbon_footprint_kg_co2 != null && (

@@ -13,6 +13,12 @@ class MaterialType(str, Enum):
     ALUMINUM = "aluminum"
     TITANIUM = "titanium"
     COPPER = "copper"
+    STAINLESS_STEEL = "stainless_steel"
+    CARBON_STEEL = "carbon_steel"
+    BRASS = "brass"
+    BRONZE = "bronze"
+    TOOL_STEEL = "tool_steel"
+    CAST_IRON = "cast_iron"
 
 
 # ---------------------------------------------------------------------------
@@ -27,6 +33,7 @@ class QuoteRequest(BaseModel):
     priority: int = Field(5, ge=1, le=10, description="Order priority: 1=urgent, 10=low")
     shifts_per_day: Optional[int] = Field(None, ge=1, le=3, description="Production shifts per day (1–3). Omit to assume 24h continuous operation.")
     hours_per_shift: Optional[int] = Field(None, ge=4, le=12, description="Hours per shift (4–12). Used with shifts_per_day to convert scheduled hours to calendar days.")
+    process_type: str = Field("cnc_milling", description="Manufacturing process family. Default: cnc_milling. Others: cnc_turning, cutting_laser, cutting_plasma, cutting_waterjet, bending_press_brake, welding_arc, stamping, edm_wire, edm_sinker.")
 
     model_config = {
         "json_schema_extra": {
