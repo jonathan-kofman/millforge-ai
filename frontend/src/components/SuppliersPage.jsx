@@ -10,13 +10,22 @@ const CATEGORY_COLORS = {
 
 const CERT_OPTIONS = ["AS9100D", "ISO 9001", "ITAR", "NADCAP", "ISO 13485", "AISC Certified"];
 
-const MOCK_RFQS = [
-  { id: "RFQ-001", material: "304 Stainless Steel Sheet", quantity: "500 lbs", deadline: "2026-05-01", location: "Cleveland, OH", certs: ["ISO 9001"], posted: "2h ago", responses: 3 },
-  { id: "RFQ-002", material: "6061 Aluminum Bar Stock", quantity: "2,000 lbs", deadline: "2026-04-25", location: "Detroit, MI", certs: [], posted: "5h ago", responses: 7 },
-  { id: "RFQ-003", material: "A36 Carbon Steel Plate", quantity: "10 sheets, 1\" thick", deadline: "2026-05-15", location: "Pittsburgh, PA", certs: ["AS9100D"], posted: "1d ago", responses: 2 },
-  { id: "RFQ-004", material: "Titanium Grade 5 Rod", quantity: "50 lbs", deadline: "2026-04-30", location: "Wichita, KS", certs: ["ITAR", "AS9100D"], posted: "1d ago", responses: 1 },
-  { id: "RFQ-005", material: "Copper Alloy C110", quantity: "200 lbs", deadline: "2026-05-10", location: "Cincinnati, OH", certs: [], posted: "2d ago", responses: 4 },
+const SEED_RFQS = [
+  { rfq_id: "RFQ-001", material: "304 Stainless Steel Sheet", quantity: "500 lbs", deadline: "2026-05-01", location: "Cleveland, OH", certs: ["ISO 9001"], posted_at: null, response_count: 3 },
+  { rfq_id: "RFQ-002", material: "6061 Aluminum Bar Stock", quantity: "2,000 lbs", deadline: "2026-04-25", location: "Detroit, MI", certs: [], posted_at: null, response_count: 7 },
+  { rfq_id: "RFQ-003", material: "A36 Carbon Steel Plate", quantity: "10 sheets, 1\" thick", deadline: "2026-05-15", location: "Pittsburgh, PA", certs: ["AS9100D"], posted_at: null, response_count: 2 },
+  { rfq_id: "RFQ-004", material: "Titanium Grade 5 Rod", quantity: "50 lbs", deadline: "2026-04-30", location: "Wichita, KS", certs: ["ITAR", "AS9100D"], posted_at: null, response_count: 1 },
+  { rfq_id: "RFQ-005", material: "Copper Alloy C110", quantity: "200 lbs", deadline: "2026-05-10", location: "Cincinnati, OH", certs: [], posted_at: null, response_count: 4 },
 ];
+
+function timeAgo(isoStr) {
+  if (!isoStr) return null;
+  const diff = (Date.now() - new Date(isoStr + "Z").getTime()) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
 
 function QuickRFQForm({ supplierName, onClose }) {
   const [form, setForm] = useState({ material: "", quantity: "", notes: "", email: "" });
@@ -159,11 +168,159 @@ function SupplierCard({ supplier, distance }) {
   );
 }
 
+function RespondForm({ rfqId, onClose, onSuccess }) {
+  const [form, setForm] = useState({ supplier_name: "", email: "", message: "", price_indication: "", lead_time_indication: "" });
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/rfqs/${rfqId}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || "Failed"); }
+      setSent(true);
+      onSuccess?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <div className="text-center py-3">
+        <p className="text-sm font-semibold text-green-400">Response sent!</p>
+        <p className="text-xs text-gray-500 mt-1">The buyer will receive your contact details.</p>
+        <button onClick={onClose} className="text-xs text-gray-500 hover:text-gray-300 mt-2 underline">Close</button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2.5">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="label">Your company *</label>
+          <input className="input text-xs py-1.5" placeholder="Acme Steel LLC" value={form.supplier_name}
+            onChange={e => setForm(f => ({ ...f, supplier_name: e.target.value }))} required />
+        </div>
+        <div>
+          <label className="label">Your email *</label>
+          <input type="email" className="input text-xs py-1.5" placeholder="you@company.com" value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="label">Price indication</label>
+          <input className="input text-xs py-1.5" placeholder="$1.20/lb, $850 total…" value={form.price_indication}
+            onChange={e => setForm(f => ({ ...f, price_indication: e.target.value }))} />
+        </div>
+        <div>
+          <label className="label">Lead time</label>
+          <input className="input text-xs py-1.5" placeholder="3–5 business days" value={form.lead_time_indication}
+            onChange={e => setForm(f => ({ ...f, lead_time_indication: e.target.value }))} />
+        </div>
+      </div>
+      <div>
+        <label className="label">Message</label>
+        <textarea className="input text-xs py-1.5 h-14 resize-none"
+          placeholder="Certifications held, min order qty, any questions…" value={form.message}
+          onChange={e => setForm(f => ({ ...f, message: e.target.value }))} />
+      </div>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      <div className="flex gap-2">
+        <button type="submit" disabled={loading} className="btn-primary text-xs py-1.5 flex-1">
+          {loading ? "Sending…" : "Submit Response"}
+        </button>
+        <button type="button" onClick={onClose} className="btn-secondary text-xs py-1.5 px-3">Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function RFQCard({ rfq, onResponded }) {
+  const [showRespond, setShowRespond] = useState(false);
+  const ago = timeAgo(rfq.posted_at);
+
+  return (
+    <div className="card hover:border-gray-700 transition-colors">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span className="text-xs text-gray-600 font-mono">{rfq.rfq_id}</span>
+            {ago && <><span className="text-gray-700">·</span><span className="text-xs text-gray-500">{ago}</span></>}
+            {rfq.location && <><span className="text-gray-700">·</span><span className="text-xs text-gray-500">{rfq.location}</span></>}
+            {!rfq.posted_at && <span className="text-xs text-gray-700 italic">example</span>}
+          </div>
+          <p className="font-semibold text-white">{rfq.material}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {rfq.quantity && `${rfq.quantity} · `}
+            {rfq.deadline && `Need by ${rfq.deadline}`}
+          </p>
+          {rfq.certs?.length > 0 && (
+            <div className="flex gap-1 mt-2 flex-wrap">
+              {rfq.certs.map(c => (
+                <span key={c} className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">{c}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="text-xl font-bold text-forge-400">{rfq.response_count}</p>
+          <p className="text-xs text-gray-500 mb-2">responses</p>
+          <button
+            onClick={() => setShowRespond(v => !v)}
+            className="text-xs font-semibold text-forge-400 border border-forge-500/30 bg-forge-500/10 hover:bg-forge-500/20 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {showRespond ? "Cancel" : "Respond →"}
+          </button>
+        </div>
+      </div>
+      {showRespond && (
+        <div className="mt-3 pt-3 border-t border-gray-800">
+          <p className="text-xs text-gray-500 mb-2">
+            Responding to <span className="text-gray-300">{rfq.rfq_id} — {rfq.material}</span>
+          </p>
+          <RespondForm
+            rfqId={rfq.rfq_id}
+            onClose={() => setShowRespond(false)}
+            onSuccess={() => { setShowRespond(false); onResponded?.(); }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RFQBoard() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ material: "", quantity: "", deadline: "", location: "", certs: [], notes: "", email: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [rfqs, setRfqs] = useState(SEED_RFQS);
+  const [rfqsLoaded, setRfqsLoaded] = useState(false);
+
+  const loadRFQs = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/rfqs`);
+      if (res.ok) {
+        const data = await res.json();
+        setRfqs(data.length > 0 ? data : SEED_RFQS);
+        setRfqsLoaded(true);
+      }
+    } catch {}
+  };
+
+  useEffect(() => { loadRFQs(); }, []);
 
   const toggleCert = (cert) => {
     setForm(f => ({
@@ -176,17 +333,24 @@ function RFQBoard() {
     e.preventDefault();
     setLoading(true);
     try {
-      await fetch(`${API_BASE}/api/contact`, {
+      const res = await fetch(`${API_BASE}/api/rfqs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.email.split("@")[0],
+          material: form.material,
+          quantity: form.quantity || undefined,
+          deadline: form.deadline || undefined,
+          location: form.location || undefined,
+          certs: form.certs,
+          notes: form.notes || undefined,
           email: form.email,
-          company: form.location,
-          message: `RFQ Board Post: ${form.material}, ${form.quantity}, deadline ${form.deadline}. Certs: ${form.certs.join(", ") || "none"}. Notes: ${form.notes}`,
-          source: "rfq_board",
         }),
       });
+      if (res.ok) {
+        const created = await res.json();
+        setRfqs(prev => [created, ...prev.filter(r => r.posted_at !== null)]);
+        setRfqsLoaded(true);
+      }
     } catch {}
     setSubmitted(true);
     setLoading(false);
@@ -213,7 +377,7 @@ function RFQBoard() {
               </div>
               <p className="font-semibold text-white mb-1">Request posted!</p>
               <p className="text-sm text-gray-400">Matching suppliers will be notified.</p>
-              <button onClick={() => { setSubmitted(false); setShowForm(false); }} className="btn-secondary text-sm mt-4">
+              <button onClick={() => { setSubmitted(false); setShowForm(false); setForm({ material: "", quantity: "", deadline: "", location: "", certs: [], notes: "", email: "" }); }} className="btn-secondary text-sm mt-4">
                 Post another
               </button>
             </div>
@@ -280,40 +444,9 @@ function RFQBoard() {
         </div>
       )}
 
-      {/* Active RFQ listings */}
       <div className="space-y-3">
-        {MOCK_RFQS.map(rfq => (
-          <div key={rfq.id} className="card hover:border-gray-700 transition-colors">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <span className="text-xs text-gray-600 font-mono">{rfq.id}</span>
-                  <span className="text-gray-700">·</span>
-                  <span className="text-xs text-gray-500">{rfq.posted}</span>
-                  <span className="text-gray-700">·</span>
-                  <span className="text-xs text-gray-500">{rfq.location}</span>
-                </div>
-                <p className="font-semibold text-white">{rfq.material}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{rfq.quantity} · Need by {rfq.deadline}</p>
-                {rfq.certs.length > 0 && (
-                  <div className="flex gap-1 mt-2 flex-wrap">
-                    {rfq.certs.map(c => (
-                      <span key={c} className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                        {c}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-xl font-bold text-forge-400">{rfq.responses}</p>
-                <p className="text-xs text-gray-500 mb-2">responses</p>
-                <button className="text-xs font-semibold text-forge-400 border border-forge-500/30 bg-forge-500/10 hover:bg-forge-500/20 px-3 py-1.5 rounded-lg transition-colors">
-                  Respond →
-                </button>
-              </div>
-            </div>
-          </div>
+        {rfqs.map(rfq => (
+          <RFQCard key={rfq.rfq_id} rfq={rfq} onResponded={loadRFQs} />
         ))}
       </div>
     </div>

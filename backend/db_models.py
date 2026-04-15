@@ -349,6 +349,45 @@ class Supplier(Base):
         return f"<Supplier id={self.id} name={self.name} state={self.state}>"
 
 
+class MarketplaceRFQ(Base):
+    """Buyer-posted material request visible on the RFQ board."""
+
+    __tablename__ = "marketplace_rfqs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    rfq_id: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    material: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    deadline: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)   # ISO date string
+    location: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    certs: Mapped[list] = mapped_column(JSON, default=list)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    response_count: Mapped[int] = mapped_column(Integer, default=0)
+    posted_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    responses: Mapped[list["MarketplaceRFQResponse"]] = relationship(
+        "MarketplaceRFQResponse", back_populates="rfq", cascade="all, delete-orphan"
+    )
+
+
+class MarketplaceRFQResponse(Base):
+    """Supplier response to a marketplace RFQ."""
+
+    __tablename__ = "marketplace_rfq_responses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    rfq_id: Mapped[int] = mapped_column(Integer, ForeignKey("marketplace_rfqs.id"), nullable=False)
+    supplier_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    price_indication: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    lead_time_indication: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    responded_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    rfq: Mapped["MarketplaceRFQ"] = relationship("MarketplaceRFQ", back_populates="responses")
+
+
 class ToolRecord(Base):
     """Registered CNC tool — tracks identity and expected life."""
 

@@ -48,6 +48,7 @@ from routers.aria_bridge import router as aria_bridge_router
 from routers.demo_chain import router as demo_chain_router
 from routers.toolwear import router as toolwear_router
 from routers.aria_scan import router as aria_scan_router
+from routers.rfqs import router as rfqs_router
 # Quality & Compliance modules
 from routers.mtr import router as mtr_router
 from routers.drawing import router as drawing_router
@@ -237,6 +238,7 @@ app.include_router(inserts_router)
 app.include_router(presetter_router)
 app.include_router(operator_router)
 app.include_router(notifications_router)
+app.include_router(rfqs_router)
 
 
 # ---------------------------------------------------------------------------

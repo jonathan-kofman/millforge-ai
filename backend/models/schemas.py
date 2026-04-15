@@ -1655,3 +1655,50 @@ class WorkCenterStatusResponse(BaseModel):
     active_operation: Optional[ActiveOperationSummary]
     queue_depth: int
     estimated_hours_remaining: float
+
+
+# ---------------------------------------------------------------------------
+# /api/rfqs — Marketplace RFQ board
+# ---------------------------------------------------------------------------
+
+class RFQCreate(BaseModel):
+    material: str = Field(..., min_length=1, max_length=255)
+    quantity: Optional[str] = None
+    deadline: Optional[str] = None
+    location: Optional[str] = None
+    certs: List[str] = Field(default_factory=list)
+    notes: Optional[str] = None
+    email: EmailStr
+
+
+class RFQResponseCreate(BaseModel):
+    supplier_name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+    message: Optional[str] = None
+    price_indication: Optional[str] = None
+    lead_time_indication: Optional[str] = None
+
+
+class RFQOut(BaseModel):
+    rfq_id: str
+    material: str
+    quantity: Optional[str]
+    deadline: Optional[str]
+    location: Optional[str]
+    certs: List[str]
+    notes: Optional[str]
+    response_count: int
+    posted_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RFQResponseOut(BaseModel):
+    id: int
+    supplier_name: str
+    message: Optional[str]
+    price_indication: Optional[str]
+    lead_time_indication: Optional[str]
+    responded_at: datetime
+
+    model_config = {"from_attributes": True}
