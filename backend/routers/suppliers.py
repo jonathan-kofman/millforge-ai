@@ -108,6 +108,57 @@ async def nearby_suppliers(
 
 
 @router.get(
+    "/recommend",
+    summary="Recommend suppliers for a work-center capability the shop lacks",
+)
+async def recommend_suppliers(
+    capability: str = Query(..., description="Work center category needed (e.g. 'anodizing_line', 'powder_coat_booth', 'heat_treat_oven', 'plating')"),
+    lat: Optional[float] = Query(None, ge=-90.0, le=90.0, description="Shop latitude — when provided, results are distance-ranked"),
+    lng: Optional[float] = Query(None, ge=-180.0, le=180.0, description="Shop longitude — when provided, results are distance-ranked"),
+    radius_miles: float = Query(500.0, gt=0, le=3000, description="Max search radius in miles"),
+    material: Optional[str] = Query(None, description="Optional material filter (steel, aluminum, etc.)"),
+    limit: int = Query(3, ge=1, le=10),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Auto-suggest subcontractors for ops the shop can't run in-house.
+
+    Maps `capability` (a work-center category from the operations array)
+    to material categories + keyword scores against the supplier directory,
+    and returns the top-N matches with a confidence score.
+
+    Use this when an Operation has `is_subcontracted=True` or when the
+    scheduler detects that a required `work_center_category` has no
+    matching active WorkCenter in the user's shop.
+    """
+    results = _directory.recommend_for_capability(
+        db,
+        capability=capability,
+        lat=lat,
+        lng=lng,
+        radius_miles=radius_miles,
+        material=material,
+        limit=limit,
+    )
+    return {
+        "capability": capability,
+        "lat": lat,
+        "lng": lng,
+        "radius_miles": radius_miles,
+        "material": material,
+        "result_count": len(results),
+        "recommendations": [
+            {
+                **SupplierResponse.model_validate(s).model_dump(),
+                "distance_miles": dist,
+                "confidence": conf,
+            }
+            for s, dist, conf in results
+        ],
+    }
+
+
+@router.get(
     "/{supplier_id}",
     response_model=SupplierResponse,
     summary="Get a single supplier by ID",
