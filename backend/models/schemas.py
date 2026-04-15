@@ -88,6 +88,15 @@ class ScheduleRequest(BaseModel):
     battery_soc_percent: Optional[float] = Field(None, ge=0.0, le=100.0, description="Battery state of charge (0–100%). Influences energy scheduling recommendations.")
     shop_lat: Optional[float] = Field(None, description="Shop latitude for nearby supplier lookup.")
     shop_lng: Optional[float] = Field(None, description="Shop longitude for nearby supplier lookup.")
+    energy_optimized: bool = Field(
+        False,
+        description=(
+            "When true, the SA optimizer adds a grid-rate x machine-power "
+            "energy cost term to its objective so jobs are nudged into "
+            "off-peak hours. Does NOT affect /api/schedule/benchmark — "
+            "that path always uses the locked tardiness-only objective."
+        ),
+    )
 
     model_config = {
         "json_schema_extra": {

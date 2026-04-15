@@ -32,6 +32,7 @@ from .scheduler import (
     Order, Schedule, ScheduledOrder, Scheduler,
     SETUP_MATRIX, BASE_SETUP_MINUTES,
 )
+from .energy_optimizer import MOCK_HOURLY_RATES, MACHINE_POWER_KW
 
 logger = logging.getLogger(__name__)
 
@@ -70,16 +71,25 @@ class SAScheduler:
         initial_temp: float = DEFAULT_INIT_TEMP,
         cooling_rate: float = DEFAULT_COOL_RATE,
         seed: Optional[int] = None,
+        energy_weight: float = 0.0,
     ):
         self.machine_count = machine_count
         self.max_iterations = max_iterations
         self.initial_temp = initial_temp
         self.cooling_rate = cooling_rate
+        # energy_weight=0.0 is the deterministic, benchmark-locked path:
+        # _energy() returns pure weighted tardiness, identical to the
+        # original objective. Setting > 0 nudges the optimizer toward
+        # off-peak hours by adding hourly-rate × machine-power energy
+        # cost to the objective. Default off so /api/schedule/benchmark
+        # never changes (FIFO 60.7%, EDD 82.1%, SA 96.4%).
+        self.energy_weight = energy_weight
         self._rng = random.Random(seed)  # isolated RNG — doesn't affect global state
         self._edd = Scheduler(machine_count)
         logger.info(
             f"SAScheduler initialized: machines={machine_count} "
-            f"max_iter={max_iterations} T0={initial_temp} α={cooling_rate}"
+            f"max_iter={max_iterations} T0={initial_temp} α={cooling_rate} "
+            f"energy_weight={energy_weight}"
         )
 
     # ------------------------------------------------------------------
@@ -167,18 +177,66 @@ class SAScheduler:
 
     def _energy(self, state: State, orders_by_id: Dict[str, Order], start_time: datetime) -> float:
         """
-        Compute total weighted tardiness for a given state.
+        Compute the SA objective ("energy") for a state.
 
-        Lower is better. Units: priority-weighted tardiness hours.
+        With energy_weight=0 (default) this is pure priority-weighted
+        tardiness — same as before, deterministic, benchmark-locked.
+
+        With energy_weight>0, an electricity-cost term is added so the
+        optimizer prefers running power-hungry jobs during off-peak
+        hours. Units of the energy term are USD; the weight is applied
+        directly so a value of e.g. 0.15 makes $1 of energy cost feel
+        like 0.15 priority-weighted tardiness hours to the optimizer.
+
+        Lower is better.
         """
         completions = self._completion_times(state, orders_by_id, start_time)
-        total = 0.0
+        tardiness_total = 0.0
         for oid, ct in completions.items():
             order = orders_by_id[oid]
             tardiness_h = max(0.0, (ct - order.due_date).total_seconds() / 3600)
             weight = max(1, 11 - order.priority)   # priority 1 → weight 10
-            total += weight * tardiness_h
-        return total
+            tardiness_total += weight * tardiness_h
+
+        if self.energy_weight > 0.0:
+            return tardiness_total + self.energy_weight * self._energy_cost(
+                state, orders_by_id, start_time
+            )
+        return tardiness_total
+
+    def _energy_cost(
+        self, state: State, orders_by_id: Dict[str, Order], start_time: datetime
+    ) -> float:
+        """
+        Total electricity cost ($) of running the schedule.
+
+        Each operation costs proc_minutes/60 × machine_kW × MOCK_HOURLY_RATES[hour]
+        where `hour` is the wall-clock hour the run-phase starts. Setup
+        time is excluded — most setup work is low-power compared to
+        actual machining.
+
+        Pure helper — has no side effects, used by _energy() when the
+        energy_weight is non-zero.
+        """
+        total_cost = 0.0
+        for sequence in state:
+            t = start_time
+            last_mat: Optional[str] = None
+            for oid in sequence:
+                order = orders_by_id[oid]
+                setup_m = self._setup(last_mat, order.material)
+                proc_m = order.base_processing_minutes
+                proc_start = t + timedelta(minutes=setup_m)
+                hour = proc_start.hour  # 0..23
+                rate = MOCK_HOURLY_RATES[hour % 24]   # $/kWh
+                power_kw = MACHINE_POWER_KW.get(
+                    order.material.lower(), MACHINE_POWER_KW["default"]
+                )
+                energy_kwh = power_kw * (proc_m / 60.0)
+                total_cost += rate * energy_kwh
+                t = proc_start + timedelta(minutes=proc_m)
+                last_mat = order.material
+        return total_cost
 
     # ------------------------------------------------------------------
     # Completion time simulation

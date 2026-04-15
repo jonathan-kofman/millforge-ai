@@ -158,10 +158,14 @@ async def optimize_schedule(
         except Exception as e:
             logger.warning(f"Failed to lookup user's ShopConfig: {e}")
 
-    # Create or reuse scheduler with the appropriate machine count
+    # Create or reuse scheduler with the appropriate machine count.
+    # When energy_optimized=True we always build a fresh SAScheduler so the
+    # singleton used by /api/schedule/benchmark keeps its locked objective
+    # and the deterministic 60.7/82.1/96.4 numbers stay frozen.
+    energy_weight = 0.15 if (algorithm == "sa" and req.energy_optimized) else 0.0
     if algorithm == "sa":
-        if machine_count != MACHINE_COUNT:
-            engine = SAScheduler(machine_count=machine_count)
+        if machine_count != MACHINE_COUNT or energy_weight > 0.0:
+            engine = SAScheduler(machine_count=machine_count, energy_weight=energy_weight)
         else:
             engine = _sa
     else:
