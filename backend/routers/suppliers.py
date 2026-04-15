@@ -140,6 +140,21 @@ async def recommend_suppliers(
         material=material,
         limit=limit,
     )
+    try:
+        from routers.analytics import record_event
+        record_event(
+            db,
+            user_id=None,
+            event_category="supplier",
+            event_type="supplier_recommended",
+            payload={
+                "capability": capability,
+                "result_count": len(results),
+                "has_geo": lat is not None and lng is not None,
+            },
+        )
+    except Exception:
+        pass
     return {
         "capability": capability,
         "lat": lat,

@@ -159,7 +159,7 @@ async def nl_schedule(req: NLScheduleRequest) -> NLScheduleResponse:
     gantt_diff = _compute_gantt_diff(gantt_before, gantt_after)
     schedule_response = _build_response(schedule, "sa")
 
-    return NLScheduleResponse(
+    response = NLScheduleResponse(
         instruction=req.instruction,
         overrides_applied=[
             PriorityOverrideItem(
@@ -179,6 +179,28 @@ async def nl_schedule(req: NLScheduleRequest) -> NLScheduleResponse:
         gantt_after=gantt_after,
         gantt_diff=gantt_diff,
     )
+
+    # Fire-and-forget product analytics event
+    try:
+        from routers.analytics import record_event
+        from database import SessionLocal
+        with SessionLocal() as ev_db:
+            record_event(
+                ev_db,
+                user_id=None,
+                event_category="scheduling",
+                event_type="nl_override",
+                payload={
+                    "instruction_len": len(req.instruction),
+                    "override_count": len(nl_result.overrides),
+                    "machine_down": nl_result.machine_down,
+                    "targeted_work_centers": nl_result.targeted_work_centers,
+                },
+            )
+    except Exception:
+        pass
+
+    return response
 
 
 # ---------------------------------------------------------------------------

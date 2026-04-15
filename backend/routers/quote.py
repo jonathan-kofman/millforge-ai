@@ -110,7 +110,10 @@ def _load_db_queue(db: Session) -> list[Order]:
 
 
 @router.post("/quote", response_model=QuoteResponse, summary="Instant quote within real shop capacity constraints")
-async def get_quote(req: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse:
+async def get_quote(
+    req: QuoteRequest,
+    db: Session = Depends(get_db),
+) -> QuoteResponse:
     """
     Accept material, dimensions, and quantity; return a price and realistic
     lead-time estimate grounded in the shop's current capacity.
@@ -182,7 +185,7 @@ async def get_quote(req: QuoteRequest, db: Session = Depends(get_db)) -> QuoteRe
     except Exception as e:
         logger.warning(f"Carbon footprint calc failed (non-fatal): {e}")
 
-    return QuoteResponse(
+    response = QuoteResponse(
         quote_id=new_order.order_id,
         material=req.material.value,
         dimensions=req.dimensions,
@@ -195,6 +198,26 @@ async def get_quote(req: QuoteRequest, db: Session = Depends(get_db)) -> QuoteRe
         notes=notes,
         carbon_footprint_kg_co2=carbon_kg,
     )
+
+    # Fire-and-forget product analytics event
+    try:
+        from routers.analytics import record_event
+        record_event(
+            db,
+            user_id=None,  # quote endpoint is public
+            event_category="scheduling",
+            event_type="quote_generated",
+            payload={
+                "material": req.material.value,
+                "quantity": req.quantity,
+                "lead_time_days": round(lead_time_days, 2),
+                "total_price_usd": round(total_price, 2),
+            },
+        )
+    except Exception:
+        pass
+
+    return response
 
 
 def _volume_discount(quantity: int) -> float:

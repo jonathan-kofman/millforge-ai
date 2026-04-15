@@ -234,6 +234,24 @@ async def optimize_schedule(
         except Exception as exc:
             logger.warning("Supplier lookup failed (non-fatal): %s", exc)
 
+    # Fire-and-forget product analytics event for the schedule run
+    try:
+        from routers.analytics import record_event
+        record_event(
+            db,
+            user_id=user.id if user else None,
+            event_category="scheduling",
+            event_type="schedule_run",
+            payload={
+                "algorithm": algorithm,
+                "order_count": len(req.orders),
+                "on_time_rate": schedule.on_time_rate,
+                "energy_optimized": req.energy_optimized,
+            },
+        )
+    except Exception:
+        pass
+
     return response
 
 

@@ -41,7 +41,7 @@ async def estimate_energy(req: EnergyEstimateRequest) -> EnergyEstimateResponse:
         logger.error("Energy estimate error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Energy estimation error")
 
-    return EnergyEstimateResponse(
+    response = EnergyEstimateResponse(
         start_time=profile.start_time,
         end_time=profile.end_time,
         material=profile.material,
@@ -53,6 +53,25 @@ async def estimate_energy(req: EnergyEstimateRequest) -> EnergyEstimateResponse:
         data_source=profile.data_source,
         validation_failures=profile.validation_failures,
     )
+    try:
+        from routers.analytics import record_event
+        from database import SessionLocal
+        with SessionLocal() as ev_db:
+            record_event(
+                ev_db,
+                user_id=None,
+                event_category="energy",
+                event_type="energy_analysis",
+                payload={
+                    "material": req.material.value,
+                    "duration_hours": req.duration_hours,
+                    "kwh": round(profile.estimated_kwh, 2),
+                    "cost_usd": round(profile.estimated_cost_usd, 2),
+                },
+            )
+    except Exception:
+        pass
+    return response
 
 
 @router.get(
