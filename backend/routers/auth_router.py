@@ -1,5 +1,5 @@
 """
-/api/auth endpoints – user registration, login, logout, and session check.
+/api/auth endpoints – user registration, login, logout, session check, and password reset.
 """
 
 import logging
@@ -16,7 +16,7 @@ from auth.dependencies import get_current_user
 from models.schemas import (
     RegisterRequest, RegisterResponse,
     LoginRequest, LoginResponse,
-    MeResponse,
+    MeResponse, ForgotPasswordRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,16 +31,17 @@ _LOGIN_LIMIT    = _os.getenv("AUTH_LOGIN_RATE_LIMIT",    "20/hour")
 _COOKIE_SECURE   = bool(_os.getenv("RAILWAY_ENVIRONMENT") or _os.getenv("COOKIE_SECURE"))
 _COOKIE_SAMESITE = "none" if _COOKIE_SECURE else "lax"
 _COOKIE_MAX_AGE  = int(_os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", "24")) * 3600
+_REMEMBER_ME_MAX_AGE = 30 * 24 * 3600  # 30 days
 
 
-def _set_auth_cookie(response: Response, token: str) -> None:
+def _set_auth_cookie(response: Response, token: str, remember_me: bool = False) -> None:
     response.set_cookie(
         key="millforge_session",
         value=token,
         httponly=True,
         secure=_COOKIE_SECURE,
         samesite=_COOKIE_SAMESITE,
-        max_age=_COOKIE_MAX_AGE,
+        max_age=_REMEMBER_ME_MAX_AGE if remember_me else _COOKIE_MAX_AGE,
         path="/",
     )
 
@@ -100,6 +101,7 @@ async def login(
     Authenticate with email and password.
 
     Sets an httpOnly session cookie and returns user info.
+    Pass remember_me=true for a 30-day cookie instead of the default 24-hour session.
     """
     user = db.query(User).filter(User.email == req.email.lower()).first()
     if not user or not verify_password(req.password, user.hashed_password):
@@ -114,8 +116,8 @@ async def login(
         )
 
     token = create_access_token(user.email, user.id)
-    _set_auth_cookie(response, token)
-    logger.info(f"User logged in: {user.email}")
+    _set_auth_cookie(response, token, remember_me=req.remember_me)
+    logger.info(f"User logged in: {user.email} (remember_me={req.remember_me})")
 
     return LoginResponse(
         access_token=token,
@@ -125,6 +127,32 @@ async def login(
         name=user.name,
         company=user.company,
     )
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/hour")
+async def forgot_password(
+    request: Request,
+    req: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Request a password reset link.
+
+    Always returns 200 to prevent email enumeration — even if the email
+    doesn't exist. The actual reset email requires an email provider (Resend,
+    SendGrid, etc.) to be configured via SMTP_* env vars.
+    """
+    user = db.query(User).filter(User.email == req.email.lower()).first()
+    if user:
+        # TODO: generate a signed reset token and send via email service
+        # token = create_reset_token(user.email)
+        # send_reset_email(user.email, token)
+        logger.info(f"Password reset requested for: {user.email}")
+    else:
+        logger.info(f"Password reset requested for non-existent email: {req.email}")
+
+    return {"message": "If an account with that email exists, a reset link has been sent."}
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -31,10 +31,13 @@ const STATUS_DOT = {
 };
 
 export default function AuthModal({ onSuccess, onClose }) {
+  // mode: "login" | "register" | "forgot"
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ email: "", password: "", name: "", company: "" });
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [forgotSent, setForgotSent] = useState(false);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -42,9 +45,28 @@ export default function AuthModal({ onSuccess, onClose }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Forgot password flow
+    if (mode === "forgot") {
+      try {
+        await fetch(`${API_BASE}/api/auth/forgot-password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: form.email }),
+        });
+        setForgotSent(true);
+      } catch {
+        setForgotSent(true); // show success even on network error — prevents enumeration
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Login / register flow
     const url = mode === "login" ? `${API_BASE}/api/auth/login` : `${API_BASE}/api/auth/register`;
     const body = mode === "login"
-      ? { email: form.email, password: form.password }
+      ? { email: form.email, password: form.password, remember_me: rememberMe }
       : { email: form.email, password: form.password, name: form.name, company: form.company || undefined };
     try {
       const res = await fetch(url, {
@@ -63,6 +85,8 @@ export default function AuthModal({ onSuccess, onClose }) {
       setLoading(false);
     }
   };
+
+  const switchMode = (m) => { setMode(m); setError(null); setForgotSent(false); };
 
   const inputStyle = {
     width: "100%",
@@ -167,80 +191,157 @@ export default function AuthModal({ onSuccess, onClose }) {
           ← Back to site
         </button>
 
-        {/* Mode toggle */}
-        <div style={{ display: "flex", background: T.bg3, borderRadius: "10px", padding: "3px", marginBottom: "32px", border: `1px solid ${T.border}` }}>
-          {["login", "register"].map(m => (
+        {/* ── Forgot password view ── */}
+        {mode === "forgot" ? (
+          <>
             <button
-              key={m}
-              onClick={() => { setMode(m); setError(null); }}
-              style={{ flex: 1, padding: "9px", borderRadius: "8px", border: "none", background: mode === m ? `linear-gradient(135deg, ${T.brand}20, ${T.brand}10)` : "transparent", color: mode === m ? T.brand : T.text3, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit", boxShadow: mode === m ? `inset 0 0 0 1px ${T.brand}40` : "none" }}
+              onClick={() => switchMode("login")}
+              style={{ background: "none", border: "none", color: T.text3, fontSize: "12px", cursor: "pointer", textAlign: "left", marginBottom: "24px", display: "flex", alignItems: "center", gap: "6px", padding: 0, fontFamily: "inherit" }}
             >
-              {m === "login" ? "Sign In" : "Register"}
+              ← Back to sign in
             </button>
-          ))}
-        </div>
 
-        <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.text0, letterSpacing: "-0.02em", marginBottom: "6px" }}>
-          {mode === "login" ? "Welcome back" : "Create your account"}
-        </h2>
-        <p style={{ fontSize: "13px", color: T.text3, marginBottom: "28px", lineHeight: 1.5 }}>
-          {mode === "login"
-            ? "Sign in to access your shop floor dashboard."
-            : "Get started with AI-powered production scheduling."}
-        </p>
+            <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.text0, letterSpacing: "-0.02em", marginBottom: "6px" }}>Reset your password</h2>
+            <p style={{ fontSize: "13px", color: T.text3, marginBottom: "28px", lineHeight: 1.5 }}>
+              Enter your email and we&apos;ll send a reset link if an account exists.
+            </p>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {mode === "register" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div>
-                <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em", display: "block", marginBottom: "7px" }}>NAME *</label>
-                <input name="name" value={form.name} onChange={handleChange} style={inputStyle} placeholder="Jane Smith" required minLength={2} />
+            {forgotSent ? (
+              <div style={{ padding: "20px", borderRadius: "12px", background: `${T.green}12`, border: `1px solid ${T.green}30`, textAlign: "center" }}>
+                <div style={{ fontSize: "24px", marginBottom: "10px" }}>✓</div>
+                <p style={{ fontSize: "14px", color: T.green, fontWeight: 600, marginBottom: "6px" }}>Check your inbox</p>
+                <p style={{ fontSize: "12px", color: T.text3, lineHeight: 1.5 }}>
+                  If <strong style={{ color: T.text1 }}>{form.email}</strong> has an account, a reset link is on its way.
+                </p>
+                <button
+                  onClick={() => switchMode("login")}
+                  style={{ marginTop: "16px", background: "none", border: `1px solid ${T.border}`, borderRadius: "8px", color: T.text2, fontSize: "12px", fontWeight: 600, padding: "8px 16px", cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Back to sign in
+                </button>
               </div>
+            ) : (
+              <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em", display: "block", marginBottom: "7px" }}>EMAIL *</label>
+                  <input name="email" type="email" value={form.email} onChange={handleChange} style={inputStyle} placeholder="jane@company.com" required />
+                </div>
+                {error && (
+                  <div style={{ padding: "10px 14px", background: `${T.red}12`, border: `1px solid ${T.red}30`, borderRadius: "8px", fontSize: "13px", color: T.red }}>
+                    {error}
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{ padding: "13px", borderRadius: "10px", border: "none", background: loading ? `${T.brand}60` : `linear-gradient(135deg, ${T.brand}, #E85D04)`, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", boxShadow: loading ? "none" : `0 4px 20px ${T.brandGlow}`, transition: "all 0.2s", fontFamily: "inherit" }}
+                >
+                  {loading ? "Sending…" : "Send reset link →"}
+                </button>
+              </form>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Mode toggle */}
+            <div style={{ display: "flex", background: T.bg3, borderRadius: "10px", padding: "3px", marginBottom: "32px", border: `1px solid ${T.border}` }}>
+              {["login", "register"].map(m => (
+                <button
+                  key={m}
+                  onClick={() => switchMode(m)}
+                  style={{ flex: 1, padding: "9px", borderRadius: "8px", border: "none", background: mode === m ? `linear-gradient(135deg, ${T.brand}20, ${T.brand}10)` : "transparent", color: mode === m ? T.brand : T.text3, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit", boxShadow: mode === m ? `inset 0 0 0 1px ${T.brand}40` : "none" }}
+                >
+                  {m === "login" ? "Sign In" : "Register"}
+                </button>
+              ))}
+            </div>
+
+            <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.text0, letterSpacing: "-0.02em", marginBottom: "6px" }}>
+              {mode === "login" ? "Welcome back" : "Create your account"}
+            </h2>
+            <p style={{ fontSize: "13px", color: T.text3, marginBottom: "28px", lineHeight: 1.5 }}>
+              {mode === "login"
+                ? "Sign in to access your shop floor dashboard."
+                : "Get started with AI-powered production scheduling."}
+            </p>
+
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {mode === "register" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em", display: "block", marginBottom: "7px" }}>NAME *</label>
+                    <input name="name" value={form.name} onChange={handleChange} style={inputStyle} placeholder="Jane Smith" required minLength={2} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em", display: "block", marginBottom: "7px" }}>COMPANY</label>
+                    <input name="company" value={form.company} onChange={handleChange} style={inputStyle} placeholder="Acme Mfg" />
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em", display: "block", marginBottom: "7px" }}>COMPANY</label>
-                <input name="company" value={form.company} onChange={handleChange} style={inputStyle} placeholder="Acme Mfg" />
+                <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em", display: "block", marginBottom: "7px" }}>EMAIL *</label>
+                <input name="email" type="email" value={form.email} onChange={handleChange} style={inputStyle} placeholder="jane@company.com" required />
               </div>
-            </div>
-          )}
 
-          <div>
-            <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em", display: "block", marginBottom: "7px" }}>EMAIL *</label>
-            <input name="email" type="email" value={form.email} onChange={handleChange} style={inputStyle} placeholder="jane@company.com" required />
-          </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
+                  <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em" }}>PASSWORD *</label>
+                  {mode === "login" && (
+                    <button
+                      type="button"
+                      onClick={() => switchMode("forgot")}
+                      style={{ background: "none", border: "none", color: T.brand, fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <input name="password" type="password" value={form.password} onChange={handleChange} style={inputStyle}
+                  placeholder={mode === "register" ? "Min 8 characters" : "Enter your password"}
+                  required minLength={mode === "register" ? 8 : 1} />
+              </div>
 
-          <div>
-            <label style={{ fontSize: "11px", color: T.text2, fontWeight: 600, letterSpacing: "0.04em", display: "block", marginBottom: "7px" }}>PASSWORD *</label>
-            <input name="password" type="password" value={form.password} onChange={handleChange} style={inputStyle}
-              placeholder={mode === "register" ? "Min 8 characters" : "Enter your password"}
-              required minLength={mode === "register" ? 8 : 1} />
-          </div>
+              {mode === "login" && (
+                <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+                  <div
+                    onClick={() => setRememberMe(v => !v)}
+                    style={{ width: "18px", height: "18px", borderRadius: "5px", border: `1.5px solid ${rememberMe ? T.brand : T.border}`, background: rememberMe ? `${T.brand}20` : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s", cursor: "pointer" }}
+                  >
+                    {rememberMe && <span style={{ color: T.brand, fontSize: "11px", fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize: "13px", color: T.text2, userSelect: "none" }} onClick={() => setRememberMe(v => !v)}>Keep me signed in for 30 days</span>
+                </label>
+              )}
 
-          {error && (
-            <div style={{ padding: "10px 14px", background: `${T.red}12`, border: `1px solid ${T.red}30`, borderRadius: "8px", fontSize: "13px", color: T.red, lineHeight: 1.4 }}>
-              {error}
-            </div>
-          )}
+              {error && (
+                <div style={{ padding: "10px 14px", background: `${T.red}12`, border: `1px solid ${T.red}30`, borderRadius: "8px", fontSize: "13px", color: T.red, lineHeight: 1.4 }}>
+                  {error}
+                </div>
+              )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ padding: "13px", borderRadius: "10px", border: "none", background: loading ? `${T.brand}60` : `linear-gradient(135deg, ${T.brand}, #E85D04)`, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", boxShadow: loading ? "none" : `0 4px 20px ${T.brandGlow}`, transition: "all 0.2s", fontFamily: "inherit", marginTop: "4px" }}
-          >
-            {loading ? "Please wait…" : mode === "login" ? "Sign In →" : "Create Account →"}
-          </button>
-        </form>
+              <button
+                type="submit"
+                disabled={loading}
+                style={{ padding: "13px", borderRadius: "10px", border: "none", background: loading ? `${T.brand}60` : `linear-gradient(135deg, ${T.brand}, #E85D04)`, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", boxShadow: loading ? "none" : `0 4px 20px ${T.brandGlow}`, transition: "all 0.2s", fontFamily: "inherit", marginTop: "4px" }}
+              >
+                {loading ? "Please wait…" : mode === "login" ? "Sign In →" : "Create Account →"}
+              </button>
+            </form>
 
-        <p style={{ fontSize: "12px", color: T.text3, textAlign: "center", marginTop: "24px" }}>
-          {mode === "login" ? "No account?" : "Already registered?"}{" "}
-          <button
-            onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(null); }}
-            style={{ background: "none", border: "none", color: T.brand, fontSize: "12px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            {mode === "login" ? "Register free" : "Sign in"}
-          </button>
-        </p>
+            <p style={{ fontSize: "12px", color: T.text3, textAlign: "center", marginTop: "24px" }}>
+              {mode === "login" ? "No account?" : "Already registered?"}{" "}
+              <button
+                onClick={() => switchMode(mode === "login" ? "register" : "login")}
+                style={{ background: "none", border: "none", color: T.brand, fontSize: "12px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                {mode === "login" ? "Register free" : "Sign in"}
+              </button>
+            </p>
+          </>
+        )}
 
-        <div style={{ marginTop: "auto", paddingTop: "40px", borderTop: `1px solid ${T.border}`, marginTop: "48px" }}>
+        <div style={{ paddingTop: "40px", borderTop: `1px solid ${T.border}`, marginTop: "48px" }}>
           <p style={{ fontSize: "11px", color: T.text4, textAlign: "center", lineHeight: 1.6 }}>
             By signing in you agree to our terms of service.<br />
             Session stored in an httpOnly cookie — no localStorage.
