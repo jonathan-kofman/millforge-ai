@@ -56,6 +56,7 @@ from routers.as9100 import router as as9100_router
 from routers.inserts import router as inserts_router
 from routers.presetter import router as presetter_router
 from routers.operator import router as operator_router
+from routers.notifications import router as notifications_router
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
@@ -235,6 +236,7 @@ app.include_router(as9100_router)
 app.include_router(inserts_router)
 app.include_router(presetter_router)
 app.include_router(operator_router)
+app.include_router(notifications_router)
 
 
 # ---------------------------------------------------------------------------

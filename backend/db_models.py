@@ -1027,3 +1027,51 @@ class ProductEvent(Base):
 
     def __repr__(self) -> str:
         return f"<ProductEvent cat={self.event_category} type={self.event_type} at={self.occurred_at}>"
+
+
+class Notification(Base):
+    """
+    User-scoped notification / alert record.
+
+    Emitted by background jobs, routers, and agents when the system wants
+    to surface something for a human to see (critical QC fail, supplier
+    below reorder point, maintenance due, shift report ready, etc.).
+
+    severity:  critical | warning | info
+    category:  quality | scheduling | maintenance | inventory | supplier |
+               energy | billing | system
+
+    Marking read is idempotent — ``read_at`` is set once and never cleared.
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Optional link-out: source table + id (e.g. ("jobs", 42))
+    source_table: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    source_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Arbitrary extra context — JSON blob
+    payload_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+    @property
+    def is_read(self) -> bool:
+        return self.read_at is not None
+
+    @property
+    def payload(self) -> dict:
+        return json.loads(self.payload_json) if self.payload_json else {}
+
+    def __repr__(self) -> str:
+        return (
+            f"<Notification id={self.id} sev={self.severity} "
+            f"cat={self.category} read={self.is_read}>"
+        )

@@ -45,7 +45,7 @@ def init_db() -> None:
         # Work center schema (0004)
         WorkCenter, Operator, ShopQuote, RoutingTemplate, RoutingStep,
         Operation, ShopFloorEvent, NonConformanceReport, FirstArticleInspection,
-        ProductEvent,
+        ProductEvent, Notification,
     )
     from discovery.models import Interview, Insight, DiscoveryPattern  # noqa: F401
     Base.metadata.create_all(bind=engine)
