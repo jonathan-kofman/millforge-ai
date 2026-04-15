@@ -199,11 +199,6 @@ export default function App() {
     return <AppDashboard user={user} onLogout={handleLogout} />;
   }
 
-  // Auth flow — full-page, matches dashboard aesthetic
-  if (showAuth) {
-    return <AuthModal onSuccess={handleAuthSuccess} onClose={() => setShowAuth(false)} />;
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-gray-950">
       {/* ── Header ── */}
@@ -379,6 +374,14 @@ export default function App() {
       {false && <HowItWorks />}
       {false && <TrustBar />}
 
+      {/* ── Lights-out widget ── */}
+      <div className="bg-gray-950 border-b border-gray-800/60">
+        <div className="max-w-6xl mx-auto px-6 pt-10 pb-2">
+          <p className="text-sm text-gray-400 text-center font-medium">Every milestone removes one more human touchpoint from routine production.</p>
+        </div>
+        <LightsOutWidget />
+      </div>
+
       {/* ── Benchmark Demo ── */}
       <div id="benchmark-section" className="bg-gray-950 border-b border-gray-800/60">
         <BenchmarkDemo />
@@ -440,14 +443,6 @@ export default function App() {
           <p className="text-xs text-gray-700 text-center mt-4">Based on simulated 28-order dataset. Results vary by shop configuration.</p>
         </div>
       </section>
-
-      {/* ── Lights-out widget ── */}
-      <div className="bg-gray-950 border-b border-gray-800/60">
-        <div className="max-w-6xl mx-auto px-6 pt-10 pb-2">
-          <p className="text-sm text-gray-400 text-center font-medium">Every milestone removes one more human touchpoint from routine production.</p>
-        </div>
-        <LightsOutWidget />
-      </div>
 
       {/* ── 3-Tier Pricing ── */}
       <section id="pricing-section" className="bg-gray-950 border-b border-gray-800/60">
@@ -699,7 +694,7 @@ export default function App() {
       {/* ── Tab content ── */}
       <main className="flex-1 max-w-6xl mx-auto px-4 py-10 w-full">
         <Suspense fallback={<div className="flex items-center justify-center py-24"><div className="w-6 h-6 border-2 border-forge-500 border-t-transparent rounded-full animate-spin" /></div>}>
-        {activeTab === "quote"          && <QuoteForm />}
+        {activeTab === "quote"          && <QuoteForm onNavigate={setActiveTab} />}
         {activeTab === "schedule"       && <ScheduleViewer />}
         {activeTab === "pricing"        && <PricingPage user={user} />}
         {activeTab === "vision"         && <VisionDemo />}

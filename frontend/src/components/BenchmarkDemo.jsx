@@ -9,10 +9,10 @@ function OnTimeRing({ percent, color, size = 88 }) {
   const [offset, setOffset] = useState(circ);
 
   useEffect(() => {
-    const id = requestAnimationFrame(() =>
-      setTimeout(() => setOffset(circ * (1 - percent / 100)), 60)
-    );
-    return () => cancelAnimationFrame(id);
+    const id = setTimeout(() => {
+      setOffset(circ * (1 - percent / 100));
+    }, 60);
+    return () => clearTimeout(id);
   }, [percent, circ]);
 
   return (
@@ -250,6 +250,13 @@ export default function BenchmarkDemo() {
               onChange={handlePressureChange}
               className="w-32 accent-orange-500"
             />
+            <button
+              type="button"
+              onClick={() => setPressure(0.5)}
+              className="text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-600 rounded px-2 py-0.5 transition-colors"
+            >
+              Reset
+            </button>
           </div>
           <span className="text-xs text-gray-500">
             {pressure <= 0.3

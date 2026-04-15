@@ -26,13 +26,27 @@ function LiveRates() {
 
   useEffect(() => {
     setLoading(true);
+    const controllers = [new AbortController(), new AbortController()];
+    const timeoutIds = [
+      setTimeout(() => controllers[0].abort(), 10000),
+      setTimeout(() => controllers[1].abort(), 10000),
+    ];
     Promise.all([
-      fetch(`${API_BASE}/api/energy/rates`).then(r => r.json()),
-      fetch(`${API_BASE}/api/energy/negative-pricing-windows`).then(r => r.json()),
+      fetch(`${API_BASE}/api/energy/rates`, { signal: controllers[0].signal }).then(r => r.json()),
+      fetch(`${API_BASE}/api/energy/negative-pricing-windows`, { signal: controllers[1].signal }).then(r => r.json()),
     ])
       .then(([r, w]) => { setRates(r); setWindows(w); })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => {
+        if (e.name === "AbortError") {
+          setError("Request timed out. The grid data API may be unavailable.");
+        } else {
+          setError(e.message);
+        }
+      })
+      .finally(() => {
+        timeoutIds.forEach(clearTimeout);
+        setLoading(false);
+      });
   }, []);
 
   if (loading) return <p className="text-gray-500 text-sm">Loading rate data…</p>;
@@ -134,8 +148,11 @@ function Arbitrage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
       const res = await fetch(`${API_BASE}/api/energy/arbitrage-analysis`, {
+        signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -143,10 +160,15 @@ function Arbitrage() {
           days_per_year: Number(form.days_per_year),
         }),
       });
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error((await res.json()).detail);
       setResult(await res.json());
     } catch (err) {
-      setError(err.message);
+      if (err.name === "AbortError") {
+        setError("Request timed out. The grid data API may be unavailable.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -224,13 +246,17 @@ function Scenario() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [comparisonResults, setComparisonResults] = useState([]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
       const res = await fetch(`${API_BASE}/api/energy/scenario`, {
+        signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -239,13 +265,23 @@ function Scenario() {
           capex_usd: Number(form.capex_usd),
         }),
       });
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error((await res.json()).detail);
       setResult(await res.json());
     } catch (err) {
-      setError(err.message);
+      if (err.name === "AbortError") {
+        setError("Request timed out. The grid data API may be unavailable.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddToComparison = () => {
+    if (!result) return;
+    setComparisonResults(prev => [...prev, result]);
   };
 
   return (
@@ -316,6 +352,49 @@ function Scenario() {
               <p className="text-sm text-gray-400">{result.notes}</p>
             </div>
           )}
+          <button
+            onClick={handleAddToComparison}
+            className="w-full text-sm border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 rounded-lg px-4 py-2 transition-colors"
+          >
+            Add to Comparison
+          </button>
+        </div>
+      )}
+
+      {comparisonResults.length >= 2 && (
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-white">Scenario Comparison</p>
+            <button onClick={() => setComparisonResults([])} className="text-xs text-gray-500 hover:text-gray-300">Clear</button>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-gray-800">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 bg-gray-900/50">
+                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Metric</th>
+                  {comparisonResults.map((r, i) => (
+                    <th key={i} className={`px-4 py-3 text-center font-semibold ${r.npv_usd === Math.max(...comparisonResults.map(x => x.npv_usd)) ? "text-forge-400" : "text-gray-400"}`}>
+                      {r.scenario}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { key: "npv_usd", label: "10-yr NPV", fmt: v => `$${(v/1000).toFixed(0)}k` },
+                  { key: "payback_years", label: "Payback", fmt: v => v ? `${v.toFixed(1)} yrs` : "N/A" },
+                  { key: "annual_savings_usd", label: "Annual Savings", fmt: v => `$${v?.toLocaleString() ?? "—"}` },
+                ].map(({ key, label, fmt }) => (
+                  <tr key={key} className="border-b border-gray-800/60 last:border-0">
+                    <td className="px-4 py-3 text-gray-400 font-medium bg-gray-900/30">{label}</td>
+                    {comparisonResults.map((r, i) => (
+                      <td key={i} className="px-4 py-3 text-center text-white bg-gray-900/20">{fmt(r[key])}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

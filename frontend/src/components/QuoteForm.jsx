@@ -28,7 +28,7 @@ function Stat({ label, value, sub, highlight }) {
   );
 }
 
-export default function QuoteForm() {
+export default function QuoteForm({ onNavigate }) {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -213,6 +213,24 @@ export default function QuoteForm() {
           )}
 
           <p className="text-sm text-gray-400 border-t border-gray-800 pt-3">{result.notes}</p>
+
+          <div className="border-t border-gray-800 pt-4 flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => {
+                setResult(null);
+                setForm(DEFAULT_FORM);
+              }}
+              className="btn-secondary text-sm flex-1"
+            >
+              Get another quote
+            </button>
+            <button
+              onClick={() => onNavigate?.("schedule")}
+              className="btn-primary text-sm flex-1"
+            >
+              View production schedule →
+            </button>
+          </div>
         </div>
       )}
     </div>

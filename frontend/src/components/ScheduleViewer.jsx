@@ -17,6 +17,7 @@ export default function ScheduleViewer() {
   const [algorithm, setAlgorithm] = useState("sa");
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState(null);
+  const [emptyOrders, setEmptyOrders] = useState(false);
 
   const loadDemo = async (algo = algorithm) => {
     setLoading(true);
@@ -37,6 +38,7 @@ export default function ScheduleViewer() {
     setLoading(true);
     setError(null);
     setApplyResult(null);
+    setEmptyOrders(false);
     try {
       // Fetch user's pending orders
       const ordRes = await fetch(`${API_BASE}/api/orders?status=pending&limit=200`, { credentials: "include" });
@@ -45,7 +47,7 @@ export default function ScheduleViewer() {
       const orders = (ordData.orders ?? ordData ?? []).filter(o => o.status !== "completed" && o.status !== "cancelled");
       if (orders.length === 0) {
         setSchedule(null);
-        setError("No pending orders found. Create orders in My Orders first.");
+        setEmptyOrders(true);
         return;
       }
       // Map to scheduler format
@@ -166,10 +168,28 @@ export default function ScheduleViewer() {
         </div>
       )}
 
-      {mode === "live" && !schedule && !loading && !error && (
+      {mode === "live" && !schedule && !loading && !error && !emptyOrders && (
         <div className="card text-center py-12 mb-6">
           <p className="text-gray-400 text-sm mb-3">Click "Generate Schedule" to optimize your pending orders.</p>
           <p className="text-xs text-gray-600">Orders from My Orders tab · SA optimizer · machine assignments included</p>
+        </div>
+      )}
+
+      {mode === "live" && emptyOrders && !schedule && !loading && (
+        <div className="card text-center py-12 mb-6">
+          <p className="text-white font-semibold mb-1">No pending orders in the queue yet</p>
+          <p className="text-gray-400 text-sm mb-6">Add orders in My Orders, or try the benchmark demo to see the optimizer in action.</p>
+          <div className="flex justify-center gap-3 flex-wrap">
+            <button
+              onClick={() => { setEmptyOrders(false); setMode("demo"); }}
+              className="btn-secondary text-sm"
+            >
+              Try the benchmark demo →
+            </button>
+            <button className="btn-secondary text-sm" disabled>
+              Go to My Orders
+            </button>
+          </div>
         </div>
       )}
 
@@ -177,7 +197,21 @@ export default function ScheduleViewer() {
         <div className="text-center py-20 text-gray-500">Calculating optimal schedule…</div>
       )}
 
-      {schedule && (
+      {schedule && (() => {
+        const exportCSV = () => {
+          const rows = schedule.schedule.map(job => ([
+            job.order_id, job.machine_id, job.material, job.quantity,
+            job.start_time, job.end_time, job.is_on_time ? "On Time" : "Late"
+          ]));
+          const header = ["Order ID", "Machine", "Material", "Quantity", "Start", "End", "Status"];
+          const csv = [header, ...rows].map(r => r.join(",")).join("\n");
+          const blob = new Blob([csv], { type: "text/csv" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = "millforge_schedule.csv"; a.click();
+          URL.revokeObjectURL(url);
+        };
+        return (
         <>
           {/* Apply banner (live mode only) */}
           {schedule._live && !applyResult && (
@@ -214,6 +248,10 @@ export default function ScheduleViewer() {
           )}
 
           {/* Summary cards */}
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Schedule Summary</p>
+            <button onClick={exportCSV} className="btn-secondary text-sm">Export CSV</button>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             <SummaryCard label="Total Orders"    value={schedule.summary.total_orders} />
             <SummaryCard label="On-Time Rate"    value={`${schedule.summary.on_time_rate_percent}%`} highlight />
@@ -230,7 +268,8 @@ export default function ScheduleViewer() {
           {/* Algorithm benchmark (demo only) */}
           {mode === "demo" && <BenchmarkPanel />}
         </>
-      )}
+        );
+      })()}
     </div>
   );
 }

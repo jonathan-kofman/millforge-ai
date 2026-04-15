@@ -392,7 +392,7 @@ function ScheduleResult({ data }) {
             const color = WC_COLOR[bar.wc] || T.text3;
             return (
               <div key={bar.seq} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: i < data.gantt.length - 1 ? "6px" : 0 }}>
-                <div style={{ width: "70px", fontSize: "9px", color: T.text3, textAlign: "right", flexShrink: 0 }}>{bar.name}</div>
+                <div className="gantt-label" style={{ width: "70px", fontSize: "9px", color: T.text3, textAlign: "right", flexShrink: 0 }}>{bar.name}</div>
                 <div style={{ flex: 1, height: "20px", borderRadius: "4px", background: `${T.bg1}`, position: "relative", overflow: "hidden" }}>
                   <div style={{
                     position: "absolute", left: `${bar.start}%`, width: `${bar.width}%`, height: "100%",
@@ -592,6 +592,23 @@ export default function DemoChainPage() {
     }
   };
 
+  const handleReset = () => {
+    setSampleType(null);
+    setFile(null);
+    setMaterial("steel");
+    setQuantity(200);
+    setPriority(3);
+    setDueDays(14);
+    setLoading(false);
+    setActiveStep(-1);
+    setStepResults({});
+    setLiveResult(null);
+    setError(null);
+    setDragOver(false);
+  };
+
+  const hasStarted = activeStep >= 0 || Object.keys(stepResults).length > 0 || !!liveResult;
+
   const stepState = i => {
     if (activeStep < 0) return "idle";
     if (activeStep > i || activeStep === 5) return "done";
@@ -626,6 +643,19 @@ export default function DemoChainPage() {
           <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: T.ai,
             boxShadow: `0 0 8px ${T.ai}`, animation: "pulse 2s infinite" }} />
           <span style={{ fontSize: "10px", color: T.ai, fontWeight: 700, letterSpacing: "0.12em" }}>ARIA-OS × MILLFORGE — LIVE DEMO</span>
+          {hasStarted && (
+            <button
+              type="button"
+              onClick={handleReset}
+              style={{ marginLeft: "auto", padding: "5px 14px", borderRadius: "8px",
+                border: `1px solid ${T.border}`, background: T.bg3,
+                color: T.text2, fontSize: "10px", fontWeight: 700, cursor: "pointer",
+                letterSpacing: "0.06em", fontFamily: "inherit", transition: "all 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderHi; e.currentTarget.style.color = T.text0; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.text2; }}>
+              ↺ START NEW DEMO
+            </button>
+          )}
         </div>
         <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.text0, letterSpacing: "-0.02em", marginBottom: "6px" }}>
           Part → Plan → Schedule → Quote → Shop Floor

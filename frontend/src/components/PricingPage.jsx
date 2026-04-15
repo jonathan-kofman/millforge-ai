@@ -30,6 +30,7 @@ export default function PricingPage({ user }) {
   });
   const [roiResult, setRoiResult] = useState(null);
   const [roiLoading, setRoiLoading] = useState(false);
+  const [roiValidationError, setRoiValidationError] = useState(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/business/pricing-tiers`)
@@ -111,6 +112,13 @@ export default function PricingPage({ user }) {
 
   const calcROI = async (e) => {
     e.preventDefault();
+    setRoiValidationError(null);
+    const machines = Number(roiForm.machine_count);
+    const orders = Number(roiForm.orders_per_month);
+    if (!machines || machines <= 0 || !orders || orders <= 0) {
+      setRoiValidationError("Please enter valid numbers above 0.");
+      return;
+    }
     setRoiLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/business/roi-calculator`, {
@@ -266,6 +274,12 @@ export default function PricingPage({ user }) {
         })}
       </div>
 
+      {!stripeEnabled && (
+        <p className="text-xs text-gray-600 text-center mt-4">
+          Pilot pricing — reach out to discuss your shop's setup.
+        </p>
+      )}
+
       {/* ROI Calculator */}
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-8">
         <h3 className="text-2xl font-bold text-white mb-2 text-center">ROI Calculator</h3>
@@ -327,7 +341,10 @@ export default function PricingPage({ user }) {
               <option value="3">3 shifts</option>
             </select>
           </label>
-          <div className="flex items-end">
+          <div className="flex flex-col justify-end gap-1">
+            {roiValidationError && (
+              <p className="text-xs text-red-400">{roiValidationError}</p>
+            )}
             <button
               type="submit"
               disabled={roiLoading}
