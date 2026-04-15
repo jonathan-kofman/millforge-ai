@@ -186,13 +186,9 @@ class TestSharedPackageValidation:
 # HTTP endpoint tests
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(scope="module")
-def client():
-    from main import app
-    from database import Base, engine
-    Base.metadata.create_all(bind=engine)
-    with TestClient(app) as c:
-        yield c
+# Uses the function-scoped in-memory client from conftest.py.
+# (A prior module-scoped fixture using the real file DB caused idempotency
+# checks to report duplicate=True on subsequent test runs — removed.)
 
 
 _VALID_PAYLOAD = {
@@ -258,7 +254,8 @@ class TestARIABridgeEndpoints:
         assert resp.status_code == 422
 
     def test_get_status_found(self, client):
-        # Ensure the job from the first test exists
+        # Create the job first (each test gets a fresh in-memory DB)
+        client.post("/api/jobs/from-aria", json=_VALID_PAYLOAD)
         resp = client.get("/api/bridge/status/aria-test-001")
         assert resp.status_code == 200
         data = resp.json()
@@ -271,6 +268,8 @@ class TestARIABridgeEndpoints:
         assert resp.status_code == 404
 
     def test_push_feedback(self, client):
+        # Create the job first (each test gets a fresh in-memory DB)
+        client.post("/api/jobs/from-aria", json=_VALID_PAYLOAD)
         resp = client.post("/api/bridge/feedback", json={
             "aria_job_id": "aria-test-001",
             "actual_cycle_time_minutes": 48.5,
@@ -287,6 +286,15 @@ class TestARIABridgeEndpoints:
         assert data["cycle_time_accuracy_pct"] == pytest.approx(107.8, abs=0.2)
 
     def test_get_feedback_after_push(self, client):
+        # Create job and push feedback first (each test gets a fresh in-memory DB)
+        client.post("/api/jobs/from-aria", json=_VALID_PAYLOAD)
+        client.post("/api/bridge/feedback", json={
+            "aria_job_id": "aria-test-001",
+            "actual_cycle_time_minutes": 48.5,
+            "qc_passed": True,
+            "defects_found": [],
+            "defect_confidence_scores": [],
+        })
         resp = client.get("/api/bridge/feedback/aria-test-001")
         assert resp.status_code == 200
         data = resp.json()
