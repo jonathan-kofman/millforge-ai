@@ -299,6 +299,13 @@ class SupplierDirectory:
         Returns a list of (supplier, distance_miles_or_None, confidence) tuples
         where confidence is a 0..1 score combining capability match and
         verification status.
+
+        IMPORTANT: when the capability has a defined keyword list, candidates
+        MUST match at least one keyword. Without this gate the category
+        filter ("metals") was non-binding — the endpoint would return
+        generic metals distributors for "anodizing_line" requests because
+        every metals supplier passed the SQL filter. Reported by feature
+        verification 2026-04-15.
         """
         cap = (capability or "").strip().lower()
         material_keywords = WORK_CENTER_TO_MATERIAL_KEYWORDS.get(cap, [])
@@ -314,10 +321,19 @@ class SupplierDirectory:
         for s in q.all():
             # Score on (a) keyword match in materials/name, (b) verified, (c) distance
             mat_score = 0.0
+            keyword_hits = 0
             if material_keywords:
                 hay = " ".join((s.materials or []) + [s.name.lower()])
-                hits = sum(1 for kw in material_keywords if kw in hay)
-                mat_score = min(1.0, hits / max(1, len(material_keywords)))
+                keyword_hits = sum(1 for kw in material_keywords if kw in hay)
+                mat_score = min(1.0, keyword_hits / max(1, len(material_keywords)))
+
+                # CAPABILITY GATE: drop suppliers with zero keyword hits.
+                # Without this the recommend endpoint silently returns
+                # general distributors that don't actually do the requested
+                # process. This is the bug the verification agent found.
+                if keyword_hits == 0:
+                    continue
+
             confidence = 0.4 * mat_score + 0.3 * (1.0 if s.verified else 0.0) + 0.3
             distance: Optional[float] = None
             if lat is not None and lng is not None and s.lat is not None and s.lng is not None:

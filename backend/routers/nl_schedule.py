@@ -138,22 +138,48 @@ async def nl_schedule(req: NLScheduleRequest) -> NLScheduleResponse:
         raise HTTPException(status_code=422, detail=f"Invalid order data: {exc}")
 
     # 4. Build the AFTER scheduler. If a machine is down, drop it from
-    # machine_count so all orders re-route to the survivors.
+    # machine_count so all orders re-route to the survivors. We then REMAP
+    # the result's machine_ids back to the original numbering so the
+    # operator's mental model is preserved (machine 2 down → results show
+    # only machine 1 and 3, never machine 2).
     sa_engine = _sa
+    survivor_remap: dict[int, int] = {}
     if nl_result.machine_down is not None:
         from agents.scheduler import MACHINE_COUNT as _MC
-        survivors = max(1, _MC - 1)
-        sa_engine = SAScheduler(machine_count=survivors)
-        logger.info(
-            "NL schedule: machine %d declared down, rescheduling on %d machines",
-            nl_result.machine_down, survivors
-        )
+        original_count = _MC
+        dead_id = nl_result.machine_down
+        survivor_ids = [i for i in range(1, original_count + 1) if i != dead_id]
+        if survivor_ids:
+            sa_engine = SAScheduler(machine_count=len(survivor_ids))
+            # The new scheduler will return machine_ids 1..len(survivors).
+            # Remap: scheduler's 1 -> survivor_ids[0], 2 -> survivor_ids[1], etc.
+            survivor_remap = {i + 1: sid for i, sid in enumerate(survivor_ids)}
+            logger.info(
+                "NL schedule: machine %d declared down. Rescheduling on %d survivor machines %s",
+                dead_id, len(survivor_ids), survivor_ids,
+            )
+        else:
+            logger.warning(
+                "NL schedule: machine_down=%d but no survivors — keeping original schedule",
+                dead_id,
+            )
 
     try:
         schedule = sa_engine.optimize(domain_orders, start_time=start_time)
     except Exception as exc:
         logger.error("SA scheduler error (after): %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Scheduling engine error")
+
+    # Apply the survivor remap: the SAScheduler returned machine_ids 1..N
+    # of the survivor set; rewrite each ScheduledOrder.machine_id back to
+    # the operator's numbering. This is what makes machine_down semantic
+    # instead of cosmetic — without it the after-schedule still uses
+    # machine_ids that overlap with the dead one.
+    if survivor_remap:
+        for so in schedule.scheduled_orders:
+            new_id = survivor_remap.get(so.machine_id)
+            if new_id is not None:
+                so.machine_id = new_id
 
     gantt_after = _schedule_to_gantt(schedule)
     gantt_diff = _compute_gantt_diff(gantt_before, gantt_after)
