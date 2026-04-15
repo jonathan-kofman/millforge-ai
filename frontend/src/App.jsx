@@ -292,7 +292,7 @@ export default function App() {
               { val: "+35.7pp", label: "OTD improvement", sub: "same machines, same staff" },
               { val: "9 of 10", label: "Touchpoints automated", sub: "scheduling → sourcing" },
             ].map(({ val, label, sub }) => (
-              <div key={label} className="bg-gray-900/80 border border-gray-800 rounded-2xl px-6 py-4 text-center min-w-[140px] backdrop-blur-sm">
+              <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl px-6 py-4 text-center min-w-[140px] transition-all duration-200 hover:border-gray-700 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/40">
                 <p className="text-2xl font-extrabold text-forge-400">{val}</p>
                 <p className="text-xs font-semibold text-gray-300 mt-0.5">{label}</p>
                 <p className="text-[10px] text-gray-600 mt-0.5">{sub}</p>
@@ -325,9 +325,9 @@ export default function App() {
                   value={captureEmail}
                   onChange={e => setCaptureEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forge-500 focus:border-transparent text-sm w-full sm:w-auto"
+                  className="input flex-1"
                 />
-                <button type="submit" disabled={captureLoading} className="bg-gray-800 hover:bg-gray-700 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap disabled:opacity-50 border border-gray-700">
+                <button type="submit" disabled={captureLoading} className="btn-secondary text-sm whitespace-nowrap">
                   {captureLoading ? "Sending…" : "Get a sample report →"}
                 </button>
               </form>
@@ -362,7 +362,7 @@ export default function App() {
               { icon: "⚡", title: "Energy Optimization", desc: "Jobs shift to off-peak windows automatically. EIA live grid pricing. No human decides when to run.", badge: "Live", badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
               { icon: "🏭", title: "Supplier Sourcing", desc: "1,100+ verified US suppliers. When stock runs low, the nearest match and a PO are one click away.", badge: "Automated", badgeColor: "bg-forge-500/15 text-forge-400 border-forge-500/30" },
             ].map(({ icon, title, desc, badge, badgeColor }) => (
-              <div key={title} className="group bg-gray-900/70 border border-gray-800 hover:border-gray-700 rounded-2xl p-6 transition-all duration-200 hover:bg-gray-900">
+              <div key={title} className={`${badge === "Live" ? "card-highlight" : "card"} group`}>
                 <div className="flex items-start justify-between mb-4">
                   <span className="text-2xl">{icon}</span>
                   <span className={`text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full border ${badgeColor}`}>{badge}</span>
@@ -444,7 +444,7 @@ export default function App() {
       {/* ── Lights-out widget ── */}
       <div className="bg-gray-950 border-b border-gray-800/60">
         <div className="max-w-6xl mx-auto px-6 pt-10 pb-2">
-          <p className="text-sm text-gray-500 text-center">Every milestone removes one more human touchpoint from routine production.</p>
+          <p className="text-sm text-gray-400 text-center font-medium">Every milestone removes one more human touchpoint from routine production.</p>
         </div>
         <LightsOutWidget />
       </div>
@@ -459,7 +459,7 @@ export default function App() {
           </div>
           <div className="grid sm:grid-cols-3 gap-6 items-stretch">
             {/* Starter */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-7 flex flex-col">
+            <div className="card flex flex-col">
               <p className="text-xs font-bold tracking-widest text-gray-500 uppercase mb-2">Starter</p>
               <p className="text-4xl font-extrabold text-white mb-1">$299<span className="text-base font-medium text-gray-500">/mo</span></p>
               <p className="text-sm text-gray-500 mb-6">Up to 3 machines</p>
@@ -476,7 +476,7 @@ export default function App() {
             </div>
 
             {/* Professional — highlighted */}
-            <div className="bg-gray-900 border-2 border-forge-500/60 rounded-2xl p-7 flex flex-col relative" style={{ boxShadow: "0 0 40px rgba(249,115,22,0.12)" }}>
+            <div className="card-highlight flex flex-col relative border-2" style={{ boxShadow: "0 0 40px rgba(249,115,22,0.12)" }}>
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-forge-500 text-white text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full">Most popular</div>
               <p className="text-xs font-bold tracking-widest text-forge-400 uppercase mb-2">Professional</p>
               <p className="text-4xl font-extrabold text-white mb-1">$499<span className="text-base font-medium text-gray-500">/mo</span></p>
@@ -494,7 +494,7 @@ export default function App() {
             </div>
 
             {/* Enterprise */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-7 flex flex-col">
+            <div className="card flex flex-col">
               <p className="text-xs font-bold tracking-widest text-gray-500 uppercase mb-2">Enterprise</p>
               <p className="text-4xl font-extrabold text-white mb-1">Custom</p>
               <p className="text-sm text-gray-500 mb-6">Unlimited machines</p>
@@ -549,7 +549,7 @@ export default function App() {
                   body: "FIFO scheduling delivers 60.7% of orders on time. That's not a staffing problem — it's an optimization problem. MillForge SA closes that gap to 96.4%.",
                 },
               ].map(({ num, title, body }) => (
-                <div key={num} className="flex gap-5">
+                <div key={num} className="card flex gap-5">
                   <span className="text-forge-500/40 font-extrabold text-2xl leading-tight flex-shrink-0 w-8">{num}</span>
                   <div>
                     <p className="text-white font-bold mb-1.5">{title}</p>
