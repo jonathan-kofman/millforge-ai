@@ -567,37 +567,61 @@ export default function App() {
         <EnergyWidget />
       </div>
 
-      {/* ── Supplier sourcing section ── */}
+      {/* ── Materials Marketplace section ── */}
       <div id="suppliers-section" className="bg-gray-900 border-b border-gray-800/60">
         <div className="max-w-6xl mx-auto px-6 py-16">
-          <p className="text-xs font-bold tracking-widest text-forge-500 uppercase mb-4 text-center">Materials Sourcing</p>
-          <h2 className="text-3xl sm:text-4xl font-bold text-white text-center mb-3 tracking-tight">Find materials. Schedule production. Ship faster.</h2>
-          <p className="text-gray-400 text-center max-w-xl mx-auto mb-12 text-base">
-            MillForge connects your schedule to verified US suppliers — so when stock runs low, a purchase order with the nearest qualified source is one click away.
+          <p className="text-xs font-bold tracking-widest text-forge-500 uppercase mb-2 text-center">Materials Marketplace</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white text-center mb-3 tracking-tight">Connect buyers and sellers across the US supply chain.</h2>
+          <p className="text-gray-400 text-center max-w-2xl mx-auto mb-12 text-base">
+            Find verified US suppliers, post material requests, or list your shop. When stock runs low, MillForge surfaces the nearest qualified source and generates the PO automatically.
           </p>
-          <div className="grid sm:grid-cols-2 gap-12 items-start">
-            <div className="space-y-5">
-              <h3 className="text-lg font-bold text-white">The sourcing problem</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                American mills lose weeks to supplier search. When a material runs short, a floor manager calls three distributors, waits for callbacks, manually compares lead times, and enters a PO by hand. The scheduling software doesn&apos;t know any of this is happening.
-              </p>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                MillForge&apos;s inventory agent watches stock in real time. When a reorder point is hit, it surfaces the nearest verified supplier — filtered by distance, category, and current schedule — and generates the PO automatically.
-              </p>
-              <button onClick={() => setActiveTab("contact")} className="btn-secondary text-sm mt-2">Submit a supplier →</button>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                [supplierStats?.total_suppliers ?? "1,100+", "Verified US Suppliers"],
-                [supplierStats?.states_covered ?? "48", "States Covered"],
-                ["4", "Material Categories"],
-              ].map(([val, label]) => (
-                <div key={label} className="bg-gray-800 rounded-2xl p-5 text-center border border-gray-700">
-                  <p className="text-2xl font-bold text-forge-400">{val}</p>
-                  <p className="text-xs text-gray-500 mt-1.5">{label}</p>
-                </div>
-              ))}
-            </div>
+
+          {/* 3-pillar marketplace */}
+          <div className="grid sm:grid-cols-3 gap-5 mb-12">
+            {[
+              {
+                icon: "🔍",
+                title: "Find Suppliers",
+                desc: "Search 1,100+ verified US suppliers by material, state, and certification. Filter to verified-only for highest confidence sources.",
+                cta: "Browse suppliers →",
+              },
+              {
+                icon: "📋",
+                title: "Post a Request",
+                desc: "List your material needs on the RFQ board. Qualified suppliers receive notifications and respond directly with quotes.",
+                cta: "Post a request →",
+              },
+              {
+                icon: "🏭",
+                title: "List Your Shop",
+                desc: "Verified listings appear first in buyer searches and get RFQ notifications automatically when buyers need your materials.",
+                cta: "List your shop →",
+              },
+            ].map(({ icon, title, desc, cta }) => (
+              <div key={title}
+                onClick={() => { setActiveTab("suppliers"); scrollTo("tab-nav"); }}
+                className="group bg-gray-800/50 border border-gray-700/60 hover:border-gray-600 rounded-2xl p-6 cursor-pointer transition-all duration-200 hover:bg-gray-800/80"
+              >
+                <span className="text-2xl mb-4 block">{icon}</span>
+                <h3 className="font-bold text-white mb-2">{title}</h3>
+                <p className="text-sm text-gray-400 leading-relaxed mb-4">{desc}</p>
+                <span className="text-xs font-semibold text-forge-400 group-hover:text-forge-300 transition-colors">{cta}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              [supplierStats?.total_suppliers ?? "1,100+", "Verified US Suppliers"],
+              [supplierStats?.states_covered ?? "48", "States Covered"],
+              ["4", "Material Categories"],
+            ].map(([val, label]) => (
+              <div key={label} className="bg-gray-900 rounded-2xl p-5 text-center border border-gray-800">
+                <p className="text-2xl font-bold text-forge-400">{val}</p>
+                <p className="text-xs text-gray-500 mt-1.5">{label}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
