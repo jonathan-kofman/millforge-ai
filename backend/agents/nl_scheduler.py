@@ -32,6 +32,32 @@ MATERIALS = {"steel", "aluminum", "titanium", "copper"}
 URGENCY_KEYWORDS = {"rush", "urgent", "asap", "expedite", "critical", "emergency", "priority"}
 DEFER_KEYWORDS = {"defer", "delay", "postpone", "push", "deprioritize", "later", "end"}
 
+# Work-center category keywords. Used to extend interpretation beyond
+# material filters so the operator can say things like "rush all welding
+# orders" or "defer laser cutting jobs".
+WORK_CENTER_KEYWORDS: dict[str, list[str]] = {
+    "cnc_mill":           ["cnc", "milling", "mill", "machined"],
+    "cnc_lathe":          ["lathe", "turning", "turned"],
+    "laser_cutter":       ["laser", "laser cutting", "laser cut"],
+    "press_brake":        ["press brake", "bending", "bent", "form"],
+    "tig_welder":         ["tig", "tig weld"],
+    "mig_welder":         ["mig", "mig weld"],
+    "welding_arc":        ["welding", "weld", "welded"],
+    "anodizing_line":     ["anodize", "anodizing", "anodized"],
+    "powder_coat_booth":  ["powder coat", "powder-coat", "powder coating"],
+    "heat_treat_oven":    ["heat treat", "heat-treat", "anneal", "temper", "harden"],
+    "inspection_station": ["inspect", "inspection", "qa", "qc"],
+    "edm":                ["edm", "wire edm"],
+    "stamping":           ["stamp", "stamping"],
+}
+
+# Machine-down pattern: "machine 2 is down", "machine #3 offline",
+# "WC 5 broken", "vmc-1 down", etc.
+_MACHINE_DOWN_RE = re.compile(
+    r"\b(?:machine|wc|vmc|hmc|station)\s*#?\s*(\d{1,3})\s+(?:is\s+)?(?:down|offline|broken|out|dead|unavailable)\b",
+    re.IGNORECASE,
+)
+
 
 # ---------------------------------------------------------------------------
 # Domain objects
@@ -50,6 +76,10 @@ class NLScheduleResult:
     overrides: List[PriorityOverride]
     summary: str
     validation_failures: List[str] = field(default_factory=list)
+    # Multi-process upgrade fields:
+    targeted_work_centers: List[str] = field(default_factory=list)
+    machine_down: Optional[int] = None         # machine_id parsed from instruction
+    actions: List[Dict] = field(default_factory=list)  # structured ops for downstream
 
 
 # ---------------------------------------------------------------------------
@@ -127,46 +157,87 @@ class NLSchedulerAgent:
     ) -> NLScheduleResult:
         text = instruction.lower()
         overrides: List[PriorityOverride] = []
+        actions: List[Dict] = []
+
+        # Detect machine-down scenario before everything else — it has its
+        # own action shape (reassign all jobs off the dead machine).
+        machine_down_id: Optional[int] = None
+        m_match = _MACHINE_DOWN_RE.search(instruction)
+        if m_match:
+            try:
+                machine_down_id = int(m_match.group(1))
+                actions.append({
+                    "type": "machine_down",
+                    "machine_id": machine_down_id,
+                    "reason": f"matched '{m_match.group(0)}'",
+                })
+            except (ValueError, IndexError):
+                machine_down_id = None
 
         # Determine intent: urgency or deferral
         is_urgent = any(kw in text for kw in URGENCY_KEYWORDS)
         is_defer = any(kw in text for kw in DEFER_KEYWORDS)
         new_priority = 1 if is_urgent else (9 if is_defer else None)
 
-        # Determine which materials / keywords are targeted
+        # Determine which materials / work centers are targeted
         targeted_materials = {mat for mat in MATERIALS if mat in text}
-        # Also pick up phrases like "aerospace", "low priority"
+        targeted_work_centers: List[str] = []
+        for wc, kws in WORK_CENTER_KEYWORDS.items():
+            if any(kw in text for kw in kws):
+                targeted_work_centers.append(wc)
+
         low_priority_filter = "low priority" in text or "low-priority" in text
 
         for o in orders:
             oid = str(o.get("order_id", ""))
             mat = str(o.get("material", "")).lower()
+            wc_cat = str(o.get("work_center_category", "")).lower()
             cur_priority = int(o.get("priority", 5))
 
+            # Filter by material if specified
             if targeted_materials and mat not in targeted_materials:
                 continue
-
+            # Filter by work center if specified
+            if targeted_work_centers and wc_cat not in targeted_work_centers:
+                continue
             if low_priority_filter and cur_priority < 6:
                 continue  # only affect genuinely low-priority orders
 
             if new_priority is not None and new_priority != cur_priority:
+                reason = f"heuristic: '{instruction[:60]}'"
+                if targeted_work_centers and wc_cat:
+                    reason = f"{reason} [wc:{wc_cat}]"
                 overrides.append(PriorityOverride(
                     order_id=oid,
                     new_priority=new_priority,
-                    reason=f"heuristic: '{instruction[:60]}'"
+                    reason=reason,
                 ))
+                actions.append({
+                    "type": "priority_override",
+                    "order_id": oid,
+                    "from_priority": cur_priority,
+                    "to_priority": new_priority,
+                })
 
         action = "urgent" if is_urgent else ("deferred" if is_defer else "unchanged")
-        mats = ", ".join(sorted(targeted_materials)) or "all materials"
-        summary = (
-            f"{len(overrides)} order(s) marked as {action} "
-            f"({mats} targeted by instruction)."
-        )
+        targets_label = ", ".join(targeted_work_centers + sorted(targeted_materials)) or "all jobs"
+        if machine_down_id:
+            summary = (
+                f"Machine {machine_down_id} flagged offline; {len(overrides)} order(s) "
+                f"reprioritized to {action} ({targets_label} targeted)."
+            )
+        else:
+            summary = (
+                f"{len(overrides)} order(s) marked as {action} ({targets_label} targeted)."
+            )
 
         return NLScheduleResult(
             instruction=instruction,
             overrides=overrides,
             summary=summary,
+            targeted_work_centers=targeted_work_centers,
+            machine_down=machine_down_id,
+            actions=actions,
         )
 
     # ------------------------------------------------------------------
@@ -180,9 +251,14 @@ class NLSchedulerAgent:
         prior_failures: List[str],
     ) -> NLScheduleResult:
         order_summary = [
-            {"order_id": o.get("order_id"), "material": o.get("material"),
-             "quantity": o.get("quantity"), "priority": o.get("priority"),
-             "complexity": o.get("complexity")}
+            {
+                "order_id": o.get("order_id"),
+                "material": o.get("material"),
+                "quantity": o.get("quantity"),
+                "priority": o.get("priority"),
+                "complexity": o.get("complexity"),
+                "work_center_category": o.get("work_center_category"),
+            }
             for o in orders
         ]
         failure_note = (
@@ -194,16 +270,23 @@ class NLSchedulerAgent:
 
 The operator issued this instruction: "{instruction}"
 
-Current order list:
+Current order list (each order has work_center_category for routing):
 {json.dumps(order_summary, indent=2)}
 
-Your job: decide which orders need their priority adjusted to honour the instruction.
+Your job: interpret the instruction and decide:
+  1. Which orders need their priority adjusted (and to what value)
+  2. Which work-center categories the operator is targeting (if any)
+  3. Whether a specific machine has been declared down (and which one)
 Priority scale: 1 = most urgent, 10 = lowest priority.{failure_note}
 
 Rules:
 - Only include orders whose priority should actually change.
 - new_priority must be an integer in [1, 10].
-- Give a brief reason per override.
+- Give a brief reason per override (mention work_center_category if relevant).
+- targeted_work_centers should be ones explicitly named OR strongly implied
+  (e.g. "rush all welding orders" → ["tig_welder", "mig_welder", "welding_arc"]).
+- machine_down should be a machine_id integer if the instruction says a
+  specific numbered machine is down/offline/broken, otherwise null.
 - Write a 1-sentence summary of what you did.
 
 Reply ONLY with valid JSON in this exact shape:
@@ -211,6 +294,8 @@ Reply ONLY with valid JSON in this exact shape:
   "overrides": [
     {{"order_id": "<id>", "new_priority": <int 1-10>, "reason": "<one sentence>"}}
   ],
+  "targeted_work_centers": ["<wc_category>", ...],
+  "machine_down": <int or null>,
   "summary": "<1-sentence summary>"
 }}"""
 
@@ -274,8 +359,28 @@ def _parse_result(raw: str, instruction: str) -> NLScheduleResult:
         )
         for ov in data.get("overrides", [])
     ]
+    targeted_wcs = [str(w) for w in (data.get("targeted_work_centers") or [])]
+    machine_down_raw = data.get("machine_down")
+    machine_down: Optional[int] = None
+    if isinstance(machine_down_raw, (int, float)) and machine_down_raw > 0:
+        machine_down = int(machine_down_raw)
+
+    # Re-derive structured actions from the parsed result
+    actions: List[Dict] = []
+    if machine_down:
+        actions.append({"type": "machine_down", "machine_id": machine_down})
+    for ov in overrides:
+        actions.append({
+            "type": "priority_override",
+            "order_id": ov.order_id,
+            "to_priority": ov.new_priority,
+        })
+
     return NLScheduleResult(
         instruction=instruction,
         overrides=overrides,
         summary=str(data.get("summary", "")),
+        targeted_work_centers=targeted_wcs,
+        machine_down=machine_down,
+        actions=actions,
     )

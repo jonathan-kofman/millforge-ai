@@ -697,12 +697,39 @@ class PriorityOverrideItem(BaseModel):
     reason: str
 
 
+class GanttEntry(BaseModel):
+    """One job's slot on the Gantt — used for the before/after diff."""
+    order_id: str
+    machine_id: int
+    start: datetime
+    end: datetime
+    on_time: bool
+
+
+class GanttDiffEntry(BaseModel):
+    """Per-order diff between the pre-override and post-override schedule."""
+    order_id: str
+    machine_before: Optional[int] = None
+    machine_after: Optional[int] = None
+    start_before: Optional[datetime] = None
+    start_after: Optional[datetime] = None
+    delta_minutes: Optional[float] = None       # positive = pushed later
+    machine_changed: bool = False
+
+
 class NLScheduleResponse(BaseModel):
     instruction: str
     overrides_applied: List[PriorityOverrideItem]
     override_summary: str
     schedule: "ScheduleResponse"
     validation_failures: List[str] = []
+    # Multi-process upgrade (feature 3):
+    targeted_work_centers: List[str] = Field(default_factory=list)
+    machine_down: Optional[int] = None
+    actions: List[Dict[str, Any]] = Field(default_factory=list)
+    gantt_before: List[GanttEntry] = Field(default_factory=list)
+    gantt_after: List[GanttEntry] = Field(default_factory=list)
+    gantt_diff: List[GanttDiffEntry] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

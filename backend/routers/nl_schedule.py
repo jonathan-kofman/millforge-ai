@@ -21,13 +21,56 @@ from models.schemas import (
     NLScheduleRequest, NLScheduleResponse, PriorityOverrideItem,
     NLAutoScheduleRequest,
     OrderScheduleResponse, ScheduleSummary, ScheduledOrderOutput,
+    GanttEntry, GanttDiffEntry,
 )
 from agents.nl_scheduler import NLSchedulerAgent
 from agents.sa_scheduler import SAScheduler
-from agents.scheduler import Order
+from agents.scheduler import Order, Schedule
 
 # Re-use the shared response builder from schedule.py
 from routers.schedule import _build_response
+
+
+def _schedule_to_gantt(schedule: Schedule) -> list[GanttEntry]:
+    """Convert a Schedule domain object into a list of GanttEntry items."""
+    return [
+        GanttEntry(
+            order_id=s.order.order_id,
+            machine_id=s.machine_id,
+            start=s.processing_start,
+            end=s.completion_time,
+            on_time=s.on_time,
+        )
+        for s in schedule.scheduled_orders
+    ]
+
+
+def _compute_gantt_diff(before: list[GanttEntry], after: list[GanttEntry]) -> list[GanttDiffEntry]:
+    """
+    For every order in either schedule, emit a per-order diff showing
+    machine reassignments and start-time shifts. delta_minutes is positive
+    when the order was pushed later by the override.
+    """
+    by_id_before = {e.order_id: e for e in before}
+    by_id_after = {e.order_id: e for e in after}
+    all_ids = sorted(set(by_id_before) | set(by_id_after))
+    out: list[GanttDiffEntry] = []
+    for oid in all_ids:
+        b = by_id_before.get(oid)
+        a = by_id_after.get(oid)
+        delta = None
+        if b and a:
+            delta = round((a.start - b.start).total_seconds() / 60, 1)
+        out.append(GanttDiffEntry(
+            order_id=oid,
+            machine_before=b.machine_id if b else None,
+            machine_after=a.machine_id if a else None,
+            start_before=b.start if b else None,
+            start_after=a.start if a else None,
+            delta_minutes=delta,
+            machine_changed=bool(b and a and b.machine_id != a.machine_id),
+        ))
+    return out
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/schedule", tags=["NL Scheduler"])
@@ -55,14 +98,30 @@ async def nl_schedule(req: NLScheduleRequest) -> NLScheduleResponse:
         req.instruction[:80], len(req.orders)
     )
 
-    # 1. Interpret instruction → priority overrides
+    # 1. Interpret instruction → priority overrides + machine-down + actions
     try:
         nl_result = _nl_agent.interpret(req.instruction, req.orders)
     except Exception as exc:
         logger.error("NL interpret error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="NL interpretation error")
 
-    # 2. Apply overrides to order list
+    start_time = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # 2. BEFORE schedule — convert orders as-is, run SA, snapshot the Gantt.
+    # This is what would happen WITHOUT the operator's instruction.
+    try:
+        original_orders = [_raw_to_order(o) for o in req.orders]
+    except Exception as exc:
+        logger.error("Order conversion error (before): %s", exc, exc_info=True)
+        raise HTTPException(status_code=422, detail=f"Invalid order data: {exc}")
+    try:
+        before_schedule = _sa.optimize(original_orders, start_time=start_time)
+    except Exception as exc:
+        logger.error("SA scheduler error (before): %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Scheduling engine error")
+    gantt_before = _schedule_to_gantt(before_schedule)
+
+    # 3. Apply overrides
     override_map = {ov.order_id: ov.new_priority for ov in nl_result.overrides}
     adjusted_orders = []
     for raw in req.orders:
@@ -72,21 +131,32 @@ async def nl_schedule(req: NLScheduleRequest) -> NLScheduleResponse:
             raw_copy["priority"] = override_map[oid]
         adjusted_orders.append(raw_copy)
 
-    # 3. Convert to domain Order objects
     try:
         domain_orders = [_raw_to_order(o) for o in adjusted_orders]
     except Exception as exc:
-        logger.error("Order conversion error: %s", exc, exc_info=True)
+        logger.error("Order conversion error (after): %s", exc, exc_info=True)
         raise HTTPException(status_code=422, detail=f"Invalid order data: {exc}")
 
-    # 4. Run SA scheduler
-    start_time = datetime.now(timezone.utc).replace(tzinfo=None)
+    # 4. Build the AFTER scheduler. If a machine is down, drop it from
+    # machine_count so all orders re-route to the survivors.
+    sa_engine = _sa
+    if nl_result.machine_down is not None:
+        from agents.scheduler import MACHINE_COUNT as _MC
+        survivors = max(1, _MC - 1)
+        sa_engine = SAScheduler(machine_count=survivors)
+        logger.info(
+            "NL schedule: machine %d declared down, rescheduling on %d machines",
+            nl_result.machine_down, survivors
+        )
+
     try:
-        schedule = _sa.optimize(domain_orders, start_time=start_time)
+        schedule = sa_engine.optimize(domain_orders, start_time=start_time)
     except Exception as exc:
-        logger.error("SA scheduler error: %s", exc, exc_info=True)
+        logger.error("SA scheduler error (after): %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Scheduling engine error")
 
+    gantt_after = _schedule_to_gantt(schedule)
+    gantt_diff = _compute_gantt_diff(gantt_before, gantt_after)
     schedule_response = _build_response(schedule, "sa")
 
     return NLScheduleResponse(
@@ -102,6 +172,12 @@ async def nl_schedule(req: NLScheduleRequest) -> NLScheduleResponse:
         override_summary=nl_result.summary,
         schedule=schedule_response,
         validation_failures=nl_result.validation_failures,
+        targeted_work_centers=nl_result.targeted_work_centers,
+        machine_down=nl_result.machine_down,
+        actions=nl_result.actions,
+        gantt_before=gantt_before,
+        gantt_after=gantt_after,
+        gantt_diff=gantt_diff,
     )
 
 
