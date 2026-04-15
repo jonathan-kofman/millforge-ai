@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from models.schemas import QuoteRequest, QuoteResponse
+from models.schemas import QuoteRequest, QuoteResponse, QuotePlaceRequest, QuotePlaceResponse
 from agents.scheduler import Scheduler, Order, get_mock_orders, THROUGHPUT
 from agents.energy_optimizer import MACHINE_POWER_KW, _get_carbon_intensity
 from agents.market_quoter import _get_spot_price
@@ -386,3 +386,88 @@ def _volume_discount(quantity: int) -> float:
     elif quantity >= 500:
         return 0.05
     return 0.0
+
+
+@router.post("/quote/place", response_model=QuotePlaceResponse, status_code=201)
+async def place_order_from_quote(
+    req: QuotePlaceRequest,
+    db: Session = Depends(get_db),
+) -> QuotePlaceResponse:
+    """
+    Convert an accepted quote into a live order. No auth required — guest
+    buyers supply their email. The created OrderRecord is immediately visible
+    in the production schedule.
+
+    The quote_id is preserved as po_number if no explicit PO is provided,
+    so shop staff can trace the order back to the original quote.
+    """
+    due_date = req.desired_due_date or (
+        datetime.now(timezone.utc).replace(tzinfo=None)
+        + timedelta(days=max(1, int(req.estimated_lead_time_days) + 3))
+    )
+
+    order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+
+    rec = OrderRecord(
+        order_id=order_id,
+        material=req.material,
+        dimensions=req.dimensions,
+        quantity=req.quantity,
+        priority=req.priority,
+        complexity=1.0,
+        due_date=due_date,
+        status="pending",
+        notes=req.notes or f"Placed from quote {req.quote_id}.",
+        customer_name=req.customer_name,
+        po_number=req.po_number or req.quote_id,
+        process_type=req.process_type,
+        contact_email=req.email,
+        quoted_price_usd=req.total_price_usd,
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+
+    logger.info(
+        "Order placed from quote: order_id=%s quote_id=%s customer=%s email=%s",
+        order_id, req.quote_id, req.customer_name, req.email,
+    )
+
+    # Confirmation email to customer — non-fatal if SMTP not configured
+    try:
+        import os, smtplib
+        from email.mime.text import MIMEText as _MIMEText
+        smtp_email = os.getenv("SMTP_EMAIL", "").strip()
+        smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+        if smtp_email and smtp_password:
+            process_label = PROCESS_LABELS.get(req.process_type, req.process_type.replace("_", " ").title())
+            body = (
+                f"Hi {req.customer_name},\n\n"
+                f"Your order has been placed and entered the production queue.\n\n"
+                f"Order ID:     {order_id}\n"
+                f"Process:      {process_label}\n"
+                f"Material:     {req.material}\n"
+                f"Quantity:     {req.quantity:,}\n"
+                f"Dimensions:   {req.dimensions}\n"
+                f"Quoted price: ${req.total_price_usd:,.2f}\n"
+                f"Est. ship:    {due_date.strftime('%Y-%m-%d')}\n\n"
+                f"Quote ref: {req.quote_id}\n\n"
+                f"— MillForge"
+            )
+            msg = _MIMEText(body)
+            msg["Subject"] = f"MillForge order confirmed — {order_id}"
+            msg["From"] = smtp_email
+            msg["To"] = str(req.email)
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(smtp_email, smtp_password)
+                server.sendmail(smtp_email, [str(req.email)], msg.as_string())
+    except Exception as exc:
+        logger.warning("Confirmation email failed (non-fatal): %s", exc)
+
+    ship_date = due_date.strftime("%Y-%m-%d")
+    return QuotePlaceResponse(
+        order_id=order_id,
+        status="pending",
+        message=f"Order {order_id} created and added to the production queue.",
+        estimated_ship_date=ship_date,
+    )

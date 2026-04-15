@@ -61,6 +61,9 @@ class OrderRecord(Base):
     customer_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     po_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     part_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    process_type: Mapped[Optional[str]] = mapped_column(String(50), default="cnc_milling", nullable=True)
+    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    quoted_price_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_by_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )

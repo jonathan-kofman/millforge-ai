@@ -76,12 +76,19 @@ function Stat({ label, value, sub, highlight }) {
   );
 }
 
+const DEFAULT_ORDER_FORM = { customer_name: "", email: "", po_number: "", notes: "", desired_due_date: "" };
+
 export default function QuoteForm({ onNavigate }) {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [orderForm, setOrderForm] = useState(DEFAULT_ORDER_FORM);
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [orderResult, setOrderResult] = useState(null);
+  const [orderError, setOrderError] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -119,6 +126,42 @@ export default function QuoteForm({ onNavigate }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePlaceOrder = async (e) => {
+    e.preventDefault();
+    setOrderLoading(true);
+    setOrderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/quote/place`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quote_id: result.quote_id,
+          material: result.material,
+          dimensions: result.dimensions,
+          quantity: result.quantity,
+          priority: form.priority,
+          process_type: form.process_type || "cnc_milling",
+          total_price_usd: result.total_price_usd,
+          estimated_lead_time_days: result.estimated_lead_time_days,
+          customer_name: orderForm.customer_name,
+          email: orderForm.email,
+          po_number: orderForm.po_number || undefined,
+          notes: orderForm.notes || undefined,
+          desired_due_date: orderForm.desired_due_date || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Order placement failed");
+      }
+      setOrderResult(await res.json());
+    } catch (err) {
+      setOrderError(err.message);
+    } finally {
+      setOrderLoading(false);
     }
   };
 
@@ -302,23 +345,112 @@ export default function QuoteForm({ onNavigate }) {
 
           <p className="text-sm text-gray-400 border-t border-gray-800 pt-3">{result.notes}</p>
 
-          <div className="border-t border-gray-800 pt-4 flex flex-col sm:flex-row gap-2">
-            <button
-              onClick={() => {
-                setResult(null);
-                setForm(DEFAULT_FORM);
-              }}
-              className="btn-secondary text-sm flex-1"
-            >
-              Get another quote
-            </button>
+          {/* Place Order CTA */}
+          {!orderResult && (
+            <div className="border-t border-gray-800 pt-4">
+              {!showOrderForm ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => { setResult(null); setForm(DEFAULT_FORM); setShowOrderForm(false); setOrderForm(DEFAULT_ORDER_FORM); }}
+                    className="btn-secondary text-sm flex-1"
+                  >
+                    Get another quote
+                  </button>
+                  <button
+                    onClick={() => setShowOrderForm(true)}
+                    className="btn-gradient text-sm flex-1 text-center"
+                  >
+                    Place Order →
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <h4 className="text-sm font-semibold text-white mb-3">Place this order</h4>
+                  <form onSubmit={handlePlaceOrder} className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Your name *</label>
+                        <input className="input" placeholder="Jane Smith" value={orderForm.customer_name}
+                          onChange={e => setOrderForm(f => ({ ...f, customer_name: e.target.value }))} required />
+                      </div>
+                      <div>
+                        <label className="label">Email *</label>
+                        <input type="email" className="input" placeholder="you@company.com" value={orderForm.email}
+                          onChange={e => setOrderForm(f => ({ ...f, email: e.target.value }))} required />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">PO number</label>
+                        <input className="input" placeholder="PO-2026-0042" value={orderForm.po_number}
+                          onChange={e => setOrderForm(f => ({ ...f, po_number: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="label">Desired ship date</label>
+                        <input type="date" className="input" value={orderForm.desired_due_date}
+                          onChange={e => setOrderForm(f => ({ ...f, desired_due_date: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="label">Notes</label>
+                      <textarea className="input h-16 resize-none text-sm" placeholder="Special requirements, delivery instructions…"
+                        value={orderForm.notes} onChange={e => setOrderForm(f => ({ ...f, notes: e.target.value }))} />
+                    </div>
+                    {orderError && <p className="text-xs text-red-400">{orderError}</p>}
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={orderLoading} className="btn-gradient text-sm flex-1 text-center">
+                        {orderLoading ? "Placing…" : "Confirm Order →"}
+                      </button>
+                      <button type="button" onClick={() => setShowOrderForm(false)} className="btn-secondary text-sm px-4">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Order confirmed */}
+          {orderResult && (
+            <div className="border-t border-gray-800 pt-4">
+              <div className="bg-green-900/20 border border-green-800/40 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-5 h-5 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center text-green-400 text-xs">✓</span>
+                  <p className="text-sm font-semibold text-white">Order placed</p>
+                </div>
+                <p className="text-xs text-gray-400 mb-1">
+                  Order ID: <span className="font-mono text-white">{orderResult.order_id}</span>
+                </p>
+                {orderResult.estimated_ship_date && (
+                  <p className="text-xs text-gray-400 mb-1">
+                    Est. ship: <span className="text-white">{orderResult.estimated_ship_date}</span>
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-2">A confirmation has been sent to your email.</p>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => { setResult(null); setForm(DEFAULT_FORM); setOrderResult(null); setOrderForm(DEFAULT_ORDER_FORM); setShowOrderForm(false); }}
+                  className="btn-secondary text-sm flex-1"
+                >
+                  New quote
+                </button>
+                <button onClick={() => onNavigate?.("schedule")} className="btn-primary text-sm flex-1">
+                  View schedule →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!orderResult && !showOrderForm && (
             <button
               onClick={() => onNavigate?.("schedule")}
-              className="btn-primary text-sm flex-1"
+              className="text-xs text-gray-600 hover:text-gray-400 transition-colors w-full text-center"
             >
               View production schedule →
             </button>
-          </div>
+          )}
         </div>
       )}
     </div>

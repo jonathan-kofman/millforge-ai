@@ -62,6 +62,31 @@ class QuoteResponse(BaseModel):
     carbon_footprint_kg_co2: Optional[float] = None
 
 
+class QuotePlaceRequest(BaseModel):
+    """Body for POST /api/quote/place — convert a quote into a live order."""
+    quote_id: str
+    material: str
+    dimensions: str
+    quantity: int = Field(..., gt=0)
+    priority: int = Field(5, ge=1, le=10)
+    process_type: str = "cnc_milling"
+    total_price_usd: float
+    estimated_lead_time_days: float
+    # Customer info (no auth required — guest checkout)
+    customer_name: str = Field(..., min_length=1)
+    email: EmailStr
+    po_number: Optional[str] = None
+    notes: Optional[str] = None
+    desired_due_date: Optional[datetime] = None
+
+
+class QuotePlaceResponse(BaseModel):
+    order_id: str
+    status: str
+    message: str
+    estimated_ship_date: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # /api/schedule
 # ---------------------------------------------------------------------------

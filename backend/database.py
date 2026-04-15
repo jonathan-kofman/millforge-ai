@@ -142,6 +142,10 @@ def _apply_column_migrations() -> None:
         "ALTER TABLE operations ADD COLUMN subcontractor_lead_days INTEGER",
         "ALTER TABLE operations ADD COLUMN ai_confidence FLOAT",
         "ALTER TABLE operations ADD COLUMN detected_features_json TEXT",
+        # Quote-to-order — process type and guest contact email
+        "ALTER TABLE orders ADD COLUMN process_type VARCHAR(50) DEFAULT 'cnc_milling'",
+        "ALTER TABLE orders ADD COLUMN contact_email VARCHAR(255)",
+        "ALTER TABLE orders ADD COLUMN quoted_price_usd FLOAT",
     ]
     for sql in migrations:
         # Use a fresh connection per migration — on Postgres, a failed DDL statement
