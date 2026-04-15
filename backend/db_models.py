@@ -993,3 +993,37 @@ class FirstArticleInspection(Base):
 
     def __repr__(self) -> str:
         return f"<FAI id={self.id} part={self.part_name} result={self.result}>"
+
+
+class ProductEvent(Base):
+    """
+    Self-hosted product analytics event log.
+
+    Records every meaningful user action for health scoring and founder
+    dashboards without sending data to third-party analytics services.
+
+    event_category: scheduling | quality | supplier | energy | onboarding | billing
+    event_type:     schedule_run | nl_override | benchmark_viewed | qc_inspected |
+                    supplier_searched | energy_analysis | order_created | quote_generated |
+                    template_applied | operator_login | shift_completed | ...
+    """
+
+    __tablename__ = "product_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    event_category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    # Optional FK to the source record (job_id, operation_id, schedule_run_id, etc.)
+    source_table: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    source_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Arbitrary event payload (e.g. algorithm used, on_time_rate, material)
+    payload_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+    @property
+    def payload(self) -> dict:
+        return json.loads(self.payload_json) if self.payload_json else {}
+
+    def __repr__(self) -> str:
+        return f"<ProductEvent cat={self.event_category} type={self.event_type} at={self.occurred_at}>"
