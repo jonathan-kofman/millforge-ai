@@ -259,55 +259,94 @@ export default function App() {
       </header>
 
       {/* ── Hero ── */}
-      <section className="bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-4 py-16 text-center">
-          {/* ICP */}
-          <p className="text-sm sm:text-base text-forge-400 font-medium mb-3">
-            For CNC job shops and metal mills drowning in backlog and rush orders.
-          </p>
+      <section className="relative overflow-hidden bg-gray-950 border-b border-gray-800">
+        {/* Ambient glow — forge orange radial behind headline */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 70% 40% at 50% 0%, rgba(249,115,22,0.12) 0%, transparent 70%)",
+          }}
+        />
+        {/* Subtle grid overlay */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+          }}
+        />
+
+        <div className="relative max-w-6xl mx-auto px-4 py-20 text-center">
+          {/* Vision badge */}
+          <div className="inline-flex items-center gap-2 bg-forge-500/10 border border-forge-500/30 rounded-full px-4 py-1.5 mb-6">
+            <span className="w-1.5 h-1.5 rounded-full bg-forge-400 animate-pulse" />
+            <span className="text-xs font-semibold text-forge-400 tracking-wide uppercase">
+              Lights-out manufacturing intelligence
+            </span>
+          </div>
+
           {/* Headline */}
-          <h1 className="text-5xl sm:text-6xl font-extrabold mb-4 leading-tight tracking-tighter">
-            <span className="text-white">MillForge AI </span>
-            <span className="bg-gradient-to-r from-forge-500 to-orange-400 bg-clip-text text-transparent">
-              ends the wait.
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold mb-5 leading-[1.05] tracking-tighter">
+            <span className="text-white">Your mill runs</span>
+            <br />
+            <span className="bg-gradient-to-r from-forge-500 via-orange-400 to-amber-300 bg-clip-text text-transparent">
+              while you sleep.
             </span>
           </h1>
+
           {/* Subheadline */}
-          <p className="text-lg sm:text-xl text-gray-200 font-semibold max-w-2xl mx-auto mb-3">
-            AI scheduler that lifts on-time delivery from 60% to 95%+<br className="hidden sm:block" /> using your existing machines and staff.
+          <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-2 leading-relaxed">
+            MillForge AI replaces manual production coordination — scheduling, quoting, quality inspection, and energy optimization — so your floor runs at full capacity with no one watching.
           </p>
-          <p className="text-xs text-gray-500 max-w-xl mx-auto mb-6 mt-1">
-            Not an ERP. Not a quoting portal. A scheduling layer that sits on top of what you already use.
+          <p className="text-xs text-gray-600 max-w-xl mx-auto mb-8">
+            Sits on top of what you already use. No ERP replacement. No rip-and-replace.
           </p>
-          {/* Stat strip */}
-          <div className="flex flex-wrap justify-center gap-6 sm:gap-10 mb-8">
+
+          {/* Stat strip — card style */}
+          <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-8">
             {[
-              ["96.4%", "On-time delivery (SA optimizer)"],
-              ["+35.7pp", "Improvement over FIFO baseline"],
-              ["< 200ms", "Schedule latency per 28 orders"],
-            ].map(([val, label]) => (
-              <div key={label} className="text-center">
+              { val: "96.4%", label: "On-time delivery", sub: "vs 60.7% FIFO baseline" },
+              { val: "+35.7pp", label: "OTD improvement", sub: "same machines, same staff" },
+              { val: "9 of 10", label: "Touchpoints automated", sub: "scheduling → sourcing" },
+            ].map(({ val, label, sub }) => (
+              <div
+                key={label}
+                className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-3.5 text-center min-w-[130px]"
+              >
                 <p className="text-2xl font-extrabold text-forge-400">{val}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                <p className="text-xs font-semibold text-gray-300 mt-0.5">{label}</p>
+                <p className="text-[10px] text-gray-600 mt-0.5">{sub}</p>
               </div>
             ))}
           </div>
-          {/* Primary CTA */}
-          <a
-            href="https://calendly.com/jonkofm/30min"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-gradient"
-          >
-            Book a 30-minute floor review →
-          </a>
-          <p className="text-xs text-gray-600 mt-3 mb-8">
+
+          {/* CTA row */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-4">
+            <a
+              href="https://calendly.com/jonkofm/30min"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-gradient"
+            >
+              Book a 30-minute floor review →
+            </a>
+            <button
+              onClick={() => { setActiveTab("schedule"); scrollTo("tab-nav"); }}
+              className="text-gray-400 hover:text-gray-200 text-sm font-medium transition-colors border border-gray-700 hover:border-gray-600 rounded-lg px-5 py-2.5"
+            >
+              See the benchmark →
+            </button>
+          </div>
+          <p className="text-xs text-gray-600 mb-10">
             No commitment. We run your order history through MillForge and show you the on-time delta.
           </p>
 
-          {/* Email capture — lower-friction CTA */}
+          {/* Email capture */}
           <div className="mb-10">
-            <p className="text-xs text-gray-500 mb-3">Not ready for a call?</p>
             {captureSubmitted ? (
               <p className="text-sm text-forge-400">Got it — we&apos;ll send the sample report shortly.</p>
             ) : (
@@ -318,25 +357,26 @@ export default function App() {
                   value={captureEmail}
                   onChange={e => setCaptureEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forge-500 focus:border-transparent text-sm w-full sm:w-auto"
+                  className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-forge-500 focus:border-transparent text-sm w-full sm:w-auto"
                 />
                 <button
                   type="submit"
                   disabled={captureLoading}
-                  className="bg-gray-700 hover:bg-gray-600 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap disabled:opacity-50"
+                  className="bg-gray-800 hover:bg-gray-700 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap disabled:opacity-50 border border-gray-700"
                 >
                   {captureLoading ? "Sending…" : "Get a sample report →"}
                 </button>
               </form>
             )}
+            <p className="text-[11px] text-gray-700 mt-2">No spam. Sample 28-order benchmark analysis.</p>
           </div>
 
-          {/* Pull quote — social proof below CTA */}
-          <div className="max-w-2xl mx-auto border-l-4 border-forge-500 pl-5 text-left">
-            <p className="text-sm sm:text-base text-gray-300 italic leading-relaxed">
+          {/* Pull quote */}
+          <div className="max-w-2xl mx-auto border-l-2 border-forge-500/50 pl-5 text-left">
+            <p className="text-sm text-gray-400 italic leading-relaxed">
               &ldquo;Ordered 5 months ago. They just told me it&apos;ll be another 2 months. I could&apos;ve grown the aluminum myself.&rdquo;
             </p>
-            <p className="mt-2 text-xs text-gray-500">— American manufacturer, 2024</p>
+            <p className="mt-2 text-xs text-gray-600">— American manufacturer, 2024</p>
           </div>
         </div>
       </section>
