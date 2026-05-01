@@ -200,6 +200,34 @@ class TestRunsRouter:
         ts = [e.get("ts") or 0 for e in body["events"]]
         assert ts == sorted(ts)
 
+    def test_timeline_recognizes_timestamp_utc(self, client, tmp_path,
+                                               monkeypatch):
+        """Real ARIA manifests use `timestamp_utc`, not `started_at`.
+        Verify the registry emits a `run_started` milestone from it."""
+        outputs = tmp_path / "outputs"
+        runs = outputs / "runs"
+        runs.mkdir(parents=True)
+        run_id = "20260501T140000_abc12345"
+        rd = runs / run_id
+        rd.mkdir()
+        # Use only `timestamp_utc` (no started_at) — mirrors
+        # aria_os.run_manifest.create_run output
+        from datetime import datetime, timezone
+        ts_iso = datetime.now(timezone.utc).isoformat()
+        (rd / "run_manifest.json").write_text(json.dumps({
+            "run_id": run_id, "goal": "test ts_utc handling",
+            "timestamp_utc": ts_iso, "schema_version": "2.1",
+        }))
+        monkeypatch.setenv("ARIA_OUTPUTS_PATH", str(outputs))
+
+        _login(client, email="runs_tsutc@example.com")
+        r = client.get(f"/api/runs/{run_id}/timeline")
+        assert r.status_code == 200
+        body = r.json()
+        kinds = [e["kind"] for e in body["events"]]
+        assert "run_started" in kinds, (
+            f"timestamp_utc should produce run_started milestone, got {kinds}")
+
     def test_artifact_download(self, client, aria_outputs):
         _login(client, email="runs_art@example.com")
         run_id = aria_outputs["run_id"]

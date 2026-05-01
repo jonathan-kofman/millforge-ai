@@ -191,7 +191,13 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 _cors_base = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:3000,http://localhost:80"
+    # MillForge frontend (Vite=5173, prod static=80, generic=3000) +
+    # the visualize-it monorepo apps that consume MillForge endpoints.
+    # 3009 is StructSight (engineering app); 3001-3008 are siblings.
+    "http://localhost:5173,http://localhost:3000,http://localhost:80,"
+    "http://localhost:3001,http://localhost:3002,http://localhost:3003,"
+    "http://localhost:3004,http://localhost:3005,http://localhost:3006,"
+    "http://localhost:3007,http://localhost:3008,http://localhost:3009"
 ).split(",")
 _frontend_url = os.getenv("FRONTEND_URL", "").strip()
 allowed_origins = [o.strip() for o in _cors_base if o.strip()]

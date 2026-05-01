@@ -156,14 +156,27 @@ def list_runs(*, limit: int = 50) -> list[dict]:
     summaries: list[dict] = []
     for run_dir in entries[: int(limit)]:
         manifest = _read_manifest(run_dir) or {}
+        # `timestamp_utc` is the canonical run-start field written by
+        # aria_os.run_manifest.create_run; accept legacy aliases too.
+        started = (manifest.get("started_at")
+                   or manifest.get("timestamp_utc"))
+        completed = (manifest.get("completed_at")
+                     or (manifest.get("pipeline_stats") or {}).get(
+                         "completed_at"))
+        # Success: prefer explicit `success`, else infer from
+        # pipeline_stats.success_agent
+        success = manifest.get("success")
+        if success is None:
+            success = (manifest.get("pipeline_stats") or {}).get(
+                "success_agent")
         summaries.append({
             "run_id": run_dir.name,
             "goal": manifest.get("goal"),
             "part_name": manifest.get("part_name") or manifest.get("part_id"),
             "schema_version": manifest.get("schema_version"),
-            "started_at": manifest.get("started_at"),
-            "completed_at": manifest.get("completed_at"),
-            "success": manifest.get("success"),
+            "started_at": started,
+            "completed_at": completed,
+            "success": success,
             "agent_iterations": (manifest.get("pipeline_stats") or {})
                                 .get("agent_iterations"),
             "artifact_count": sum(
@@ -333,20 +346,35 @@ def timeline(db: Session, run_id: str, *,
 
     events: list[dict] = []
 
-    # Manifest milestones — emit 1 entry per known timestamp on the manifest
+    # Manifest milestones — emit 1 entry per known timestamp on the
+    # manifest. The canonical run-start field is `timestamp_utc`; older
+    # legacy fields like `started_at` are also accepted. Each milestone
+    # gets a kind that names what stage produced it.
     manifest = fs.get("manifest") or {}
-    for k in ("started_at", "spec_extracted_at", "geometry_emitted_at",
-              "agent_loop_complete_at", "dfm_complete_at",
-              "fea_complete_at", "cam_complete_at",
-              "completed_at"):
+    milestone_keys = (
+        "timestamp_utc",                # canonical run start
+        "started_at",                   # legacy alias
+        "spec_extracted_at", "geometry_emitted_at",
+        "agent_loop_complete_at", "dfm_complete_at",
+        "fea_complete_at", "cam_complete_at",
+        "render_complete_at", "vault_complete_at",
+        "completed_at",
+    )
+    for k in milestone_keys:
         v = manifest.get(k)
-        if v is not None:
-            events.append({
-                "ts": _to_epoch(v),
-                "kind": k,
-                "payload": {"source": "run_manifest"},
-                "_source": "aria_run_manifest",
-            })
+        if v is None:
+            continue
+        ts_epoch = _to_epoch(v)
+        if ts_epoch is None:
+            continue
+        # Normalize the kind so the UI displays a consistent label
+        kind = "run_started" if k in ("timestamp_utc", "started_at") else k
+        events.append({
+            "ts": ts_epoch,
+            "kind": kind,
+            "payload": {"source": "run_manifest", "raw_field": k},
+            "_source": "aria_run_manifest",
+        })
 
     # MillForge job stage history — derived from cam_metadata + timestamps
     job_dict: Optional[dict] = None
