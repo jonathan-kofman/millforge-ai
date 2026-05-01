@@ -306,9 +306,37 @@ async def get_quote(
         queue_depth = 0
 
     # Scale to calendar days based on shift schedule.
-    if req.shifts_per_day and req.hours_per_shift:
+    # Validation: both shifts_per_day and hours_per_shift must be provided together,
+    # or both must be None (assumes 24h continuous operation).
+    if (req.shifts_per_day is None) != (req.hours_per_shift is None):
+        # One is provided but not the other — invalid
+        raise HTTPException(
+            status_code=400,
+            detail="shifts_per_day and hours_per_shift must both be provided or both omitted. "
+                   "Cannot scale lead time with only one parameter."
+        )
+
+    if req.shifts_per_day is not None and req.hours_per_shift is not None:
+        # Both provided — validate they are sensible
+        if req.shifts_per_day <= 0 or req.hours_per_shift <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="shifts_per_day and hours_per_shift must be positive values."
+            )
+
         productive_hours_per_day = req.shifts_per_day * req.hours_per_shift
+        if productive_hours_per_day > 24:
+            # Warn but don't block — assumes overlapping or sequential shifts within a calendar day
+            logger.warning(
+                "Quote has productive_hours_per_day=%.1f > 24; scaling will compress timeline. "
+                "Ensure shifts_per_day and hours_per_shift account for actual operating hours, not clock hours.",
+                productive_hours_per_day
+            )
+        # Scale machine hours to calendar hours: if the machine runs productive_hours_per_day out of 24,
+        # then real calendar hours needed = machine_hours * (24 / productive_hours_per_day)
         lead_time_hours = lead_time_hours * (24 / productive_hours_per_day)
+
+    # Convert hours to days (always 24 hours per day in calendar time)
     lead_time_days = lead_time_hours / 24
 
     # --- Price ---

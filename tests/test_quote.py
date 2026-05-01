@@ -190,3 +190,134 @@ def test_missing_dimensions_returns_422(client):
     payload = {k: v for k, v in VALID_PAYLOAD.items() if k != "dimensions"}
     resp = post_quote(client, payload)
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Shift scaling validation (bug fix: lead-time scaling silent assumptions)
+# ---------------------------------------------------------------------------
+
+
+def test_quote_shift_scaling_both_provided(client):
+    """When both shifts_per_day and hours_per_shift are provided, lead time scales correctly."""
+    payload = {
+        **VALID_PAYLOAD,
+        "shifts_per_day": 1,
+        "hours_per_shift": 8,
+    }
+    resp = post_quote(client, payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["estimated_lead_time_days"] > 0
+
+
+def test_quote_shift_scaling_3_shifts_faster_than_1_shift(client):
+    """3 shifts should give ~1/3 the lead time of 1 shift for the same job (all else equal)."""
+    payload_1shift = {
+        **VALID_PAYLOAD,
+        "shifts_per_day": 1,
+        "hours_per_shift": 8,
+    }
+    payload_3shift = {
+        **VALID_PAYLOAD,
+        "shifts_per_day": 3,
+        "hours_per_shift": 8,
+    }
+    resp_1 = post_quote(client, payload_1shift)
+    resp_3 = post_quote(client, payload_3shift)
+    assert resp_1.status_code == 200
+    assert resp_3.status_code == 200
+
+    data_1 = resp_1.json()
+    data_3 = resp_3.json()
+
+    # 3 shifts (24h operation) should be ~1/3 the time of 1 shift (8h operation)
+    ratio = data_1["estimated_lead_time_days"] / data_3["estimated_lead_time_days"]
+    # Allow ~10% tolerance for rounding and other factors
+    assert 2.7 < ratio < 3.3, f"Expected ratio ~3.0, got {ratio}"
+
+
+def test_quote_shift_scaling_only_shifts_per_day_returns_400(client):
+    """If only shifts_per_day is provided (without hours_per_shift), return 400."""
+    payload = {
+        **VALID_PAYLOAD,
+        "shifts_per_day": 2,
+        # hours_per_shift intentionally omitted
+    }
+    resp = post_quote(client, payload)
+    assert resp.status_code == 400
+    assert "shifts_per_day and hours_per_shift" in resp.json()["detail"]
+
+
+def test_quote_shift_scaling_only_hours_per_shift_returns_400(client):
+    """If only hours_per_shift is provided (without shifts_per_day), return 400."""
+    payload = {
+        **VALID_PAYLOAD,
+        "hours_per_shift": 8,
+        # shifts_per_day intentionally omitted
+    }
+    resp = post_quote(client, payload)
+    assert resp.status_code == 400
+    assert "shifts_per_day and hours_per_shift" in resp.json()["detail"]
+
+
+def test_quote_shift_scaling_neither_provided_assumes_continuous(client):
+    """If neither shifts_per_day nor hours_per_shift is provided, assume 24h continuous operation."""
+    payload = {k: v for k, v in VALID_PAYLOAD.items()
+               if k not in ("shifts_per_day", "hours_per_shift")}
+    resp = post_quote(client, payload)
+    assert resp.status_code == 200
+    # Should work without crashing and give a reasonable lead time
+
+
+def test_quote_shift_scaling_zero_shifts_per_day_returns_422(client):
+    """shifts_per_day = 0 should return 422 (Pydantic validation enforces ge=1)."""
+    payload = {
+        **VALID_PAYLOAD,
+        "shifts_per_day": 0,
+        "hours_per_shift": 8,
+    }
+    resp = post_quote(client, payload)
+    # Pydantic rejects before our handler runs
+    assert resp.status_code == 422
+
+
+def test_quote_shift_scaling_zero_hours_per_shift_returns_422(client):
+    """hours_per_shift = 0 should return 422 (Pydantic validation enforces ge=4)."""
+    payload = {
+        **VALID_PAYLOAD,
+        "shifts_per_day": 2,
+        "hours_per_shift": 0,
+    }
+    resp = post_quote(client, payload)
+    # Pydantic rejects before our handler runs
+    assert resp.status_code == 422
+
+
+def test_quote_shift_scaling_hours_exceed_24_logs_warning(client):
+    """productive_hours_per_day > 24 (e.g., 3 shifts × 12 hours) should log warning but not block."""
+    payload = {
+        **VALID_PAYLOAD,
+        "shifts_per_day": 3,
+        "hours_per_shift": 12,  # 36 hours/day — overlapping shifts
+    }
+    resp = post_quote(client, payload)
+    # Should succeed (no 400 error), but log a warning internally
+    assert resp.status_code == 200
+    data = resp.json()
+    # With 36h productive time out of 24h calendar time, lead time should be compressed
+    assert data["estimated_lead_time_days"] > 0
+
+
+def test_quote_two_shifts_eight_hours_each_baseline(client):
+    """Baseline 2-shift 8-hour operation: standard 16h/day productive."""
+    payload = {
+        **VALID_PAYLOAD,
+        "shifts_per_day": 2,
+        "hours_per_shift": 8,
+    }
+    resp = post_quote(client, payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    # Should give reasonable lead time with 16h/day productive
+    assert data["estimated_lead_time_days"] > 0
+    assert data["estimated_lead_time_hours"] > 0

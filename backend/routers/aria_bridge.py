@@ -27,6 +27,7 @@ from database import get_db
 from db_models import Job, Operation, FirstArticleInspection, QCResult, User
 from auth.dependencies import get_current_user_optional
 from services.pipeline_events import emit as _emit_event
+from services import aria_callback as _aria_callback
 
 logger = logging.getLogger(__name__)
 
@@ -883,6 +884,18 @@ def push_feedback(
         },
     )
 
+    # Closed-loop redo callback. Fire-and-forget; never blocks response.
+    callback_dispatched = False
+    if payload.qc_passed is False:
+        intent = _aria_callback.build_intent_from_qc(
+            millforge_job_id=job.id,
+            cam_metadata=job.cam_metadata,
+            qc_passed=payload.qc_passed,
+            defects_found=list(payload.defects_found or []),
+            feedback_notes=payload.feedback_notes,
+        )
+        callback_dispatched = _aria_callback.notify_redo(intent)
+
     return {
         "aria_job_id": payload.aria_job_id,
         "millforge_job_id": job.id,
@@ -890,6 +903,8 @@ def push_feedback(
         "cycle_time_delta_minutes": delta,
         "cycle_time_accuracy_pct": accuracy_pct,
         "estimated_cycle_time_minutes": estimated,
+        "aria_callback_dispatched": callback_dispatched,
+        "aria_callback_enabled": _aria_callback.is_enabled(),
     }
 
 

@@ -113,6 +113,9 @@ class MachineStateMachine:
         self._setup_start_wall: Optional[datetime] = None
         self._run_start_wall: Optional[datetime] = None
         self._order_material: Optional[str] = None
+        # Lock protects all state transitions from concurrent access
+        # (e.g., assign_job() and reset_fault() called while step() is running)
+        self._transition_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Public API
@@ -126,18 +129,19 @@ class MachineStateMachine:
         material: Optional[str] = None,
     ) -> None:
         """Assign a new job. Only valid when in IDLE state."""
-        if self.state != MachineState.IDLE:
-            raise ValueError(
-                f"Cannot assign job to machine {self.machine_id} — current state: {self.state.name}"
+        with self._transition_lock:
+            if self.state != MachineState.IDLE:
+                raise ValueError(
+                    f"Cannot assign job to machine {self.machine_id} — current state: {self.state.name}"
+                )
+            self._current_job_id = job_id
+            self._setup_duration = setup_time_minutes * 60
+            self._processing_duration = processing_time_minutes * 60
+            self._order_material = material
+            logger.info(
+                "Machine %d assigned job %s (setup=%.0fs run=%.0fs)",
+                self.machine_id, job_id, self._setup_duration, self._processing_duration,
             )
-        self._current_job_id = job_id
-        self._setup_duration = setup_time_minutes * 60
-        self._processing_duration = processing_time_minutes * 60
-        self._order_material = material
-        logger.info(
-            "Machine %d assigned job %s (setup=%.0fs run=%.0fs)",
-            self.machine_id, job_id, self._setup_duration, self._processing_duration,
-        )
 
     def step(self) -> MachineState:
         """
@@ -145,22 +149,25 @@ class MachineStateMachine:
 
         Safe to call frequently — only transitions when durations have elapsed.
         Any exception during a transition forces the machine into FAULT.
+        Protected by per-machine lock to ensure atomic transitions under concurrent access.
         """
-        try:
-            return self._dispatch()
-        except Exception as exc:
-            logger.error(
-                "Machine %d fault during %s: %s", self.machine_id, self.state.name, exc
-            )
-            self._transition(MachineState.FAULT)
-            return self.state
+        with self._transition_lock:
+            try:
+                return self._dispatch()
+            except Exception as exc:
+                logger.error(
+                    "Machine %d fault during %s: %s", self.machine_id, self.state.name, exc
+                )
+                self._transition(MachineState.FAULT)
+                return self.state
 
     def reset_fault(self) -> None:
         """Operator clears a FAULT and returns the machine to IDLE."""
-        if self.state == MachineState.FAULT:
-            self._current_job_id = None
-            self._transition(MachineState.IDLE)
-            logger.info("Machine %d fault cleared — returning to IDLE", self.machine_id)
+        with self._transition_lock:
+            if self.state == MachineState.FAULT:
+                self._current_job_id = None
+                self._transition(MachineState.IDLE)
+                logger.info("Machine %d fault cleared — returning to IDLE", self.machine_id)
 
     # ------------------------------------------------------------------
     # Internal dispatch

@@ -14,18 +14,46 @@ from sqlalchemy.orm import Session
 from database import get_db
 from db_models import InspectionRecord, OrderRecord, User
 from models.schemas import VisionInspectRequest, VisionInspectResponse
-from agents.quality_vision import QualityVisionAgent, MODEL_AVAILABLE
+from agents.quality_vision import (
+    QualityVisionAgent,
+    MODEL_AVAILABLE,
+    check_vision_model_availability,
+)
 from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Vision"])
 
 _vision_agent = QualityVisionAgent()
+_model_startup_check = None  # populated at startup
 
 
 def get_vision_model_name() -> str:
     """Return the runtime model name for health reporting."""
     return _vision_agent._model_name
+
+
+def register_vision_startup(available: bool, status: str) -> None:
+    """Called from main.py lifespan to record startup check result."""
+    global _model_startup_check
+    _model_startup_check = {"available": available, "status": status}
+
+
+def _is_vision_model_safe() -> bool:
+    """
+    Check if vision model is safe to use.
+    Returns False if startup check determined model is missing AND the agent is in heuristic mode.
+    This prevents silent quality degradation.
+    """
+    if _model_startup_check is None:
+        return True  # startup check not run yet (shouldn't happen in normal flow)
+
+    if _model_startup_check["available"]:
+        return True
+
+    # Model is not available — only safe if we're running in a test/dev mode
+    # where the heuristic is expected
+    return False
 
 
 @router.post(
@@ -48,6 +76,24 @@ async def inspect_part(
 
     if not req.image_url or not req.image_url.strip():
         raise HTTPException(status_code=422, detail="image_url cannot be empty")
+
+    # Fail loudly if model was supposed to be available but startup check failed
+    if not _is_vision_model_safe():
+        logger.error(
+            "Vision model startup check failed (%s). "
+            "Returning 503 to prevent silent quality degradation. "
+            "Check logs for model loading details.",
+            _model_startup_check.get("status", "unknown"),
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Vision model failed to load. Quality inspection unavailable. "
+                f"Startup status: {_model_startup_check.get('status', 'unknown')}. "
+                "Check server logs for details. Try: (a) ensure model file exists, "
+                "(b) install git-lfs and re-clone, or (c) set MILLFORGE_MODEL_PATH env var."
+            ),
+        )
 
     try:
         result = _vision_agent.inspect(

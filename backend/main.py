@@ -35,6 +35,9 @@ from routers.ws_machines import router as ws_machines_router, connection_manager
 from routers.shift import router as shift_router
 from routers.maintenance import router as maintenance_router
 from routers.dashboard import router as dashboard_router
+from routers.floor_dashboard import router as floor_dashboard_router
+from routers.floor_stream import router as floor_stream_router
+from routers.runs import router as runs_router
 from discovery.routes import router as discovery_router
 from routers.jobs import router as jobs_router
 from routers.machines import router as machines_router, conflict_router as machines_conflict_router
@@ -61,7 +64,11 @@ from routers.notifications import router as notifications_router
 from agents.machine_fleet import MachineFleet
 from database import init_db, SessionLocal
 from db_models import Supplier
-from routers.vision import get_vision_model_name as _get_vision_model_name
+from routers.vision import (
+    get_vision_model_name as _get_vision_model_name,
+    register_vision_startup,
+)
+from agents.quality_vision import check_vision_model_availability
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -135,6 +142,23 @@ async def lifespan(app: FastAPI):
     # MillForge has no normalizer for (non-fatal, never blocks startup).
     from services.aria_schema import check_aria_compatibility
     await check_aria_compatibility()
+
+    # Vision model startup check — ensure model is available or fail loudly
+    try:
+        model_available, model_status = check_vision_model_availability()
+        register_vision_startup(model_available, model_status)
+        if model_available:
+            logger.info("✓ Vision model available: %s", model_status)
+        else:
+            logger.warning(
+                "⚠ Vision model unavailable (will use heuristic): %s. "
+                "Inspect endpoint will return 503 to prevent silent quality degradation.",
+                model_status,
+            )
+    except RuntimeError as exc:
+        logger.error("Vision model startup check FAILED (CRITICAL): %s", exc)
+        register_vision_startup(False, f"FAILED: {exc}")
+
     yield
     await machine_fleet.stop()
     logger.info("MillForge backend shutting down.")
@@ -216,6 +240,9 @@ app.include_router(ws_machines_router)
 app.include_router(shift_router)
 app.include_router(maintenance_router)
 app.include_router(dashboard_router)
+app.include_router(floor_dashboard_router)
+app.include_router(floor_stream_router)
+app.include_router(runs_router)
 app.include_router(discovery_router)
 app.include_router(jobs_router)
 app.include_router(machines_router)

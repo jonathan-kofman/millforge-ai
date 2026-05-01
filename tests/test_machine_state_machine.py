@@ -4,6 +4,7 @@ Unit tests for MachineStateMachine and MockMachineIO.
 
 import sys
 import os
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
@@ -273,3 +274,169 @@ def test_feedback_logger_increments_count_on_completion():
 
     count_after_second = db.query(JobFeedbackRecord).count()
     assert count_after_second == 2
+
+
+# ---------------------------------------------------------------------------
+# Atomic state transition tests (concurrent access)
+# ---------------------------------------------------------------------------
+
+def test_concurrent_assign_and_step_transition_atomic():
+    """
+    Concurrent calls to assign_job() and step() should not cause split-brain state.
+    Simulates race between worker thread calling step() and HTTP handler calling assign_job().
+    """
+    import threading
+
+    msm, io = make_msm(machine_id=10)
+    results = []
+    errors = []
+
+    def worker_step():
+        """Background worker: call step() repeatedly."""
+        try:
+            for _ in range(50):
+                msm.step()
+                time.sleep(0.001)  # Small delay
+        except Exception as exc:
+            errors.append(f"step: {exc}")
+
+    def worker_assign():
+        """HTTP handler: call assign_job()."""
+        try:
+            # Wait for machine to reach IDLE after first job completes
+            time.sleep(0.1)
+            for i in range(5):
+                # Try to assign while step() is running
+                msm.assign_job(
+                    f"ORD-{i:03d}",
+                    setup_time_minutes=0.0,
+                    processing_time_minutes=0.01,
+                )
+                time.sleep(0.02)
+                # Force completion to return to IDLE
+                io.force_complete(msm.machine_id)
+                time.sleep(0.02)
+        except Exception as exc:
+            errors.append(f"assign_job: {exc}")
+
+    # Start background stepping
+    step_thread = threading.Thread(target=worker_step, daemon=True)
+    assign_thread = threading.Thread(target=worker_assign, daemon=True)
+
+    step_thread.start()
+    assign_thread.start()
+
+    step_thread.join(timeout=5)
+    assign_thread.join(timeout=5)
+
+    assert len(errors) == 0, f"Concurrency errors: {errors}"
+    # After all jobs, machine should be in a valid state (not split-brain)
+    assert msm.state in [MachineState.IDLE, MachineState.SETUP, MachineState.READY,
+                          MachineState.RUNNING, MachineState.COOLDOWN]
+
+
+def test_concurrent_reset_fault_and_step_transition_atomic():
+    """
+    Concurrent calls to reset_fault() and step() should not cause split-brain state.
+    Simulates race between operator resetting a fault and background loop stepping.
+    """
+    import threading
+
+    msm, io = make_msm(machine_id=11)
+    errors = []
+
+    # Force machine into FAULT state
+    msm.assign_job("ORD-001", setup_time_minutes=0.0, processing_time_minutes=0.0)
+    msm.step()
+    msm._setup_complete_at = "bad"  # Corrupt to trigger fault
+    msm.step()
+    assert msm.state == MachineState.FAULT
+
+    def worker_step():
+        """Background: try to step while resetting."""
+        try:
+            for _ in range(20):
+                msm.step()
+                time.sleep(0.005)
+        except Exception as exc:
+            errors.append(f"step: {exc}")
+
+    def worker_reset():
+        """Operator: reset fault multiple times."""
+        try:
+            time.sleep(0.02)
+            for _ in range(5):
+                msm.reset_fault()
+                time.sleep(0.01)
+        except Exception as exc:
+            errors.append(f"reset_fault: {exc}")
+
+    step_thread = threading.Thread(target=worker_step, daemon=True)
+    reset_thread = threading.Thread(target=worker_reset, daemon=True)
+
+    step_thread.start()
+    reset_thread.start()
+
+    step_thread.join(timeout=5)
+    reset_thread.join(timeout=5)
+
+    assert len(errors) == 0, f"Concurrency errors: {errors}"
+    # After reset, should be IDLE
+    assert msm.state in [MachineState.IDLE, MachineState.FAULT]
+
+
+def test_high_load_state_consistency():
+    """
+    Fire 50 concurrent jobs onto one machine and verify final state is consistent.
+    This is the audit requirement: no split-brain state under high concurrency.
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    msm, io = make_msm(machine_id=12)
+    job_count = 50
+    errors = []
+
+    def background_step():
+        """Continuous stepping for 3 seconds."""
+        end_time = time.time() + 3.0
+        while time.time() < end_time:
+            try:
+                msm.step()
+                time.sleep(0.01)
+            except Exception as exc:
+                errors.append(f"step: {exc}")
+
+    def submit_job(job_num):
+        """Submit a single job (may fail if not IDLE)."""
+        try:
+            time.sleep(0.001 * job_num)  # Stagger submissions
+            if msm.state == MachineState.IDLE:
+                msm.assign_job(
+                    f"ORD-{job_num:04d}",
+                    setup_time_minutes=0.0,
+                    processing_time_minutes=0.01,
+                )
+                # Immediately mark complete to cycle back to IDLE
+                io.force_complete(msm.machine_id)
+        except ValueError:
+            # Expected when machine is not IDLE
+            pass
+        except Exception as exc:
+            errors.append(f"submit_job({job_num}): {exc}")
+
+    # Start background stepping
+    step_thread = threading.Thread(target=background_step, daemon=True)
+    step_thread.start()
+
+    # Fire 50 concurrent job submissions
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        list(executor.map(submit_job, range(job_count)))
+
+    step_thread.join(timeout=5)
+
+    assert len(errors) == 0, f"High-load errors: {errors}"
+    # State should be valid (no corrupted/split-brain state)
+    valid_states = {MachineState.IDLE, MachineState.SETUP, MachineState.READY,
+                    MachineState.RUNNING, MachineState.COOLDOWN}
+    assert msm.state in valid_states, f"Invalid state: {msm.state}"

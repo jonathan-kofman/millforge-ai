@@ -18,7 +18,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -76,6 +76,68 @@ def _try_download_model(path: str = _MODEL_PATH) -> bool:
     except Exception as exc:
         logger.warning("Model download failed (%s) — using heuristic fallback", exc)
         return False
+
+
+def check_vision_model_availability() -> Tuple[bool, str]:
+    """
+    Verify NEU-DET model availability at startup.
+
+    Returns:
+        (is_available, status_message)
+        - is_available: True if model is present and loadable
+        - status_message: human-readable status for logging
+
+    Raises:
+        RuntimeError if critical preconditions fail (file corruption, etc.)
+    """
+    # Check 1: local git-checked-in NEU-DET model
+    if os.path.exists(NEU_DET_MODEL_PATH):
+        try:
+            # Quick validation: ensure file is not truncated/corrupted
+            size = os.path.getsize(NEU_DET_MODEL_PATH)
+            if size < 1_000_000:  # ONNX models are > 1MB
+                raise RuntimeError(
+                    f"NEU-DET model file at {NEU_DET_MODEL_PATH} is too small ({size} bytes) — "
+                    "file may be corrupted or incomplete. "
+                    "Ensure git-lfs is installed or re-clone the repo."
+                )
+            logger.info(
+                "NEU-DET model found locally (%s, %.1f MB)",
+                NEU_DET_MODEL_PATH,
+                size / 1_000_000,
+            )
+            return True, "NEU-DET model loaded from git"
+        except OSError as exc:
+            raise RuntimeError(f"Cannot read NEU-DET model: {exc}")
+
+    # Check 2: try fallback path (e.g., from env var or /tmp)
+    fallback = os.getenv("MILLFORGE_MODEL_PATH", _MODEL_PATH)
+    if fallback != NEU_DET_MODEL_PATH and os.path.exists(fallback):
+        logger.info(
+            "NEU-DET model not in git, but found in fallback: %s",
+            fallback,
+        )
+        return True, f"NEU-DET model loaded from {fallback}"
+
+    # Check 3: try downloading from public source
+    if _try_download_model(fallback):
+        logger.warning(
+            "NEU-DET model missing from git and fallback; downloaded from public source to %s. "
+            "This is OK for Railway/fresh deployments, but consider adding model to git-lfs "
+            "if this happens frequently.",
+            fallback,
+        )
+        return True, f"NEU-DET model downloaded to {fallback}"
+
+    # Check 4: critical failure
+    logger.error(
+        "CRITICAL: NEU-DET vision model could not be loaded or downloaded. "
+        "Quality inspection will use heuristic fallback (90%% accuracy vs 96%%). "
+        "On Railway deployments, either (a) add .onnx files to git-lfs, "
+        "(b) pre-warm /tmp/millforge_models in the Dockerfile, "
+        "or (c) set MILLFORGE_MODEL_PATH=/path/to/local/model.onnx"
+    )
+    return False, "FALLBACK: using heuristic (model unavailable)"
 
 # ---------------------------------------------------------------------------
 # Defect taxonomy

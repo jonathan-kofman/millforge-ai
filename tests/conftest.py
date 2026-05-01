@@ -74,12 +74,19 @@ def client():
     # Force heuristic vision mode so tests never try to download real image URLs
     import routers.vision as _vision_mod
     original_vision_agent = _vision_mod._vision_agent
+    original_model_startup_check = _vision_mod._model_startup_check
     _vision_mod._vision_agent = _make_heuristic_vision_agent()
+    # Initialize model startup check so endpoints don't fail
+    _vision_mod._model_startup_check = {
+        "available": True,
+        "status": "test mode (heuristic agent)",
+    }
 
     with TestClient(app) as c:
         yield c
 
     _vision_mod._vision_agent = original_vision_agent
+    _vision_mod._model_startup_check = original_model_startup_check
     db_module.engine = original_engine
     db_module.SessionLocal = original_session_local
     Base.metadata.drop_all(bind=test_engine)
